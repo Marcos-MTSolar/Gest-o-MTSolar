@@ -2,15 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
-import { 
-  LayoutDashboard, 
-  Users, 
-  Briefcase, 
-  Wrench, 
-  MessageSquare, 
-  Settings, 
-  LogOut, 
-  Menu, 
+import {
+  LayoutDashboard,
+  Users,
+  Briefcase,
+  Wrench,
+  MessageSquare,
+  Settings,
+  LogOut,
+  Menu,
   X,
   FileText,
   ShoppingCart,
@@ -36,8 +36,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     axios.get('/api/settings').then(res => {
       if (res.data.logo_url) setLogoUrl(res.data.logo_url);
-    }).catch(() => {});
-    
+    }).catch(() => { });
+
     // Check for unread messages on mount
     checkUnreadMessages();
   }, []);
@@ -50,13 +50,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         // API: ORDER BY m.created_at DESC LIMIT 50. Then res.json(messages.reverse()). 
         // So the response is [oldest, ..., newest].
         // So the last element is the newest.
-        
+
         const lastReadId = localStorage.getItem('lastReadMessageId');
         if (!lastReadId || latestMsg.id > parseInt(lastReadId)) {
           setUnreadCount(prev => prev + 1); // Just mark as having unread
         }
       }
-    } catch (e) {}
+    } catch (e) { }
   };
 
   useEffect(() => {
@@ -77,7 +77,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     if (socketMessages.length > prevMessagesLength.current) {
       const newMessages = socketMessages.slice(prevMessagesLength.current);
       const hasOtherUserMessage = newMessages.some(m => m.sender_id !== user?.id);
-      
+
       if (hasOtherUserMessage && location.pathname !== '/messages') {
         setUnreadCount(prev => prev + 1);
       }
@@ -107,7 +107,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen bg-gray-100 overflow-hidden">
       {/* Sidebar */}
-      <aside 
+      <aside
         className={cn(
           "fixed inset-y-0 left-0 z-50 w-64 bg-blue-900 text-white transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0",
           isOpen ? "translate-x-0" : "-translate-x-full"
@@ -122,7 +122,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <X size={24} />
           </button>
         </div>
-        
+
         <div className="flex flex-col justify-between h-[calc(100%-5rem)]">
           <nav className="flex-1 px-2 py-4 space-y-2">
             {filteredItems.map((item) => (
@@ -131,8 +131,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 to={item.path}
                 className={cn(
                   "flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors relative",
-                  location.pathname === item.path 
-                    ? "bg-blue-800 text-amber-400" 
+                  location.pathname === item.path
+                    ? "bg-blue-800 text-amber-400"
                     : "text-gray-300 hover:bg-blue-800 hover:text-white"
                 )}
               >
@@ -157,7 +157,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <p className="text-xs text-gray-400">{user?.role}</p>
               </div>
             </div>
-            <button 
+            <button
               onClick={logout}
               className="flex items-center w-full px-4 py-2 text-sm text-gray-300 hover:bg-blue-800 hover:text-white rounded-lg transition-colors"
             >
@@ -176,19 +176,34 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <Menu size={24} />
             </button>
             <div className="flex items-center gap-2">
-              {logoUrl && <img src={logoUrl} alt="MT Solar" className="h-8 w-auto object-contain" />}
+              {logoUrl && <img src={logoUrl} alt="MT Solar" className="h-8 w-auto object-contain bg-white rounded p-1 shadow-sm border border-gray-100" />}
               <span className="text-lg font-semibold text-blue-900">MT Solar</span>
             </div>
           </div>
-          
+
           <div className="flex items-center justify-end w-full gap-4">
+            {/* Desktop Logo & User */}
+            <div className="hidden lg:flex items-center gap-3 mr-4 border-r pr-4">
+              <div className="text-right">
+                <p className="text-sm font-bold text-gray-800">{user?.name}</p>
+                <p className="text-xs text-gray-500">{user?.role}</p>
+              </div>
+              {logoUrl ? (
+                <img src={logoUrl} alt="MT Solar Logo" className="h-10 w-auto object-contain bg-white rounded-lg p-1 border border-gray-200 shadow-sm" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-900 font-bold">
+                  {user?.name.charAt(0)}
+                </div>
+              )}
+            </div>
+
             <button className="relative p-2 text-gray-500 hover:text-blue-900 transition-colors">
               <Bell size={24} />
               {unreadCount > 0 && (
                 <span className="absolute top-1 right-1 h-3 w-3 bg-red-500 rounded-full border-2 border-white"></span>
               )}
             </button>
-            <button 
+            <button
               onClick={logout}
               className="p-2 text-gray-500 hover:text-red-600 transition-colors flex items-center gap-2"
               title="Sair"
@@ -209,10 +224,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </motion.div>
         </main>
       </div>
-      
+
       {/* Overlay for mobile sidebar */}
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
           onClick={toggleSidebar}
         ></div>

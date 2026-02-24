@@ -42,29 +42,34 @@ export default function Technical() {
       formData.append('inspection_media', file);
     });
 
-    // Validation: Check if any required field is empty
-    const requiredFields = [
-      'entrance_pattern', 'grounding', 'roof_structure', 'roof_overview', 'breaker_box',
-      'structure_type', 'module_quantity'
-    ];
+    const submitter = (e.nativeEvent as any).submitter as HTMLButtonElement | undefined;
+    const isApproving = submitter?.innerText.includes('Finalizar') || submitter?.innerText.includes('Atualizar');
 
-    // Check if any text field is empty
-    let hasEmptyField = requiredFields.some(field => !formData.get(field));
+    if (isApproving) {
+      // Validation: Check if any required field is empty
+      const requiredFields = [
+        'entrance_pattern', 'grounding', 'roof_structure', 'roof_overview', 'breaker_box',
+        'structure_type', 'module_quantity'
+      ];
 
-    if (hasEmptyField) {
-      alert('Por favor, preencha todos os campos obrigatórios.');
-      return;
-    }
+      // Check if any text field is empty
+      let hasEmptyField = requiredFields.some(field => !formData.get(field));
 
-    const observations = formData.get('observations') as string;
-    if (isReinforcementNeeded && !observations.trim()) {
-      alert('Obrigatório preencher as Observações Gerais justificando o Reforço Estrutural.');
-      return;
+      if (hasEmptyField) {
+        alert('Por favor, preencha todos os campos obrigatórios para finalizar a vistoria.');
+        return;
+      }
+
+      const observations = formData.get('observations') as string;
+      if (isReinforcementNeeded && !observations.trim()) {
+        alert('Obrigatório preencher as Observações Gerais justificando o Reforço Estrutural.');
+        return;
+      }
     }
 
     // Append status and reinforcement boolean mapping correctly
     formData.set('reinforcement_needed', isReinforcementNeeded ? 'true' : 'false');
-    formData.set('status', 'approved');
+    formData.set('status', isApproving ? 'approved' : 'pending');
 
     try {
       await axios.put(`/api/projects/${selectedProject.id}/technical`, formData, {
@@ -224,16 +229,22 @@ export default function Technical() {
               </div>
             </div>
 
-            <div className="p-6 border-t bg-gray-50 flex justify-between items-center">
+            <div className="p-6 border-t bg-gray-50 flex justify-end gap-3 items-center">
               {selectedProject.technical_status === 'approved' && (
-                <div className="flex items-center text-green-600 font-bold gap-2">
+                <div className="flex items-center text-green-600 font-bold gap-2 mr-auto">
                   <CheckCircle size={24} />
                   <span>Vistoria Concluída</span>
                 </div>
               )}
               <button
                 type="submit"
-                className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-bold shadow-sm flex items-center gap-2 ml-auto"
+                className="px-6 py-2 bg-amber-100 text-amber-800 border border-amber-300 rounded hover:bg-amber-200 font-bold shadow-sm flex items-center gap-2"
+              >
+                Salvar como Pendente
+              </button>
+              <button
+                type="submit"
+                className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-bold shadow-sm flex items-center gap-2"
               >
                 <CheckCircle size={18} /> {selectedProject.technical_status === 'approved' ? 'Atualizar Vistoria' : 'Finalizar Vistoria'}
               </button>

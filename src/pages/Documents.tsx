@@ -6,7 +6,7 @@ import { FileText, Trash2, Upload, Download, CheckCircle, AlertTriangle } from '
 export default function Documents() {
   const [documents, setDocuments] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
-  const [newDoc, setNewDoc] = useState<{project_id: string, title: string, type?: string}>({ project_id: '', title: '', type: '' });
+  const [newDoc, setNewDoc] = useState<{ project_id: string, title: string, type?: string }>({ project_id: '', title: '', type: '' });
   const [file, setFile] = useState<File | null>(null);
 
   useEffect(() => {
@@ -38,20 +38,38 @@ export default function Documents() {
 
     const formData = new FormData();
     formData.append('project_id', newDoc.project_id);
-    
+
     // Auto-set title based on type
     const title = typeLabels[newDoc.type || 'other'] || 'Documento';
     formData.append('title', title);
-    
+
     formData.append('type', newDoc.type || 'other');
     formData.append('file', file);
 
     try {
       await axios.post('/api/documents', formData);
-      // Keep project_id selected to allow multiple uploads
+
+      // Auto-activate homologation if this is the last required doc
+      const currentDocs = documents.filter(d => d.project_id === parseInt(newDoc.project_id));
+      const hasType = (t: string) => currentDocs.some(d => d.type === t) || newDoc.type === t;
+
+      if (hasType('rg_cnh') && hasType('art') && hasType('bill_generator')) {
+        try {
+          await axios.put(`/api/projects/${newDoc.project_id}/homologation`, {
+            homologation_status: 'technical_analysis'
+          });
+          alert('Documento enviado! Como todos os documentos obrigatórios foram anexados, a Homologação foi ativada automaticamente.');
+        } catch (error) {
+          alert('Documento enviado. Ocorreu um erro ao ativar a homologação automaticamente.');
+        }
+      } else {
+        alert('Documento enviado com sucesso!');
+      }
+
       setNewDoc(prev => ({ ...prev, title: '', type: '' }));
       setFile(null);
       fetchDocuments();
+      fetchProjects();
     } catch (error) {
       alert('Erro ao enviar documento');
     }
@@ -82,10 +100,10 @@ export default function Documents() {
   };
 
   // Check required docs for selected project
-  const selectedProjectDocs = newDoc.project_id 
+  const selectedProjectDocs = newDoc.project_id
     ? documents.filter(d => d.project_id === parseInt(newDoc.project_id))
     : [];
-  
+
   const requiredTypes = ['rg_cnh', 'art', 'bill_generator'];
   const missingDocs = requiredTypes.filter(type => !selectedProjectDocs.some(d => d.type === type));
   const isComplete = missingDocs.length === 0 && newDoc.project_id !== '';
@@ -99,10 +117,10 @@ export default function Documents() {
         <form onSubmit={handleUpload} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Projeto</label>
-            <select 
-              className="w-full border p-2 rounded" 
-              value={newDoc.project_id} 
-              onChange={e => setNewDoc({...newDoc, project_id: e.target.value})}
+            <select
+              className="w-full border p-2 rounded"
+              value={newDoc.project_id}
+              onChange={e => setNewDoc({ ...newDoc, project_id: e.target.value })}
               required
             >
               <option value="">Selecione...</option>
@@ -113,10 +131,10 @@ export default function Documents() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Documento</label>
-            <select 
-              className="w-full border p-2 rounded" 
-              value={newDoc.type || ''} 
-              onChange={e => setNewDoc({...newDoc, type: e.target.value})}
+            <select
+              className="w-full border p-2 rounded"
+              value={newDoc.type || ''}
+              onChange={e => setNewDoc({ ...newDoc, type: e.target.value })}
               required
             >
               <option value="">Selecione...</option>
@@ -129,9 +147,9 @@ export default function Documents() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Arquivo</label>
-            <input 
-              type="file" 
-              className="w-full border p-2 rounded" 
+            <input
+              type="file"
+              className="w-full border p-2 rounded"
               onChange={e => setFile(e.target.files ? e.target.files[0] : null)}
               required
             />
@@ -155,21 +173,13 @@ export default function Documents() {
                 );
               })}
             </div>
-            
-            <button 
-              onClick={handleConfirmDocs}
-              disabled={!isComplete}
-              className={`px-4 py-2 rounded font-bold text-sm flex items-center gap-2 transition-colors ${
-                isComplete 
-                  ? 'bg-green-600 text-white hover:bg-green-700 shadow-sm' 
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-            >
-              <CheckCircle size={18} />
-              Confirmar Envios e Ativar Homologação
-            </button>
-            {!isComplete && (
-              <p className="text-xs text-gray-500 mt-2">Envie todos os documentos obrigatórios para ativar a homologação.</p>
+
+            {!isComplete ? (
+              <p className="text-xs text-gray-500 mt-2">Envie todos os documentos obrigatórios para ativar a homologação automaticamente.</p>
+            ) : (
+              <p className="text-sm text-green-700 font-bold mt-2 flex items-center gap-2">
+                <CheckCircle size={18} /> Homologação já ativada para este projeto!
+              </p>
             )}
           </div>
         )}
@@ -199,17 +209,17 @@ export default function Documents() {
                 <td className="p-4 text-sm text-gray-500">{doc.uploader_name}</td>
                 <td className="p-4 text-sm text-gray-500">{new Date(doc.created_at).toLocaleDateString()}</td>
                 <td className="p-4 flex gap-2">
-                  <a 
-                    href={doc.url} 
-                    target="_blank" 
+                  <a
+                    href={doc.url}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-600 hover:text-blue-800 p-1"
                     title="Baixar"
                   >
                     <Download size={18} />
                   </a>
-                  <button 
-                    onClick={() => handleDelete(doc.id)} 
+                  <button
+                    onClick={() => handleDelete(doc.id)}
                     className="text-red-600 hover:text-red-800 p-1"
                     title="Excluir"
                   >
