@@ -12,8 +12,8 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Vercel serverless functions environment protection
+// Moved __dirname into startServer logic to prevent top-level import.meta.url strict errors in CJS.
 
 const app = express();
 const server = createServer(app);
@@ -22,14 +22,18 @@ const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-in-prod';
 
 // Supabase Setup
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
 
 if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('Missing Supabase environment variables!');
+  console.error('WARNING: Missing Supabase environment variables! Endpoints will fail.');
 }
 
-const supabase = createClient(supabaseUrl || '', supabaseServiceKey || '');
+// Fallback to dummy so it doesn't crash the entire serverless instance on load
+const supabase = createClient(
+  supabaseUrl || 'https://dummy.supabase.co',
+  supabaseServiceKey || 'dummy_key'
+);
 
 // Middleware
 app.use(express.json());
@@ -496,6 +500,9 @@ app.get('/api/stats', authenticateToken, async (req: any, res) => {
 
 // Vite Integration
 async function startServer() {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
