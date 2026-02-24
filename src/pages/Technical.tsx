@@ -6,6 +6,7 @@ export default function Technical() {
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isReinforcementNeeded, setIsReinforcementNeeded] = useState(false);
 
   useEffect(() => {
     fetchProjects();
@@ -14,7 +15,7 @@ export default function Technical() {
   const fetchProjects = async () => {
     const res = await axios.get('/api/projects');
     // Filter projects that are ready for inspection or already in inspection
-    setProjects(res.data.filter((p: any) => 
+    setProjects(res.data.filter((p: any) =>
       ['inspection', 'installation', 'homologation', 'conclusion'].includes(p.current_stage) || p.commercial_status === 'approved'
     ));
   };
@@ -33,30 +34,37 @@ export default function Technical() {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProject) return;
-    
+
     const formData = new FormData(e.target as HTMLFormElement);
-    
+
     // Append manually selected files
     selectedFiles.forEach(file => {
       formData.append('inspection_media', file);
     });
-    
+
     // Validation: Check if any required field is empty
     const requiredFields = [
-      'entrance_pattern', 'grounding', 'roof_structure', 'roof_overview', 'breaker_box', 
+      'entrance_pattern', 'grounding', 'roof_structure', 'roof_overview', 'breaker_box',
       'structure_type', 'module_quantity'
     ];
-    
+
     // Check if any text field is empty
     let hasEmptyField = requiredFields.some(field => !formData.get(field));
-    
+
     if (hasEmptyField) {
       alert('Por favor, preencha todos os campos obrigatórios.');
       return;
     }
 
-    // Append status
-    formData.append('status', 'approved');
+    const observations = formData.get('observations') as string;
+    if (isReinforcementNeeded && !observations.trim()) {
+      alert('Obrigatório preencher as Observações Gerais justificando o Reforço Estrutural.');
+      return;
+    }
+
+    // Append status and reinforcement boolean mapping correctly
+    formData.set('reinforcement_needed', isReinforcementNeeded ? 'true' : 'false');
+    formData.set('status', 'approved');
 
     try {
       await axios.put(`/api/projects/${selectedProject.id}/technical`, formData, {
@@ -130,31 +138,34 @@ export default function Technical() {
                   <input name="module_quantity" type="number" defaultValue={selectedProject.module_quantity} className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
                 <div className="flex items-center mt-6 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                  <input 
-                    type="checkbox" 
-                    name="reinforcement_needed" 
-                    defaultChecked={selectedProject.reinforcement_needed === 1 || selectedProject.reinforcement_needed === true} 
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" 
+                  <input
+                    type="checkbox"
+                    name="reinforcement_needed"
+                    checked={isReinforcementNeeded}
+                    onChange={(e) => setIsReinforcementNeeded(e.target.checked)}
+                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
                   />
                   <label className="ml-3 text-sm font-medium text-gray-800 flex items-center gap-2">
                     <AlertTriangle size={16} className="text-amber-600" />
                     Necessita Reforço Estrutural?
                   </label>
                 </div>
-                
+
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Observações Gerais</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Observações Gerais {isReinforcementNeeded && <span className="text-red-500">* (Obrigatório devido ao reforço)</span>}
+                  </label>
                   <textarea name="observations" defaultValue={selectedProject.observations} className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" rows={4} placeholder="Observações adicionais sobre a vistoria..."></textarea>
                 </div>
 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Fotos e Vídeos da Vistoria</label>
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition-colors">
-                    <input 
-                      type="file" 
-                      multiple 
+                    <input
+                      type="file"
+                      multiple
                       accept="image/*,video/*"
-                      className="hidden" 
+                      className="hidden"
                       id="inspection-media-upload"
                       onChange={handleFileSelect}
                     />
@@ -167,7 +178,7 @@ export default function Technical() {
                       <span className="text-xs text-gray-400 mt-1">Suporta múltiplos arquivos</span>
                     </label>
                   </div>
-                  
+
                   {/* Selected Files Preview */}
                   {selectedFiles.length > 0 && (
                     <div className="mt-4">
@@ -220,8 +231,8 @@ export default function Technical() {
                   <span>Vistoria Concluída</span>
                 </div>
               )}
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-bold shadow-sm flex items-center gap-2 ml-auto"
               >
                 <CheckCircle size={18} /> {selectedProject.technical_status === 'approved' ? 'Atualizar Vistoria' : 'Finalizar Vistoria'}
@@ -245,13 +256,14 @@ export default function Technical() {
                   </span>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={async () => {
                   // Fetch full details before editing
                   const res = await axios.get(`/api/projects/${p.id}`);
                   setSelectedProject(res.data);
+                  setIsReinforcementNeeded(res.data.reinforcement_needed === 1 || res.data.reinforcement_needed === true);
                 }}
-                className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-800"
+                className={`px-4 py-2 rounded text-white ${p.technical_status === 'approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-900 hover:bg-blue-800'}`}
               >
                 {p.technical_status === 'approved' ? 'Ver Detalhes' : 'Iniciar Vistoria'}
               </button>

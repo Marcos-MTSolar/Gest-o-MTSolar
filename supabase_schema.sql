@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS commercial_data (
   payment_method TEXT,
   contract_url TEXT,
   notes TEXT,
+  pendencies TEXT,
   status TEXT DEFAULT 'pending',
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

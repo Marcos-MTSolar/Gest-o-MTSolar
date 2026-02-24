@@ -14,8 +14,8 @@ export default function Installation() {
   const fetchProjects = async () => {
     const res = await axios.get('/api/projects');
     // Filter projects that are in installation stage
-    setProjects(res.data.filter((p: any) => 
-      ['installation', 'homologation', 'conclusion'].includes(p.current_stage) || 
+    setProjects(res.data.filter((p: any) =>
+      ['installation', 'homologation', 'conclusion'].includes(p.current_stage) ||
       (p.current_stage === 'inspection' && p.technical_status === 'approved') // Fallback if stage transition hasn't happened yet
     ));
   };
@@ -23,12 +23,12 @@ export default function Installation() {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProject) return;
-    
+
     const formData = new FormData(e.target as HTMLFormElement);
-    
+
     const requiredPhotos = [
-      'photo_modules', 'photo_inverter', 'photo_inverter_label', 'photo_roof_sealing', 
-      'photo_grounding', 'photo_ac_voltage', 'photo_dc_voltage', 'photo_generation_plate', 
+      'photo_modules', 'photo_inverter', 'photo_inverter_label', 'photo_roof_sealing',
+      'photo_grounding', 'photo_ac_voltage', 'photo_dc_voltage', 'photo_generation_plate',
       'photo_ac_stringbox', 'photo_connection_point'
     ];
 
@@ -39,9 +39,9 @@ export default function Installation() {
       const hasExistingUrl = selectedProject[field];
       return !hasNewFile && !hasExistingUrl;
     });
-    
+
     const pendencies = formData.get('pendencies') as string;
-    
+
     if (hasMissingPhoto && !pendencies?.trim()) {
       alert('Existem fotos obrigatórias não enviadas. Por favor, preencha a aba de "Pendências / Observações" justificando a falta.');
       setActiveTab('pendencies');
@@ -95,19 +95,19 @@ export default function Installation() {
           <form onSubmit={handleUpdate}>
             {/* Tabs Header */}
             <div className="flex border-b">
-              <button 
+              <button
                 type="button"
                 onClick={() => setActiveTab('photos')}
                 className={`flex-1 py-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'photos' ? 'border-blue-900 text-blue-900 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
               >
-                1. Fotos da Obra
+                <span>1. Fotos da Obra</span>
               </button>
-              <button 
+              <button
                 type="button"
                 onClick={() => setActiveTab('pendencies')}
                 className={`flex-1 py-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'pendencies' ? 'border-blue-900 text-blue-900 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
               >
-                2. Pendências / Obs
+                <span>2. Pendências / Obs</span>
               </button>
             </div>
 
@@ -148,35 +148,32 @@ export default function Installation() {
 
             <div className="p-6 border-t bg-gray-50 flex justify-between items-center">
               <div className="text-xs text-gray-500">
-                {activeTab === 'photos' && 'Passo 1 de 2'}
-                {activeTab === 'pendencies' && 'Passo 2 de 2'}
+                {activeTab === 'photos' && <span>Passo 1 de 2</span>}
+                {activeTab === 'pendencies' && <span>Passo 2 de 2</span>}
               </div>
               <div className="flex gap-3">
-                {activeTab === 'pendencies' && (
-                  <button 
-                    type="button" 
-                    onClick={() => setActiveTab('photos')}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-100"
-                  >
-                    Anterior
-                  </button>
-                )}
-                {activeTab === 'photos' ? (
-                  <button 
-                    type="button" 
-                    onClick={() => setActiveTab('pendencies')}
-                    className="px-4 py-2 bg-blue-900 text-white rounded hover:bg-blue-800"
-                  >
-                    Próximo
-                  </button>
-                ) : (
-                  <button 
-                    type="submit" 
-                    className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-bold shadow-sm flex items-center gap-2"
-                  >
-                    <CheckCircle size={18} /> Finalizar Obra
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('photos')}
+                  className={`px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-100 ${activeTab === 'pendencies' ? 'block' : 'hidden'}`}
+                >
+                  <span>Anterior</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('pendencies')}
+                  className={`px-4 py-2 bg-blue-900 text-white rounded hover:bg-blue-800 ${activeTab === 'photos' ? 'block' : 'hidden'}`}
+                >
+                  <span>Próximo</span>
+                </button>
+
+                <button
+                  type="submit"
+                  className={`px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-bold shadow-sm flex items-center gap-2 ${activeTab === 'pendencies' ? 'flex' : 'hidden'}`}
+                >
+                  <CheckCircle size={18} /> <span>Finalizar Obra</span>
+                </button>
               </div>
             </div>
           </form>
@@ -197,7 +194,7 @@ export default function Installation() {
                   </span>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={async () => {
                   const res = await axios.get(`/api/projects/${p.id}`);
                   setSelectedProject(res.data);

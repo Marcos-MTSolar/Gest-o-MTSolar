@@ -1,20 +1,34 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import { addDays, isSameDay, parseISO, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { Calendar as CalendarIcon, Bell } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ activeProjects: 0, pendingInspections: 0, completedProjects: 0, monthlyRevenue: 0 });
+  const [tomorrowEvents, setTomorrowEvents] = useState<any[]>([]);
   const { user } = useAuth();
 
   useEffect(() => {
+    // Fetch stats
     axios.get('/api/stats').then(res => setStats(res.data));
+
+    // Fetch events and filter for tomorrow
+    axios.get('/api/events').then(res => {
+      const tomorrow = addDays(new Date(), 1);
+      const filtered = res.data.filter((e: any) =>
+        isSameDay(parseISO(e.event_date), tomorrow)
+      );
+      setTomorrowEvents(filtered);
+    }).catch(err => console.error("Error fetching events:", err));
   }, []);
 
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-gray-800 mb-4">Dashboard</h1>
       <p className="text-gray-600 mb-6">Bem-vindo, {user?.name} ({user?.role})</p>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <h3 className="text-gray-500 text-sm font-medium">Projetos Ativos</h3>
@@ -27,6 +41,45 @@ export default function Dashboard() {
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <h3 className="text-gray-500 text-sm font-medium">Projetos Concluídos</h3>
           <p className="text-3xl font-bold text-green-600 mt-2">{stats.completedProjects}</p>
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-blue-900 text-white p-4 flex items-center gap-2">
+            <Bell size={20} className="text-amber-400" />
+            <h2 className="text-lg font-bold">Mural de Avisos (Amanhã)</h2>
+            <span className="ml-auto text-sm bg-blue-800 px-3 py-1 rounded-full text-blue-100">
+              {format(addDays(new Date(), 1), "EEEE, d 'de' MMMM", { locale: ptBR })}
+            </span>
+          </div>
+
+          <div className="p-0">
+            {tomorrowEvents.length > 0 ? (
+              <ul className="divide-y divide-gray-100">
+                {tomorrowEvents.map((ev, idx) => (
+                  <li key={idx} className="p-4 hover:bg-gray-50 transition-colors flex items-start gap-4">
+                    <div className="bg-blue-100 text-blue-800 p-3 rounded-lg flex flex-col items-center justify-center min-w-[70px]">
+                      <CalendarIcon size={20} className="mb-1" />
+                      <span className="text-xs font-bold">{format(parseISO(ev.event_date), 'HH:mm')}</span>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-800 text-lg flex items-center gap-2">
+                        {ev.title}
+                        {ev.is_reminder && <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Lembrete</span>}
+                      </h4>
+                      {ev.description && <p className="text-gray-600 mt-1">{ev.description}</p>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="p-8 text-center text-gray-500">
+                <Bell size={40} className="mx-auto mb-3 text-gray-300" />
+                <p>Nenhum evento letivo ou aviso agendado para amanhã.</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

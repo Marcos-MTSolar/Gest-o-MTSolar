@@ -35,15 +35,25 @@ export default function Commercial() {
   const updateCommercial = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProject) return;
-    
+
     const formData = new FormData(e.target as HTMLFormElement);
+    const proposal_value = formData.get('proposal_value') as string;
+    const payment_method = formData.get('payment_method') as string;
+
+    if (!proposal_value || !payment_method) {
+      alert("Por favor, preencha o Valor da Proposta e a Forma de Pagamento antes de salvar.");
+      return;
+    }
+
     try {
       await axios.put(`/api/projects/${selectedProject.id}/commercial`, {
-        proposal_value: formData.get('proposal_value'),
-        payment_method: formData.get('payment_method'),
+        proposal_value,
+        payment_method,
         notes: formData.get('notes'),
+        pendencies: formData.get('pendencies'),
         status: 'approved'
       });
+      alert("Dados comerciais salvos com sucesso!");
       fetchProjects();
       setSelectedProject(null);
     } catch (error) {
@@ -52,7 +62,7 @@ export default function Commercial() {
   };
 
   const translateStage = (stage: string) => {
-    const stages: {[key: string]: string} = {
+    const stages: { [key: string]: string } = {
       'pending': 'Pendente',
       'inspection': 'Vistoria',
       'homologation': 'Homologação',
@@ -63,7 +73,7 @@ export default function Commercial() {
   };
 
   const translateTechnicalStatus = (status: string) => {
-    const statuses: {[key: string]: string} = {
+    const statuses: { [key: string]: string } = {
       'pending': 'Pendente',
       'approved': 'Aprovada',
       'rejected': 'Reprovada',
@@ -78,7 +88,7 @@ export default function Commercial() {
         <>
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold text-gray-800">Área Comercial</h1>
-            <button 
+            <button
               onClick={() => setShowNewClient(true)}
               className="bg-blue-900 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-800"
             >
@@ -91,14 +101,14 @@ export default function Commercial() {
               <div className="bg-white p-6 rounded-xl w-full max-w-2xl">
                 <h2 className="text-xl font-bold mb-4">Cadastro de Cliente</h2>
                 <form onSubmit={handleCreateClient} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <input placeholder="Nome Completo" className="border p-2 rounded" required value={newClient.name} onChange={e => setNewClient({...newClient, name: e.target.value})} />
-                  <input placeholder="CPF/CNPJ" className="border p-2 rounded" value={newClient.cpf_cnpj} onChange={e => setNewClient({...newClient, cpf_cnpj: e.target.value})} />
-                  <input placeholder="Telefone" className="border p-2 rounded" value={newClient.phone} onChange={e => setNewClient({...newClient, phone: e.target.value})} />
-                  <input placeholder="Email" className="border p-2 rounded" value={newClient.email} onChange={e => setNewClient({...newClient, email: e.target.value})} />
-                  <input placeholder="Endereço" className="border p-2 rounded md:col-span-2" value={newClient.address} onChange={e => setNewClient({...newClient, address: e.target.value})} />
-                  <input placeholder="Cidade" className="border p-2 rounded" value={newClient.city} onChange={e => setNewClient({...newClient, city: e.target.value})} />
-                  <input placeholder="Estado" className="border p-2 rounded" value={newClient.state} onChange={e => setNewClient({...newClient, state: e.target.value})} />
-                  
+                  <input placeholder="Nome Completo" className="border p-2 rounded" required value={newClient.name} onChange={e => setNewClient({ ...newClient, name: e.target.value })} />
+                  <input placeholder="CPF/CNPJ" className="border p-2 rounded" value={newClient.cpf_cnpj} onChange={e => setNewClient({ ...newClient, cpf_cnpj: e.target.value })} />
+                  <input placeholder="Telefone" className="border p-2 rounded" value={newClient.phone} onChange={e => setNewClient({ ...newClient, phone: e.target.value })} />
+                  <input placeholder="Email" className="border p-2 rounded" value={newClient.email} onChange={e => setNewClient({ ...newClient, email: e.target.value })} />
+                  <input placeholder="Endereço" className="border p-2 rounded md:col-span-2" value={newClient.address} onChange={e => setNewClient({ ...newClient, address: e.target.value })} />
+                  <input placeholder="Cidade" className="border p-2 rounded" value={newClient.city} onChange={e => setNewClient({ ...newClient, city: e.target.value })} />
+                  <input placeholder="Estado" className="border p-2 rounded" value={newClient.state} onChange={e => setNewClient({ ...newClient, state: e.target.value })} />
+
                   <div className="md:col-span-2 flex justify-end gap-2 mt-4">
                     <button type="button" onClick={() => setShowNewClient(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
                     <button type="submit" className="px-4 py-2 bg-blue-900 text-white rounded hover:bg-blue-800">Salvar</button>
@@ -114,23 +124,29 @@ export default function Commercial() {
                 <div>
                   <h3 className="text-lg font-bold text-gray-800">{p.client_name}</h3>
                   <p className="text-sm text-gray-500">{p.title}</p>
+
+                  {p.commercial_status === 'pending' && p.commercial_pendencies && (
+                    <p className="text-xs text-amber-700 mt-1 bg-amber-50 p-1 rounded inline-block border border-amber-200">
+                      <strong>Pendência:</strong> {p.commercial_pendencies}
+                    </p>
+                  )}
+
                   <div className="flex gap-2 mt-2">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      p.commercial_status === 'approved' ? 'bg-green-100 text-green-800' : 
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${p.commercial_status === 'approved' ? 'bg-green-100 text-green-800' :
                       p.commercial_status === 'pending' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {p.commercial_status === 'approved' ? 'Aprovado' : 'Pendente'}
+                      }`}>
+                      {p.commercial_status === 'approved' ? 'Finalizado' : 'Pendente'}
                     </span>
                   </div>
                 </div>
-                <button 
+                <button
                   onClick={async () => {
                     const res = await axios.get(`/api/projects/${p.id}`);
                     setSelectedProject(res.data);
                   }}
-                  className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-800"
+                  className={`px-4 py-2 rounded text-white ${p.commercial_status === 'approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-900 hover:bg-blue-800'}`}
                 >
-                  Gerenciar
+                  {p.commercial_status === 'approved' ? 'Ver Detalhes' : 'Gerenciar'}
                 </button>
               </div>
             ))}
@@ -173,11 +189,15 @@ export default function Commercial() {
                   </select>
                 </div>
                 <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Pendências (Restrições para fechar a venda)</label>
+                  <input name="pendencies" defaultValue={selectedProject.commercial_pendencies} placeholder="Ex: Cliente aguardando aprovação de crédito num banco" className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none border-amber-200 bg-amber-50" />
+                </div>
+                <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Observações Comerciais</label>
                   <textarea name="notes" defaultValue={selectedProject.commercial_notes} className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" rows={4}></textarea>
                 </div>
               </div>
-              
+
               <div className="flex justify-end pt-4 border-t">
                 <button type="submit" className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-bold shadow-sm flex items-center gap-2">
                   <CheckCircle size={20} /> Salvar e Aprovar Proposta

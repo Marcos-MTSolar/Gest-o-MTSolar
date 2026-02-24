@@ -242,7 +242,7 @@ app.get('/api/projects', authenticateToken, async (req: any, res) => {
     .select(`
       *,
       clients (name),
-      commercial_data (status),
+      commercial_data (status, pendencies),
       technical_data (status, structure_type)
     `)
     .order('updated_at', { ascending: false });
@@ -252,6 +252,7 @@ app.get('/api/projects', authenticateToken, async (req: any, res) => {
     ...p,
     client_name: p.clients?.name,
     commercial_status: p.commercial_data?.[0]?.status, // Supabase returns array for 1:many/1:1 unless specified
+    commercial_pendencies: p.commercial_data?.[0]?.pendencies,
     technical_status: p.technical_data?.[0]?.status,
     structure_type: p.technical_data?.[0]?.structure_type
   }));
@@ -291,6 +292,7 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
     contract_url: project.commercial_data?.[0]?.contract_url,
     commercial_notes: project.commercial_data?.[0]?.notes,
     commercial_status: project.commercial_data?.[0]?.status,
+    commercial_pendencies: project.commercial_data?.[0]?.pendencies,
 
     // Technical
     ...project.technical_data?.[0], // Spread all technical fields
@@ -305,10 +307,10 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
 
 // Commercial Update
 app.put('/api/projects/:id/commercial', authenticateToken, async (req: any, res) => {
-  const { proposal_value, payment_method, notes, status } = req.body;
+  const { proposal_value, payment_method, notes, pendencies, status } = req.body;
 
   await supabase.from('commercial_data')
-    .update({ proposal_value, payment_method, notes, status, updated_at: new Date() })
+    .update({ proposal_value, payment_method, notes, pendencies, status, updated_at: new Date() })
     .eq('project_id', req.params.id);
 
   if (status === 'approved') {
@@ -495,6 +497,30 @@ app.get('/api/stats', authenticateToken, async (req: any, res) => {
     completedProjects: completedProjects || 0,
     monthlyRevenue: 0
   });
+});
+
+// Settings
+app.get('/api/settings', authenticateToken, async (req: any, res) => {
+  const { data: settings, error } = await supabase.from('settings').select('*');
+  const dict: any = {};
+  if (settings) {
+    settings.forEach(s => {
+      dict[s.key] = s.value;
+    });
+  }
+  res.json({ logo_url: dict.logo_url || null });
+});
+
+app.post('/api/settings/logo', authenticateToken, upload.single('logo'), async (req: any, res) => {
+  if (req.user.role !== 'CEO') return res.status(403).json({ error: 'Forbidden' });
+  const file = req.file;
+  if (!file) return res.status(400).json({ error: 'No file uploaded' });
+
+  const url = await uploadFile(file);
+  if (!url) return res.status(500).json({ error: 'Upload failed' });
+
+  await supabase.from('settings').upsert({ key: 'logo_url', value: url });
+  res.json({ url });
 });
 
 // Vite Integration
