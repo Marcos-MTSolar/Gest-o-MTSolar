@@ -8,7 +8,6 @@ import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import multer from 'multer';
 import * as dotenv from 'dotenv';
-import serverless from 'serverless-http';
 
 dotenv.config();
 
@@ -526,4 +525,4 @@ if (process.env.NODE_ENV !== 'production') {
   startServer();
 }
 
-export const handler = serverless(app);
+export default app;
