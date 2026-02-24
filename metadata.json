@@ -1,0 +1,5 @@
+{
+  "name": "MT Solar App",
+  "description": "Corporate mobile app for MT Solar with role-based access (CEO, Admin, Commercial, Technical), real-time sync, and workflow management.",
+  "requestFramePermissions": []
+}
