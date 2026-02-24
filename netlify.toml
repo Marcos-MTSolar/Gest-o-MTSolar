@@ -3,7 +3,7 @@
   publish = "dist"
 
 [functions]
-  external_node_modules = ["bcryptjs"]
+  external_node_modules = ["bcryptjs", "lightningcss"]
 
 [[redirects]]
   from = "/api/*"
