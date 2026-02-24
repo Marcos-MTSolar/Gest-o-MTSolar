@@ -8,6 +8,7 @@ import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import multer from 'multer';
 import * as dotenv from 'dotenv';
+import serverless from 'serverless-http';
 
 dotenv.config();
 
@@ -510,9 +511,9 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(__dirname, 'dist')));
+    app.use(express.static(path.join(__dirname, '../dist')));
     app.get('*', (req, res) => {
-      res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+      res.sendFile(path.join(__dirname, '../dist', 'index.html'));
     });
   }
 
@@ -525,4 +526,4 @@ if (process.env.NODE_ENV !== 'production') {
   startServer();
 }
 
-export default app;
+export const handler = serverless(app);
