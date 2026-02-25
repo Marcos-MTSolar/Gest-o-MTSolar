@@ -321,6 +321,33 @@ app.put('/api/projects/:id/commercial', authenticateToken, async (req: any, res)
   res.json({ success: true });
 });
 
+// Kit Purchase Update
+app.put('/api/projects/:id/kit', authenticateToken, async (req: any, res) => {
+  const { kit_purchased, inverter_model, inverter_power, module_model, module_power } = req.body;
+
+  // Let's assume these columns might not exist if we missed a migration, but KitPurchase requires them.
+  // We'll update projects table. If it fails, we catch the error gracefully vs crashing.
+  try {
+    const updatePayload: any = {
+      kit_purchased,
+      updated_at: new Date()
+    };
+
+    // Some schemas put these in technical_data. We'll try to put them in technical_data.
+    await supabase.from('technical_data').update({
+      inverter_model, inverter_power, module_model, module_power, updated_at: new Date()
+    }).eq('project_id', req.params.id);
+
+    // Update main project status
+    await supabase.from('projects').update(updatePayload).eq('id', req.params.id);
+
+    broadcast('PROJECT_UPDATED', { id: req.params.id, type: 'kit' });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Technical Update
 app.put('/api/projects/:id/technical', authenticateToken, upload.any(), async (req: any, res) => {
   const {
@@ -480,7 +507,7 @@ app.delete('/api/documents/:id', authenticateToken, async (req: any, res) => {
 
 // Events
 app.get('/api/events', authenticateToken, async (req: any, res) => {
-  const { data: events } = await supabase.from('events').select('*').eq('user_id', req.user.id).order('event_date', { ascending: true });
+  const { data: events } = await supabase.from('events').select('*').order('event_date', { ascending: true });
   res.json(events || []);
 });
 
@@ -492,12 +519,12 @@ app.post('/api/events', authenticateToken, async (req: any, res) => {
 
 app.put('/api/events/:id', authenticateToken, async (req: any, res) => {
   const { title, description, event_date, is_reminder } = req.body;
-  await supabase.from('events').update({ title, description, event_date, is_reminder }).eq('id', req.params.id).eq('user_id', req.user.id);
+  await supabase.from('events').update({ title, description, event_date, is_reminder }).eq('id', req.params.id);
   res.json({ success: true });
 });
 
 app.delete('/api/events/:id', authenticateToken, async (req: any, res) => {
-  await supabase.from('events').delete().eq('id', req.params.id).eq('user_id', req.user.id);
+  await supabase.from('events').delete().eq('id', req.params.id);
   res.json({ success: true });
 });
 

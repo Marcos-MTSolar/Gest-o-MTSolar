@@ -161,18 +161,11 @@ export default function Documents() {
 
             <button
               onClick={handleConfirmDocs}
-              disabled={!isComplete}
-              className={`px-4 py-2 rounded font-bold text-sm flex items-center gap-2 transition-colors ${isComplete
-                  ? 'bg-green-600 text-white hover:bg-green-700 shadow-sm'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
+              className="px-4 py-2 mt-4 rounded font-bold text-sm flex items-center gap-2 transition-colors bg-green-600 text-white hover:bg-green-700 shadow-sm"
             >
               <CheckCircle size={18} />
               Confirmar Envios e Ativar Homologação
             </button>
-            {!isComplete && (
-              <p className="text-xs text-gray-500 mt-2">Envie todos os documentos obrigatórios para habilitar e ativar a homologação do cliente.</p>
-            )}
           </div>
         )}
       </div>
