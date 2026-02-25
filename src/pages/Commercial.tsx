@@ -67,7 +67,7 @@ export default function Commercial() {
         status: submitAction
       });
       alert("Dados comerciais salvos com sucesso!");
-      fetchProjects();
+      await fetchProjects();
       setSelectedProject(null);
     } catch (error) {
       alert('Erro ao atualizar projeto');

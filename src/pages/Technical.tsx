@@ -77,10 +77,10 @@ export default function Technical() {
       await axios.put(`/api/projects/${selectedProject.id}/technical`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
+      alert('Vistoria técnica concluída com sucesso!');
+      await fetchProjects();
       setSelectedProject(null);
       setSelectedFiles([]); // Clear files after upload
-      fetchProjects();
-      alert('Vistoria técnica concluída com sucesso!');
     } catch (error) {
       alert('Erro ao atualizar vistoria');
     }

@@ -6,8 +6,8 @@ export default function Homologation() {
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
 
-  const [rejectionModal, setRejectionModal] = useState<{ projectId: number, isOpen: boolean }>({ projectId: 0, isOpen: false });
-  const [rejectionReason, setRejectionReason] = useState('');
+  const [statusModal, setStatusModal] = useState<{ projectId: number, status: string, isOpen: boolean }>({ projectId: 0, status: '', isOpen: false });
+  const [statusNote, setStatusNote] = useState('');
 
   useEffect(() => {
     fetchProjects();
@@ -30,11 +30,20 @@ export default function Homologation() {
         homologation_status: status,
         rejection_reason: reason
       });
-      fetchProjects();
-      if (status === 'rejected') {
-        setRejectionModal({ projectId: 0, isOpen: false });
-        setRejectionReason('');
+
+      if (status === 'connection_point_approved') {
+        alert('Ponto de conexão aprovado! Projeto finalizado com sucesso.');
+        setStatusModal({ projectId: 0, status: '', isOpen: false });
+        setStatusNote('');
+        await fetchProjects();
+        setSelectedProject(null);
+        return;
       }
+
+      setStatusModal({ projectId: 0, status: '', isOpen: false });
+      setStatusNote('');
+      await fetchProjects();
+
       // Update selected project to reflect changes immediately or close detail view
       const updatedRes = await axios.get(`/api/projects/${id}`);
       setSelectedProject(updatedRes.data);
@@ -66,11 +75,16 @@ export default function Homologation() {
                   <h3 className="text-lg font-bold text-gray-800">{p.client_name}</h3>
                   <p className="text-sm text-gray-500">{p.title}</p>
                   <div className="mt-2">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${p.homologation_status === 'connection_point_approved' ? 'bg-green-100 text-green-800' :
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold inline-block mb-1 ${p.homologation_status === 'connection_point_approved' ? 'bg-green-100 text-green-800' :
                       p.homologation_status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
                       }`}>
                       {statusOptions.find(o => o.value === p.homologation_status)?.label || 'Pendente'}
                     </span>
+                    {p.homologation_status && !['connection_point_approved', 'technical_analysis'].includes(p.homologation_status) && p.rejection_reason && (
+                      <p className="text-xs text-amber-700 mt-1 bg-amber-50 p-2 rounded border border-amber-200 block w-fit">
+                        <strong>Motivo / Pendência:</strong> {p.rejection_reason}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <button
@@ -126,10 +140,11 @@ export default function Homologation() {
                   <button
                     key={opt.value}
                     onClick={() => {
-                      if (opt.value === 'rejected') {
-                        setRejectionModal({ projectId: selectedProject.id, isOpen: true });
+                      if (['rejected', 'waiting_inspection', 'performing_inspection'].includes(opt.value)) {
+                        setStatusNote(selectedProject.rejection_reason || '');
+                        setStatusModal({ projectId: selectedProject.id, status: opt.value, isOpen: true });
                       } else {
-                        handleUpdate(selectedProject.id, opt.value);
+                        handleUpdate(selectedProject.id, opt.value, '');
                       }
                     }}
                     className={`px-4 py-3 text-sm rounded-lg border transition-colors font-medium ${selectedProject.homologation_status === opt.value
@@ -143,12 +158,14 @@ export default function Homologation() {
               </div>
             </div>
 
-            {selectedProject.homologation_status === 'rejected' && selectedProject.rejection_reason && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 flex items-start gap-3">
-                <AlertTriangle size={20} className="mt-0.5 flex-shrink-0" />
+            {selectedProject.homologation_status && !['connection_point_approved', 'technical_analysis'].includes(selectedProject.homologation_status) && selectedProject.rejection_reason && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 flex items-start gap-3">
+                <AlertTriangle size={20} className="mt-0.5 flex-shrink-0 text-amber-600" />
                 <div>
-                  <h4 className="font-bold mb-1">Reprovado na Análise Técnica</h4>
-                  <p className="text-sm">{selectedProject.rejection_reason}</p>
+                  <h4 className="font-bold mb-1">
+                    Pendência: {statusOptions.find(o => o.value === selectedProject.homologation_status)?.label}
+                  </h4>
+                  <p className="text-sm text-amber-900">{selectedProject.rejection_reason}</p>
                 </div>
               </div>
             )}
@@ -166,32 +183,32 @@ export default function Homologation() {
         </div>
       )}
 
-      {rejectionModal.isOpen && (
+      {statusModal.isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-xl w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4 text-red-600 flex items-center gap-2">
-              <AlertTriangle /> Reprovar Análise
+            <h2 className="text-xl font-bold mb-4 text-amber-600 flex items-center gap-2">
+              <AlertTriangle /> Adicionar Pendência
             </h2>
-            <p className="text-gray-600 mb-4">Por favor, informe o motivo da reprovação:</p>
+            <p className="text-gray-600 mb-4">Por favor, informe uma observação ou motivo da pendência <strong>{statusOptions.find(o => o.value === statusModal.status)?.label}</strong>:</p>
             <textarea
-              className="w-full border p-3 rounded-lg mb-4 h-32 focus:ring-2 focus:ring-red-500 outline-none"
-              placeholder="Descreva o motivo..."
-              value={rejectionReason}
-              onChange={e => setRejectionReason(e.target.value)}
+              className="w-full border p-3 rounded-lg mb-4 h-32 focus:ring-2 focus:ring-amber-500 outline-none"
+              placeholder="Descreva a observação..."
+              value={statusNote}
+              onChange={e => setStatusNote(e.target.value)}
             ></textarea>
             <div className="flex justify-end gap-2">
               <button
-                onClick={() => setRejectionModal({ projectId: 0, isOpen: false })}
+                onClick={() => setStatusModal({ projectId: 0, status: '', isOpen: false })}
                 className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
               >
                 Cancelar
               </button>
               <button
-                onClick={() => handleUpdate(rejectionModal.projectId, 'rejected', rejectionReason)}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-medium"
-                disabled={!rejectionReason.trim()}
+                onClick={() => handleUpdate(statusModal.projectId, statusModal.status, statusNote)}
+                className="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 font-medium"
+                disabled={!statusNote.trim()}
               >
-                Confirmar Reprovação
+                Confirmar e Salvar
               </button>
             </div>
           </div>
