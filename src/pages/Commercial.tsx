@@ -10,6 +10,7 @@ export default function Commercial() {
   const { user } = useAuth();
 
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
+  const [submitAction, setSubmitAction] = useState<'pending' | 'approved'>('pending');
 
   useEffect(() => {
     fetchProjects();
@@ -55,7 +56,7 @@ export default function Commercial() {
         payment_method,
         notes: formData.get('notes'),
         pendencies: formData.get('pendencies'),
-        status: e.nativeEvent.submitter?.innerText.includes('Aprovar') ? 'approved' : 'pending'
+        status: submitAction
       });
 
       await axios.put(`/api/projects/${selectedProject.id}/commercial`, {
@@ -63,7 +64,7 @@ export default function Commercial() {
         payment_method,
         notes: formData.get('notes'),
         pendencies: formData.get('pendencies'),
-        status: (e.nativeEvent as any).submitter?.innerText.includes('Aprovar') ? 'approved' : 'pending'
+        status: submitAction
       });
       alert("Dados comerciais salvos com sucesso!");
       fetchProjects();
@@ -211,10 +212,10 @@ export default function Commercial() {
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t">
-                <button type="submit" className="bg-amber-100 text-amber-800 border border-amber-300 px-6 py-3 rounded-lg hover:bg-amber-200 font-bold shadow-sm flex items-center gap-2">
+                <button type="submit" onClick={() => setSubmitAction('pending')} className="bg-amber-100 text-amber-800 border border-amber-300 px-6 py-3 rounded-lg hover:bg-amber-200 font-bold shadow-sm flex items-center gap-2">
                   Salvar como Pendente
                 </button>
-                <button type="submit" className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-bold shadow-sm flex items-center gap-2">
+                <button type="submit" onClick={() => setSubmitAction('approved')} className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-bold shadow-sm flex items-center gap-2">
                   <CheckCircle size={20} /> Salvar e Aprovar Proposta
                 </button>
               </div>

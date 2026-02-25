@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ activeProjects: 0, pendingInspections: 0, completedProjects: 0, monthlyRevenue: 0 });
+  const [todayEvents, setTodayEvents] = useState<any[]>([]);
   const [tomorrowEvents, setTomorrowEvents] = useState<any[]>([]);
   const { user } = useAuth();
 
@@ -14,13 +15,20 @@ export default function Dashboard() {
     // Fetch stats
     axios.get('/api/stats').then(res => setStats(res.data));
 
-    // Fetch events and filter for tomorrow
+    // Fetch events and filter for today and tomorrow
     axios.get('/api/events').then(res => {
+      const today = new Date();
       const tomorrow = addDays(new Date(), 1);
-      const filtered = res.data.filter((e: any) =>
+
+      const todayFiltered = res.data.filter((e: any) =>
+        isSameDay(parseISO(e.event_date), today)
+      );
+      const tomorrowFiltered = res.data.filter((e: any) =>
         isSameDay(parseISO(e.event_date), tomorrow)
       );
-      setTomorrowEvents(filtered);
+
+      setTodayEvents(todayFiltered);
+      setTomorrowEvents(tomorrowFiltered);
     }).catch(err => console.error("Error fetching events:", err));
   }, []);
 
@@ -44,7 +52,47 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="mt-8">
+      <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* Avisos de Hoje */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-amber-500 text-white p-4 flex items-center gap-2">
+            <Bell size={20} className="text-white" />
+            <h2 className="text-lg font-bold">Mural de Avisos (Hoje)</h2>
+            <span className="ml-auto text-sm bg-amber-600 px-3 py-1 rounded-full text-amber-50">
+              {format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}
+            </span>
+          </div>
+
+          <div className="p-0 h-96 overflow-y-auto">
+            {todayEvents.length > 0 ? (
+              <ul className="divide-y divide-gray-100">
+                {todayEvents.map((ev, idx) => (
+                  <li key={idx} className="p-4 hover:bg-gray-50 transition-colors flex items-start gap-4">
+                    <div className="bg-amber-100 text-amber-800 p-3 rounded-lg flex flex-col items-center justify-center min-w-[70px]">
+                      <CalendarIcon size={20} className="mb-1" />
+                      <span className="text-xs font-bold">{format(parseISO(ev.event_date), 'HH:mm')}</span>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-800 text-lg flex items-center gap-2">
+                        {ev.title}
+                        {ev.is_reminder && <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Lembrete</span>}
+                      </h4>
+                      {ev.description && <p className="text-gray-600 mt-1">{ev.description}</p>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="p-8 text-center text-gray-500 flex flex-col items-center justify-center h-full">
+                <Bell size={40} className="mx-auto mb-3 text-gray-300" />
+                <p>Nenhum evento letivo ou aviso agendado para hoje.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Avisos de Amanhã */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="bg-blue-900 text-white p-4 flex items-center gap-2">
             <Bell size={20} className="text-amber-400" />
@@ -54,7 +102,7 @@ export default function Dashboard() {
             </span>
           </div>
 
-          <div className="p-0">
+          <div className="p-0 h-96 overflow-y-auto">
             {tomorrowEvents.length > 0 ? (
               <ul className="divide-y divide-gray-100">
                 {tomorrowEvents.map((ev, idx) => (
@@ -74,13 +122,14 @@ export default function Dashboard() {
                 ))}
               </ul>
             ) : (
-              <div className="p-8 text-center text-gray-500">
+              <div className="p-8 text-center text-gray-500 flex flex-col items-center justify-center h-full">
                 <Bell size={40} className="mx-auto mb-3 text-gray-300" />
                 <p>Nenhum evento letivo ou aviso agendado para amanhã.</p>
               </div>
             )}
           </div>
         </div>
+
       </div>
     </div>
   );

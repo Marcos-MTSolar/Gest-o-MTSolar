@@ -15,11 +15,11 @@ export default function Homologation() {
 
   const fetchProjects = async () => {
     const res = await axios.get('/api/projects');
-    // Filter projects that are in homologation or ready for it (inspection done)
+    // Filter projects that are in homologation or ready for it (unlocked by documents)
     setProjects(res.data.filter((p: any) =>
       p.status !== 'completed' && (
         ['homologation', 'conclusion'].includes(p.current_stage) ||
-        (p.current_stage === 'inspection' && p.technical_status === 'approved')
+        !!p.homologation_status
       )
     ));
   };
@@ -67,7 +67,7 @@ export default function Homologation() {
                   <p className="text-sm text-gray-500">{p.title}</p>
                   <div className="mt-2">
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${p.homologation_status === 'connection_point_approved' ? 'bg-green-100 text-green-800' :
-                        p.homologation_status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+                      p.homologation_status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
                       }`}>
                       {statusOptions.find(o => o.value === p.homologation_status)?.label || 'Pendente'}
                     </span>
@@ -133,8 +133,8 @@ export default function Homologation() {
                       }
                     }}
                     className={`px-4 py-3 text-sm rounded-lg border transition-colors font-medium ${selectedProject.homologation_status === opt.value
-                        ? 'bg-blue-900 text-white border-blue-900 shadow-md'
-                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                      ? 'bg-blue-900 text-white border-blue-900 shadow-md'
+                      : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                       }`}
                   >
                     {opt.label}
