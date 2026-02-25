@@ -15,8 +15,10 @@ export default function Technical() {
   const fetchProjects = async () => {
     const res = await axios.get('/api/projects');
     // Filter projects that are ready for inspection or already in inspection
+    // Exclude projects where technical inspection is already approved
     setProjects(res.data.filter((p: any) =>
-      ['inspection', 'installation', 'homologation', 'conclusion'].includes(p.current_stage) || p.commercial_status === 'approved'
+      p.technical_status !== 'approved' &&
+      (['inspection', 'installation', 'homologation', 'conclusion'].includes(p.current_stage) || p.commercial_status === 'approved')
     ));
   };
 

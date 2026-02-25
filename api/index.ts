@@ -388,6 +388,24 @@ app.put('/api/projects/:id/installation', authenticateToken, upload.any(), async
   res.json({ success: true });
 });
 
+// Homologation Update
+app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, res) => {
+  const { homologation_status, rejection_reason } = req.body;
+
+  await supabase.from('projects').update({
+    homologation_status,
+    rejection_reason,
+    updated_at: new Date()
+  }).eq('id', req.params.id);
+
+  if (homologation_status === 'connection_point_approved') {
+    await supabase.from('projects').update({ current_stage: 'completed', status: 'completed', updated_at: new Date() }).eq('id', req.params.id);
+  }
+
+  broadcast('PROJECT_UPDATED', { id: req.params.id, type: 'homologation' });
+  res.json({ success: true });
+});
+
 // Messages
 app.get('/api/messages', authenticateToken, async (req: any, res) => {
   const { data: messages } = await supabase

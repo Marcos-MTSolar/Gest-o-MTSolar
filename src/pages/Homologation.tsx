@@ -6,7 +6,7 @@ export default function Homologation() {
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
 
-  const [rejectionModal, setRejectionModal] = useState<{projectId: number, isOpen: boolean}>({ projectId: 0, isOpen: false });
+  const [rejectionModal, setRejectionModal] = useState<{ projectId: number, isOpen: boolean }>({ projectId: 0, isOpen: false });
   const [rejectionReason, setRejectionReason] = useState('');
 
   useEffect(() => {
@@ -16,9 +16,11 @@ export default function Homologation() {
   const fetchProjects = async () => {
     const res = await axios.get('/api/projects');
     // Filter projects that are in homologation or ready for it (inspection done)
-    setProjects(res.data.filter((p: any) => 
-      ['homologation', 'conclusion'].includes(p.current_stage) || 
-      (p.current_stage === 'inspection' && p.technical_status === 'approved')
+    setProjects(res.data.filter((p: any) =>
+      p.status !== 'completed' && (
+        ['homologation', 'conclusion'].includes(p.current_stage) ||
+        (p.current_stage === 'inspection' && p.technical_status === 'approved')
+      )
     ));
   };
 
@@ -64,15 +66,14 @@ export default function Homologation() {
                   <h3 className="text-lg font-bold text-gray-800">{p.client_name}</h3>
                   <p className="text-sm text-gray-500">{p.title}</p>
                   <div className="mt-2">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      p.homologation_status === 'connection_point_approved' ? 'bg-green-100 text-green-800' : 
-                      p.homologation_status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
-                    }`}>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${p.homologation_status === 'connection_point_approved' ? 'bg-green-100 text-green-800' :
+                        p.homologation_status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+                      }`}>
                       {statusOptions.find(o => o.value === p.homologation_status)?.label || 'Pendente'}
                     </span>
                   </div>
                 </div>
-                <button 
+                <button
                   onClick={async () => {
                     const res = await axios.get(`/api/projects/${p.id}`);
                     setSelectedProject(res.data);
@@ -107,7 +108,7 @@ export default function Homologation() {
                     'bill_generator': 'Conta Geradora',
                     'bill_beneficiary': 'Conta Beneficiária'
                   }[type];
-                  
+
                   return (
                     <div key={type} className={`p-3 rounded-lg border flex items-center justify-between ${hasDoc ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
                       <span className={`font-medium ${hasDoc ? 'text-green-800' : 'text-red-800'}`}>{label}</span>
@@ -131,11 +132,10 @@ export default function Homologation() {
                         handleUpdate(selectedProject.id, opt.value);
                       }
                     }}
-                    className={`px-4 py-3 text-sm rounded-lg border transition-colors font-medium ${
-                      selectedProject.homologation_status === opt.value 
-                        ? 'bg-blue-900 text-white border-blue-900 shadow-md' 
+                    className={`px-4 py-3 text-sm rounded-lg border transition-colors font-medium ${selectedProject.homologation_status === opt.value
+                        ? 'bg-blue-900 text-white border-blue-900 shadow-md'
                         : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                    }`}
+                      }`}
                   >
                     {opt.label}
                   </button>
@@ -152,7 +152,7 @@ export default function Homologation() {
                 </div>
               </div>
             )}
-            
+
             {selectedProject.homologation_status === 'connection_point_approved' && (
               <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-green-800 flex items-center gap-3">
                 <CheckCircle size={24} />
@@ -173,20 +173,20 @@ export default function Homologation() {
               <AlertTriangle /> Reprovar Análise
             </h2>
             <p className="text-gray-600 mb-4">Por favor, informe o motivo da reprovação:</p>
-            <textarea 
+            <textarea
               className="w-full border p-3 rounded-lg mb-4 h-32 focus:ring-2 focus:ring-red-500 outline-none"
               placeholder="Descreva o motivo..."
               value={rejectionReason}
               onChange={e => setRejectionReason(e.target.value)}
             ></textarea>
             <div className="flex justify-end gap-2">
-              <button 
+              <button
                 onClick={() => setRejectionModal({ projectId: 0, isOpen: false })}
                 className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
               >
                 Cancelar
               </button>
-              <button 
+              <button
                 onClick={() => handleUpdate(rejectionModal.projectId, 'rejected', rejectionReason)}
                 className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-medium"
                 disabled={!rejectionReason.trim()}

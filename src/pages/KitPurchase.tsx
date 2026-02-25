@@ -12,8 +12,11 @@ export default function KitPurchase() {
 
   const fetchProjects = async () => {
     const res = await axios.get('/api/projects');
-    // Filter projects that are commercially approved
-    setProjects(res.data.filter((p: any) => p.commercial_status === 'approved'));
+    // Filter projects that are commercially approved or have advanced past commercial
+    setProjects(res.data.filter((p: any) =>
+      p.commercial_status === 'approved' ||
+      ['inspection', 'installation', 'homologation', 'conclusion', 'completed'].includes(p.current_stage)
+    ));
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
@@ -61,7 +64,7 @@ export default function KitPurchase() {
                     </span>
                   </div>
                 </div>
-                <button 
+                <button
                   onClick={async () => {
                     const res = await axios.get(`/api/projects/${p.id}`);
                     setSelectedProject(res.data);
@@ -93,62 +96,62 @@ export default function KitPurchase() {
             <form onSubmit={handleUpdate} className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Modelo do Inversor</label>
-                <input 
-                  name="inverter_model" 
-                  defaultValue={selectedProject.inverter_model} 
+                <input
+                  name="inverter_model"
+                  defaultValue={selectedProject.inverter_model}
                   placeholder="Ex: Growatt 5kW"
-                  className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                  className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Potência do Inversor</label>
-                <input 
-                  name="inverter_power" 
-                  defaultValue={selectedProject.inverter_power} 
+                <input
+                  name="inverter_power"
+                  defaultValue={selectedProject.inverter_power}
                   placeholder="Ex: 5000W"
-                  className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                  className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Modelo do Módulo</label>
-                <input 
-                  name="module_model" 
-                  defaultValue={selectedProject.module_model} 
+                <input
+                  name="module_model"
+                  defaultValue={selectedProject.module_model}
                   placeholder="Ex: Canadian 550W"
-                  className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                  className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Potência do Módulo</label>
-                <input 
-                  name="module_power" 
-                  defaultValue={selectedProject.module_power} 
+                <input
+                  name="module_power"
+                  defaultValue={selectedProject.module_power}
                   placeholder="Ex: 550W"
-                  className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                  className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
-              
+
               <div className="md:col-span-2 mt-4 pt-4 border-t">
                 <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
                   <div className="flex items-center gap-4">
                     <span className="text-sm font-bold text-gray-700">Status da Compra:</span>
                     <div className="flex items-center gap-4">
                       <label className="flex items-center cursor-pointer">
-                        <input 
-                          type="radio" 
-                          name="kit_purchased" 
-                          value="true" 
-                          defaultChecked={selectedProject.kit_purchased} 
+                        <input
+                          type="radio"
+                          name="kit_purchased"
+                          value="true"
+                          defaultChecked={selectedProject.kit_purchased}
                           className="w-5 h-5 text-blue-600 focus:ring-blue-500"
                         />
                         <span className="ml-2 text-sm text-gray-700 font-medium">Kit Comprado</span>
                       </label>
                       <label className="flex items-center cursor-pointer">
-                        <input 
-                          type="radio" 
-                          name="kit_purchased" 
-                          value="false" 
-                          defaultChecked={!selectedProject.kit_purchased} 
+                        <input
+                          type="radio"
+                          name="kit_purchased"
+                          value="false"
+                          defaultChecked={!selectedProject.kit_purchased}
                           className="w-5 h-5 text-blue-600 focus:ring-blue-500"
                         />
                         <span className="ml-2 text-sm text-gray-700 font-medium">Pendente</span>

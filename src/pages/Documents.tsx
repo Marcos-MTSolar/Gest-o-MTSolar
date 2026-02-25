@@ -49,22 +49,7 @@ export default function Documents() {
     try {
       await axios.post('/api/documents', formData);
 
-      // Auto-activate homologation if this is the last required doc
-      const currentDocs = documents.filter(d => d.project_id === parseInt(newDoc.project_id));
-      const hasType = (t: string) => currentDocs.some(d => d.type === t) || newDoc.type === t;
-
-      if (hasType('rg_cnh') && hasType('art') && hasType('bill_generator')) {
-        try {
-          await axios.put(`/api/projects/${newDoc.project_id}/homologation`, {
-            homologation_status: 'technical_analysis'
-          });
-          alert('Documento enviado! Como todos os documentos obrigatórios foram anexados, a Homologação foi ativada automaticamente.');
-        } catch (error) {
-          alert('Documento enviado. Ocorreu um erro ao ativar a homologação automaticamente.');
-        }
-      } else {
-        alert('Documento enviado com sucesso!');
-      }
+      alert('Documento enviado com sucesso!');
 
       setNewDoc(prev => ({ ...prev, title: '', type: '' }));
       setFile(null);
@@ -174,12 +159,19 @@ export default function Documents() {
               })}
             </div>
 
-            {!isComplete ? (
-              <p className="text-xs text-gray-500 mt-2">Envie todos os documentos obrigatórios para ativar a homologação automaticamente.</p>
-            ) : (
-              <p className="text-sm text-green-700 font-bold mt-2 flex items-center gap-2">
-                <CheckCircle size={18} /> Homologação já ativada para este projeto!
-              </p>
+            <button
+              onClick={handleConfirmDocs}
+              disabled={!isComplete}
+              className={`px-4 py-2 rounded font-bold text-sm flex items-center gap-2 transition-colors ${isComplete
+                  ? 'bg-green-600 text-white hover:bg-green-700 shadow-sm'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+            >
+              <CheckCircle size={18} />
+              Confirmar Envios e Ativar Homologação
+            </button>
+            {!isComplete && (
+              <p className="text-xs text-gray-500 mt-2">Envie todos os documentos obrigatórios para habilitar e ativar a homologação do cliente.</p>
             )}
           </div>
         )}

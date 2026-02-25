@@ -17,7 +17,8 @@ export default function Commercial() {
 
   const fetchProjects = async () => {
     const res = await axios.get('/api/projects');
-    setProjects(res.data);
+    // Hide projects that have already been finalized in the commercial stage
+    setProjects(res.data.filter((p: any) => p.commercial_status !== 'approved'));
   };
 
   const handleCreateClient = async (e: React.FormEvent) => {
