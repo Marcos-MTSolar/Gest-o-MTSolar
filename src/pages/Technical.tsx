@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { CheckCircle, AlertTriangle, Camera, Video, X } from 'lucide-react';
 
@@ -7,7 +7,7 @@ export default function Technical() {
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isReinforcementNeeded, setIsReinforcementNeeded] = useState(false);
-  const [submitAction, setSubmitAction] = useState('pending');
+  const submitAction = useRef('pending');
 
   useEffect(() => {
     fetchProjects();
@@ -45,7 +45,7 @@ export default function Technical() {
       formData.append('inspection_media', file);
     });
 
-    const action = submitAction || 'pending';
+    const action = submitAction.current || 'pending';
     const isApproving = action === 'approved';
 
     if (isApproving) {
@@ -241,14 +241,14 @@ export default function Technical() {
               )}
               <button
                 type="submit"
-                onClick={() => setSubmitAction('pending')}
+                onClick={() => { submitAction.current = 'pending'; }}
                 className="px-6 py-2 bg-amber-100 text-amber-800 border border-amber-300 rounded hover:bg-amber-200 font-bold shadow-sm flex items-center gap-2"
               >
                 Salvar como Pendente
               </button>
               <button
                 type="submit"
-                onClick={() => setSubmitAction('approved')}
+                onClick={() => { submitAction.current = 'approved'; }}
                 className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-bold shadow-sm flex items-center gap-2"
               >
                 <CheckCircle size={18} /> {selectedProject.technical_status === 'approved' ? 'Atualizar Vistoria' : 'Finalizar Vistoria'}

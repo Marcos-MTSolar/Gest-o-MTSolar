@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { Plus, Search, FileText, CheckCircle, Clock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -12,7 +12,7 @@ export default function Commercial() {
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [showEditClient, setShowEditClient] = useState(false);
   const [editClientData, setEditClientData] = useState<any>({});
-  const [submitAction, setSubmitAction] = useState('pending');
+  const submitAction = useRef('pending');
 
   useEffect(() => {
     fetchProjects();
@@ -47,7 +47,7 @@ export default function Commercial() {
     const proposal_value = formData.get('proposal_value') as string;
     const payment_method = formData.get('payment_method') as string;
 
-    const action = submitAction || 'pending';
+    const action = submitAction.current || 'pending';
 
     if (!proposal_value || !payment_method) {
       alert("Por favor, preencha o Valor da Proposta e a Forma de Pagamento antes de salvar.");
@@ -264,10 +264,10 @@ export default function Commercial() {
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t">
-                <button type="submit" onClick={() => setSubmitAction('pending')} className="bg-amber-100 text-amber-800 border border-amber-300 px-6 py-3 rounded-lg hover:bg-amber-200 font-bold shadow-sm flex items-center gap-2">
+                <button type="submit" onClick={() => { submitAction.current = 'pending'; }} className="bg-amber-100 text-amber-800 border border-amber-300 px-6 py-3 rounded-lg hover:bg-amber-200 font-bold shadow-sm flex items-center gap-2">
                   Salvar como Pendente
                 </button>
-                <button type="submit" onClick={() => setSubmitAction('approved')} className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-bold shadow-sm flex items-center gap-2">
+                <button type="submit" onClick={() => { submitAction.current = 'approved'; }} className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-bold shadow-sm flex items-center gap-2">
                   <CheckCircle size={20} /> Salvar e Aprovar Proposta
                 </button>
               </div>
