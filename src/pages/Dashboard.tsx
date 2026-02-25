@@ -7,8 +7,10 @@ import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ activeProjects: 0, pendingInspections: 0, completedProjects: 0, monthlyRevenue: 0 });
+  const [allEvents, setAllEvents] = useState<any[]>([]);
   const [todayEvents, setTodayEvents] = useState<any[]>([]);
   const [tomorrowEvents, setTomorrowEvents] = useState<any[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const { user } = useAuth();
 
   useEffect(() => {
@@ -17,6 +19,7 @@ export default function Dashboard() {
 
     // Fetch events and filter for today and tomorrow
     axios.get('/api/events').then(res => {
+      setAllEvents(res.data);
       const today = new Date();
       const tomorrow = addDays(new Date(), 1);
 
@@ -31,6 +34,14 @@ export default function Dashboard() {
       setTomorrowEvents(tomorrowFiltered);
     }).catch(err => console.error("Error fetching events:", err));
   }, []);
+
+  const selectedDateFiltered = allEvents.filter((e: any) => {
+    try {
+      return format(parseISO(e.event_date), 'yyyy-MM-dd') === selectedDate;
+    } catch {
+      return false;
+    }
+  });
 
   return (
     <div className="p-6">
@@ -52,7 +63,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {/* Avisos de Hoje */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -125,6 +136,49 @@ export default function Dashboard() {
               <div className="p-8 text-center text-gray-500 flex flex-col items-center justify-center h-full">
                 <Bell size={40} className="mx-auto mb-3 text-gray-300" />
                 <p>Nenhum evento letivo ou aviso agendado para amanhã.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Avisos por Data (Mural) */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-full">
+          <div className="bg-emerald-600 text-white p-4 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <CalendarIcon size={20} className="text-emerald-100" />
+              <h2 className="text-lg font-bold">Mural por Data</h2>
+            </div>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="px-2 py-1 min-w-[130px] rounded text-emerald-900 text-sm font-bold border-none outline-none focus:ring-2 focus:ring-emerald-300 ml-2"
+            />
+          </div>
+
+          <div className="p-0 h-96 overflow-y-auto">
+            {selectedDateFiltered.length > 0 ? (
+              <ul className="divide-y divide-gray-100">
+                {selectedDateFiltered.map((ev, idx) => (
+                  <li key={idx} className="p-4 hover:bg-gray-50 transition-colors flex items-start gap-4">
+                    <div className="bg-emerald-100 text-emerald-800 p-3 rounded-lg flex flex-col items-center justify-center min-w-[70px]">
+                      <CalendarIcon size={20} className="mb-1" />
+                      <span className="text-xs font-bold">{format(parseISO(ev.event_date), 'HH:mm')}</span>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-800 text-lg flex items-center gap-2">
+                        {ev.title}
+                        {ev.is_reminder && <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Lembrete</span>}
+                      </h4>
+                      {ev.description && <p className="text-gray-600 mt-1">{ev.description}</p>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="p-8 text-center text-gray-500 flex flex-col items-center justify-center h-full">
+                <CalendarIcon size={40} className="mx-auto mb-3 text-gray-300" />
+                <p>Nenhum evento letivo ou aviso agendado para esta data.</p>
               </div>
             )}
           </div>

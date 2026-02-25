@@ -314,7 +314,12 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
 });
 
 app.delete('/api/projects/:id', authenticateToken, async (req: any, res) => {
-  // Cascading deletes on the database side should clean up commercial_data and technical_data
+  // Cascading deletes manually in case DB does not have ON DELETE CASCADE
+  await supabase.from('commercial_data').delete().eq('project_id', req.params.id);
+  await supabase.from('technical_data').delete().eq('project_id', req.params.id);
+  await supabase.from('documents').delete().eq('project_id', req.params.id);
+  await supabase.from('media').delete().eq('project_id', req.params.id);
+
   await supabase.from('projects').delete().eq('id', req.params.id);
   broadcast('PROJECT_DELETED', { id: req.params.id });
   res.json({ success: true });
