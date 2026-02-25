@@ -235,6 +235,14 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
   res.json({ id: client.id });
 });
 
+app.put('/api/clients/:id', authenticateToken, async (req: any, res) => {
+  const { name, phone, email, address, city, state, cpf_cnpj } = req.body;
+  await supabase.from('clients')
+    .update({ name, phone, email, address, city, state, cpf_cnpj })
+    .eq('id', req.params.id);
+  res.json({ success: true });
+});
+
 // Projects
 app.get('/api/projects', authenticateToken, async (req: any, res) => {
   const { data: projects } = await supabase
@@ -303,6 +311,13 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
   };
 
   res.json(formatted);
+});
+
+app.delete('/api/projects/:id', authenticateToken, async (req: any, res) => {
+  // Cascading deletes on the database side should clean up commercial_data and technical_data
+  await supabase.from('projects').delete().eq('id', req.params.id);
+  broadcast('PROJECT_DELETED', { id: req.params.id });
+  res.json({ success: true });
 });
 
 // Commercial Update

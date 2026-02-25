@@ -10,7 +10,8 @@ export default function Commercial() {
   const { user } = useAuth();
 
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
-  const [submitAction, setSubmitAction] = useState<'pending' | 'approved'>('pending');
+  const [showEditClient, setShowEditClient] = useState(false);
+  const [editClientData, setEditClientData] = useState<any>({});
 
   useEffect(() => {
     fetchProjects();
@@ -45,32 +46,58 @@ export default function Commercial() {
     const proposal_value = formData.get('proposal_value') as string;
     const payment_method = formData.get('payment_method') as string;
 
+    const submitter = (e.nativeEvent as React.BaseSyntheticEvent | any)?.submitter as HTMLButtonElement;
+    const action = submitter?.value || 'pending';
+
     if (!proposal_value || !payment_method) {
       alert("Por favor, preencha o Valor da Proposta e a Forma de Pagamento antes de salvar.");
       return;
     }
 
     try {
-      console.log("Comercial API payload:", {
-        proposal_value,
-        payment_method,
-        notes: formData.get('notes'),
-        pendencies: formData.get('pendencies'),
-        status: submitAction
-      });
-
       await axios.put(`/api/projects/${selectedProject.id}/commercial`, {
         proposal_value,
         payment_method,
         notes: formData.get('notes'),
         pendencies: formData.get('pendencies'),
-        status: submitAction
+        status: action
       });
-      alert("Dados comerciais salvos com sucesso!");
+      alert(action === 'approved' ? "Proposta Comercial Aprovada!" : "Dados comerciais salvos como pendente.");
       await fetchProjects();
       setSelectedProject(null);
     } catch (error) {
       alert('Erro ao atualizar projeto');
+    }
+  };
+
+  const handleEditClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (!selectedProject) return;
+      await axios.put(`/api/clients/${selectedProject.client_id}`, editClientData);
+      setShowEditClient(false);
+      alert('Cadastro de cliente atualizado com sucesso!');
+      await fetchProjects();
+      // Refetch current project to update headers
+      const res = await axios.get(`/api/projects/${selectedProject.id}`);
+      setSelectedProject(res.data);
+    } catch (error) {
+      alert('Erro ao atualizar cadastro do cliente');
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    if (!selectedProject) return;
+    const confirmDelete = window.confirm(`Tem certeza que deseja remover o projeto e cadastro comercial deste cliente? Esta ação é irreversível.`);
+    if (!confirmDelete) return;
+
+    try {
+      await axios.delete(`/api/projects/${selectedProject.id}`);
+      alert('Projeto removido com sucesso.');
+      setSelectedProject(null);
+      await fetchProjects();
+    } catch (error) {
+      alert('Erro ao remover projeto');
     }
   };
 
@@ -172,7 +199,32 @@ export default function Commercial() {
               <h2 className="text-xl font-bold text-gray-800">Comercial: {selectedProject.client_name}</h2>
               <p className="text-sm text-gray-500">{selectedProject.title}</p>
             </div>
-            <button onClick={() => setSelectedProject(null)} className="text-gray-500 hover:text-gray-700 font-medium">Voltar</button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setEditClientData({
+                    name: selectedProject.client_name || '',
+                    cpf_cnpj: selectedProject.cpf_cnpj || '',
+                    phone: selectedProject.phone || '',
+                    email: selectedProject.email || '',
+                    address: selectedProject.address || '',
+                    city: selectedProject.city || '',
+                    state: selectedProject.state || ''
+                  });
+                  setShowEditClient(true);
+                }}
+                className="text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded border border-transparent hover:bg-blue-50"
+              >
+                Editar Cliente
+              </button>
+              <button
+                onClick={handleDeleteProject}
+                className="text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded border border-transparent hover:bg-red-50"
+              >
+                Remover Desistência
+              </button>
+              <button onClick={() => setSelectedProject(null)} className="ml-2 bg-gray-200 text-gray-700 px-3 py-1 rounded hover:bg-gray-300 font-medium">Voltar</button>
+            </div>
           </div>
 
           <div className="p-6">
@@ -212,12 +264,35 @@ export default function Commercial() {
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t">
-                <button type="submit" onClick={() => setSubmitAction('pending')} className="bg-amber-100 text-amber-800 border border-amber-300 px-6 py-3 rounded-lg hover:bg-amber-200 font-bold shadow-sm flex items-center gap-2">
+                <button type="submit" name="action" value="pending" className="bg-amber-100 text-amber-800 border border-amber-300 px-6 py-3 rounded-lg hover:bg-amber-200 font-bold shadow-sm flex items-center gap-2">
                   Salvar como Pendente
                 </button>
-                <button type="submit" onClick={() => setSubmitAction('approved')} className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-bold shadow-sm flex items-center gap-2">
+                <button type="submit" name="action" value="approved" className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-bold shadow-sm flex items-center gap-2">
                   <CheckCircle size={20} /> Salvar e Aprovar Proposta
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Client Modal */}
+      {showEditClient && selectedProject && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-xl w-full max-w-2xl">
+            <h2 className="text-xl font-bold mb-4">Editar Cliente</h2>
+            <form onSubmit={handleEditClient} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <input placeholder="Nome Completo" className="border p-2 rounded" required value={editClientData.name} onChange={e => setEditClientData({ ...editClientData, name: e.target.value })} />
+              <input placeholder="CPF/CNPJ" className="border p-2 rounded" value={editClientData.cpf_cnpj} onChange={e => setEditClientData({ ...editClientData, cpf_cnpj: e.target.value })} />
+              <input placeholder="Telefone" className="border p-2 rounded" value={editClientData.phone} onChange={e => setEditClientData({ ...editClientData, phone: e.target.value })} />
+              <input placeholder="Email" className="border p-2 rounded" value={editClientData.email} onChange={e => setEditClientData({ ...editClientData, email: e.target.value })} />
+              <input placeholder="Endereço" className="border p-2 rounded md:col-span-2" value={editClientData.address} onChange={e => setEditClientData({ ...editClientData, address: e.target.value })} />
+              <input placeholder="Cidade" className="border p-2 rounded" value={editClientData.city} onChange={e => setEditClientData({ ...editClientData, city: e.target.value })} />
+              <input placeholder="Estado" className="border p-2 rounded" value={editClientData.state} onChange={e => setEditClientData({ ...editClientData, state: e.target.value })} />
+
+              <div className="md:col-span-2 flex justify-end gap-2 mt-4">
+                <button type="button" onClick={() => setShowEditClient(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-blue-900 text-white rounded hover:bg-blue-800">Salvar Alterações</button>
               </div>
             </form>
           </div>

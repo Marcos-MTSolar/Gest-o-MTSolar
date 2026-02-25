@@ -7,7 +7,6 @@ export default function Technical() {
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isReinforcementNeeded, setIsReinforcementNeeded] = useState(false);
-  const [submitAction, setSubmitAction] = useState<'pending' | 'approved'>('pending');
 
   useEffect(() => {
     fetchProjects();
@@ -45,7 +44,9 @@ export default function Technical() {
       formData.append('inspection_media', file);
     });
 
-    const isApproving = submitAction === 'approved';
+    const submitter = (e.nativeEvent as React.BaseSyntheticEvent | any)?.submitter as HTMLButtonElement;
+    const action = submitter?.value || 'pending';
+    const isApproving = action === 'approved';
 
     if (isApproving) {
       // Validation: Check if any required field is empty
@@ -71,7 +72,7 @@ export default function Technical() {
 
     // Append status and reinforcement boolean mapping correctly
     formData.set('reinforcement_needed', isReinforcementNeeded ? 'true' : 'false');
-    formData.set('status', isApproving ? 'approved' : 'pending');
+    formData.set('status', action);
 
     try {
       await axios.put(`/api/projects/${selectedProject.id}/technical`, formData, {
@@ -240,14 +241,16 @@ export default function Technical() {
               )}
               <button
                 type="submit"
-                onClick={() => setSubmitAction('pending')}
+                name="action"
+                value="pending"
                 className="px-6 py-2 bg-amber-100 text-amber-800 border border-amber-300 rounded hover:bg-amber-200 font-bold shadow-sm flex items-center gap-2"
               >
                 Salvar como Pendente
               </button>
               <button
                 type="submit"
-                onClick={() => setSubmitAction('approved')}
+                name="action"
+                value="approved"
                 className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-bold shadow-sm flex items-center gap-2"
               >
                 <CheckCircle size={18} /> {selectedProject.technical_status === 'approved' ? 'Atualizar Vistoria' : 'Finalizar Vistoria'}

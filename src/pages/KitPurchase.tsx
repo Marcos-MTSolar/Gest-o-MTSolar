@@ -19,6 +19,15 @@ export default function KitPurchase() {
     ));
   };
 
+  const structureMap: Record<string, string> = {
+    ceramico: 'Telhado Cerâmico',
+    fibrocimento: 'Telhado Fibrocimento',
+    metalico: 'Telhado Metálico',
+    laje: 'Laje',
+    solo: 'Solo',
+    outros: 'Outros'
+  };
+
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProject) return;
@@ -57,7 +66,7 @@ export default function KitPurchase() {
                 <div>
                   <h3 className="text-lg font-bold text-gray-800">{p.client_name}</h3>
                   <p className="text-sm text-gray-500">{p.title}</p>
-                  <p className="text-xs text-gray-400 mt-1">Tipo de Estrutura: <span className="font-semibold text-gray-600">{p.structure_type || 'Não definido'}</span></p>
+                  <p className="text-xs text-gray-400 mt-1">Tipo de Estrutura: <span className="font-semibold text-gray-600">{structureMap[p.structure_type] || p.structure_type || 'Não definido'}</span></p>
                   <div className="mt-2">
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${p.kit_purchased ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
                       {p.kit_purchased ? 'Kit Comprado' : 'Pendente Compra'}
@@ -90,7 +99,7 @@ export default function KitPurchase() {
           <div className="p-6">
             <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
               <p className="text-sm text-gray-600 mb-1">Tipo de Estrutura Definido na Vistoria:</p>
-              <p className="text-lg font-bold text-blue-900">{selectedProject.structure_type || 'Não informado'}</p>
+              <p className="text-lg font-bold text-blue-900">{structureMap[selectedProject.structure_type] || selectedProject.structure_type || 'Não informado'}</p>
             </div>
 
             <form onSubmit={handleUpdate} className="grid grid-cols-1 md:grid-cols-2 gap-6">
