@@ -262,7 +262,7 @@ app.get('/api/projects', authenticateToken, async (req: any, res) => {
     commercial_status: p.commercial_data?.[0]?.status, // Supabase returns array for 1:many/1:1 unless specified
     commercial_pendencies: p.commercial_data?.[0]?.pendencies,
     technical_status: p.technical_data?.[0]?.status,
-    structure_type: p.technical_data?.[0]?.structure_type
+    structure_type: p.structure_type || p.technical_data?.[0]?.structure_type
   }));
 
   res.json(formatted);
@@ -306,6 +306,7 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
     ...project.technical_data?.[0], // Spread all technical fields
     technical_notes: project.technical_data?.[0]?.observations,
     technical_status: project.technical_data?.[0]?.status,
+    structure_type: project.structure_type || project.technical_data?.[0]?.structure_type,
 
     documents
   };
@@ -319,6 +320,8 @@ app.delete('/api/projects/:id', authenticateToken, async (req: any, res) => {
   await supabase.from('technical_data').delete().eq('project_id', req.params.id);
   await supabase.from('documents').delete().eq('project_id', req.params.id);
   await supabase.from('media').delete().eq('project_id', req.params.id);
+  // Optional depending on schema: clean up any other related tables directly bound to project_id here.
+
 
   await supabase.from('projects').delete().eq('id', req.params.id);
   broadcast('PROJECT_DELETED', { id: req.params.id });
@@ -401,6 +404,11 @@ app.put('/api/projects/:id/technical', authenticateToken, upload.any(), async (r
       inspection_media: JSON.stringify(finalMedia), updated_at: new Date()
     })
     .eq('project_id', req.params.id);
+
+  // Sync the structure_type to the projects table for KitPurchase to read reliably
+  if (structure_type) {
+    await supabase.from('projects').update({ structure_type }).eq('id', req.params.id);
+  }
 
   if (status === 'approved') {
     await supabase.from('projects').update({ current_stage: 'installation', updated_at: new Date() }).eq('id', req.params.id);
