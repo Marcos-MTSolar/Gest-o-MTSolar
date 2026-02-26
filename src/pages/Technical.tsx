@@ -14,13 +14,21 @@ export default function Technical() {
   }, []);
 
   const fetchProjects = async () => {
-    const res = await axios.get('/api/projects');
-    // Filter projects that are ready for inspection or already in inspection
-    // Exclude projects where technical inspection is already approved
-    setProjects(res.data.filter((p: any) =>
-      p.technical_status !== 'approved' && p.technical_status !== 'vistoria_concluida' &&
-      (['inspection', 'installation', 'homologation', 'conclusion'].includes(p.current_stage) || p.commercial_status === 'approved' || p.commercial_status === 'proposta_enviada')
-    ));
+    try {
+      const res = await axios.get('/api/projects');
+      if (Array.isArray(res.data)) {
+        // Filter projects that are ready for inspection or already in inspection
+        // Exclude projects where technical inspection is already approved
+        setProjects(res.data.filter((p: any) =>
+          p.technical_status !== 'approved' && p.technical_status !== 'vistoria_concluida' &&
+          (['inspection', 'installation', 'homologation', 'conclusion'].includes(p.current_stage) || p.commercial_status === 'approved' || p.commercial_status === 'proposta_enviada')
+        ));
+      } else {
+        setProjects([]);
+      }
+    } catch {
+      setProjects([]);
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {

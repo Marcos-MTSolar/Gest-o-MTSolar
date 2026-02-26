@@ -14,8 +14,12 @@ export default function Users() {
   }, []);
 
   const fetchUsers = async () => {
-    const res = await axios.get('/api/users');
-    setUsers(res.data);
+    try {
+      const res = await axios.get('/api/users');
+      setUsers(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setUsers([]);
+    }
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -57,34 +61,34 @@ export default function Users() {
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Gerenciar Usuários</h1>
-      
+
       {user?.role === 'CEO' && (
         <div className="bg-white p-6 rounded-xl shadow-sm mb-8">
           <h2 className="text-lg font-semibold mb-4">Novo Usuário</h2>
           <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <input 
-              placeholder="Nome" 
-              className="border p-2 rounded" 
-              value={newUser.name} 
-              onChange={e => setNewUser({...newUser, name: e.target.value})} 
+            <input
+              placeholder="Nome"
+              className="border p-2 rounded"
+              value={newUser.name}
+              onChange={e => setNewUser({ ...newUser, name: e.target.value })}
             />
-            <input 
-              placeholder="Email" 
-              className="border p-2 rounded" 
-              value={newUser.email} 
-              onChange={e => setNewUser({...newUser, email: e.target.value})} 
+            <input
+              placeholder="Email"
+              className="border p-2 rounded"
+              value={newUser.email}
+              onChange={e => setNewUser({ ...newUser, email: e.target.value })}
             />
-            <input 
-              placeholder="Senha" 
-              type="password" 
-              className="border p-2 rounded" 
-              value={newUser.password} 
-              onChange={e => setNewUser({...newUser, password: e.target.value})} 
+            <input
+              placeholder="Senha"
+              type="password"
+              className="border p-2 rounded"
+              value={newUser.password}
+              onChange={e => setNewUser({ ...newUser, password: e.target.value })}
             />
-            <select 
-              className="border p-2 rounded" 
-              value={newUser.role} 
-              onChange={e => setNewUser({...newUser, role: e.target.value})}
+            <select
+              className="border p-2 rounded"
+              value={newUser.role}
+              onChange={e => setNewUser({ ...newUser, role: e.target.value })}
             >
               <option value="ADMIN">Admin</option>
               <option value="COMMERCIAL">Comercial</option>
@@ -102,35 +106,35 @@ export default function Users() {
             <form onSubmit={handleUpdate} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Nome</label>
-                <input 
-                  className="w-full border p-2 rounded" 
-                  value={editingUser.name} 
-                  onChange={e => setEditingUser({...editingUser, name: e.target.value})} 
+                <input
+                  className="w-full border p-2 rounded"
+                  value={editingUser.name}
+                  onChange={e => setEditingUser({ ...editingUser, name: e.target.value })}
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Email</label>
-                <input 
-                  className="w-full border p-2 rounded" 
-                  value={editingUser.email} 
-                  onChange={e => setEditingUser({...editingUser, email: e.target.value})} 
+                <input
+                  className="w-full border p-2 rounded"
+                  value={editingUser.email}
+                  onChange={e => setEditingUser({ ...editingUser, email: e.target.value })}
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Nova Senha (opcional)</label>
-                <input 
+                <input
                   type="password"
-                  className="w-full border p-2 rounded" 
+                  className="w-full border p-2 rounded"
                   placeholder="Deixe em branco para manter"
-                  onChange={e => setEditingUser({...editingUser, password: e.target.value})} 
+                  onChange={e => setEditingUser({ ...editingUser, password: e.target.value })}
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Função</label>
-                <select 
-                  className="w-full border p-2 rounded" 
-                  value={editingUser.role} 
-                  onChange={e => setEditingUser({...editingUser, role: e.target.value})}
+                <select
+                  className="w-full border p-2 rounded"
+                  value={editingUser.role}
+                  onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
                 >
                   <option value="ADMIN">Admin</option>
                   <option value="COMMERCIAL">Comercial</option>
@@ -139,10 +143,10 @@ export default function Users() {
                 </select>
               </div>
               <div className="flex items-center">
-                <input 
-                  type="checkbox" 
-                  checked={editingUser.active} 
-                  onChange={e => setEditingUser({...editingUser, active: e.target.checked})}
+                <input
+                  type="checkbox"
+                  checked={editingUser.active}
+                  onChange={e => setEditingUser({ ...editingUser, active: e.target.checked })}
                   className="w-4 h-4 text-blue-600"
                 />
                 <label className="ml-2 text-sm text-gray-700">Ativo</label>
@@ -174,10 +178,10 @@ export default function Users() {
                 <td className="p-4">{u.email}</td>
                 <td className="p-4">
                   <span className={`px-2 py-1 rounded-full text-xs font-semibold
-                    ${u.role === 'CEO' ? 'bg-purple-100 text-purple-800' : 
+                    ${u.role === 'CEO' ? 'bg-purple-100 text-purple-800' :
                       u.role === 'ADMIN' ? 'bg-blue-100 text-blue-800' :
-                      u.role === 'COMMERCIAL' ? 'bg-green-100 text-green-800' :
-                      'bg-amber-100 text-amber-800'
+                        u.role === 'COMMERCIAL' ? 'bg-green-100 text-green-800' :
+                          'bg-amber-100 text-amber-800'
                     }`}>
                     {u.role}
                   </span>
@@ -188,16 +192,16 @@ export default function Users() {
                 </td>
                 {canManageUsers && (
                   <td className="p-4 flex gap-2">
-                    <button 
-                      onClick={() => setEditingUser(u)} 
+                    <button
+                      onClick={() => setEditingUser(u)}
                       className="text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-50"
                       title="Editar"
                     >
                       <Pencil size={18} />
                     </button>
                     {user?.role === 'CEO' && (
-                      <button 
-                        onClick={() => handleDelete(u.id)} 
+                      <button
+                        onClick={() => handleDelete(u.id)}
                         className="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50"
                         title="Excluir"
                       >

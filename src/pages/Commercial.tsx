@@ -19,12 +19,17 @@ export default function Commercial() {
   }, []);
 
   const fetchProjects = async () => {
-    const res = await axios.get('/api/projects');
-    console.log('[DEBUG] Projects fetched in Commercial:', res.data.map((p: any) => ({
-      id: p.id, title: p.title, commercial_status: p.commercial_status
-    })));
-    // Hide projects that have already been finalized in the commercial stage
-    setProjects(res.data.filter((p: any) => p.commercial_status !== 'approved' && p.commercial_status !== 'proposta_enviada'));
+    try {
+      const res = await axios.get('/api/projects');
+      if (Array.isArray(res.data)) {
+        // Hide projects that have already been finalized in the commercial stage
+        setProjects(res.data.filter((p: any) => p.commercial_status !== 'approved' && p.commercial_status !== 'proposta_enviada'));
+      } else {
+        setProjects([]);
+      }
+    } catch (err) {
+      setProjects([]);
+    }
   };
 
   const handleCreateClient = async (e: React.FormEvent) => {

@@ -12,12 +12,18 @@ export default function Installation() {
   }, []);
 
   const fetchProjects = async () => {
-    const res = await axios.get('/api/projects');
-    // Filter projects that are in installation stage
-    setProjects(res.data.filter((p: any) =>
-      ['installation', 'homologation', 'conclusion'].includes(p.current_stage) ||
-      (p.current_stage === 'inspection' && p.technical_status === 'approved') // Fallback if stage transition hasn't happened yet
-    ));
+    try {
+      const res = await axios.get('/api/projects');
+      if (Array.isArray(res.data)) {
+        setProjects(res.data.filter((p: any) =>
+          ['installation', 'homologation', 'conclusion', 'completed'].includes(p.current_stage)
+        ));
+      } else {
+        setProjects([]);
+      }
+    } catch {
+      setProjects([]);
+    }
   };
 
   const handleUpdate = async (e: React.FormEvent) => {

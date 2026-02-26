@@ -19,19 +19,25 @@ export default function Dashboard() {
 
     // Fetch events and filter for today and tomorrow
     axios.get('/api/events').then(res => {
-      setAllEvents(res.data);
-      const today = new Date();
-      const tomorrow = addDays(new Date(), 1);
+      if (Array.isArray(res.data)) {
+        setAllEvents(res.data);
+        const today = new Date();
+        const tomorrow = addDays(new Date(), 1);
 
-      const todayFiltered = res.data.filter((e: any) =>
-        isSameDay(parseISO(e.event_date), today)
-      );
-      const tomorrowFiltered = res.data.filter((e: any) =>
-        isSameDay(parseISO(e.event_date), tomorrow)
-      );
+        const todayFiltered = res.data.filter((e: any) =>
+          isSameDay(parseISO(e.event_date), today)
+        );
+        const tomorrowFiltered = res.data.filter((e: any) =>
+          isSameDay(parseISO(e.event_date), tomorrow)
+        );
 
-      setTodayEvents(todayFiltered);
-      setTomorrowEvents(tomorrowFiltered);
+        setTodayEvents(todayFiltered);
+        setTomorrowEvents(tomorrowFiltered);
+      } else {
+        setAllEvents([]);
+        setTodayEvents([]);
+        setTomorrowEvents([]);
+      }
     }).catch(err => console.error("Error fetching events:", err));
   }, []);
 

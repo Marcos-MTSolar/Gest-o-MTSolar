@@ -10,18 +10,43 @@ export default function Documents() {
   const [file, setFile] = useState<File | null>(null);
 
   useEffect(() => {
-    fetchDocuments();
-    fetchProjects();
+    fetchDocumentsAndProjects(); // Call the combined function
   }, []);
 
+  const fetchDocumentsAndProjects = async () => {
+    try {
+      const res = await axios.get('/api/documents');
+      setDocuments(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setDocuments([]);
+    }
+
+    try {
+      const res = await axios.get('/api/projects');
+      setProjects(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setProjects([]);
+    }
+  };
+
+  // The original fetchDocuments and fetchProjects are now combined into fetchDocumentsAndProjects
+  // We will keep the original names for clarity if they are called elsewhere, but update their implementation
   const fetchDocuments = async () => {
-    const res = await axios.get('/api/documents');
-    setDocuments(res.data);
+    try {
+      const res = await axios.get('/api/documents');
+      setDocuments(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setDocuments([]);
+    }
   };
 
   const fetchProjects = async () => {
-    const res = await axios.get('/api/projects');
-    setProjects(res.data);
+    try {
+      const res = await axios.get('/api/projects');
+      setProjects(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setProjects([]);
+    }
   };
 
   const typeLabels: Record<string, string> = {

@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { 
-  format, 
-  startOfMonth, 
-  endOfMonth, 
-  startOfWeek, 
-  endOfWeek, 
-  eachDayOfInterval, 
-  isSameMonth, 
-  isSameDay, 
-  addMonths, 
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
+  eachDayOfInterval,
+  isSameMonth,
+  isSameDay,
+  addMonths,
   subMonths,
   parseISO
 } from 'date-fns';
@@ -30,7 +30,7 @@ export default function Agenda() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
-  
+
   // Form State
   const [formData, setFormData] = useState({
     title: '',
@@ -46,9 +46,10 @@ export default function Agenda() {
   const fetchEvents = async () => {
     try {
       const res = await axios.get('/api/events');
-      setEvents(res.data);
+      setEvents(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
       console.error('Error fetching events:', error);
+      setEvents([]); // Ensure events is an empty array on error to prevent crashes
     }
   };
 
@@ -88,7 +89,7 @@ export default function Agenda() {
     const [hours, minutes] = formData.time.split(':');
     const eventDate = new Date(selectedDate);
     eventDate.setHours(parseInt(hours), parseInt(minutes));
-    
+
     const payload = {
       title: formData.title,
       description: formData.description,
@@ -169,8 +170,8 @@ export default function Agenda() {
             const isToday = isSameDay(day, new Date());
 
             return (
-              <div 
-                key={day.toString()} 
+              <div
+                key={day.toString()}
                 onClick={() => handleDayClick(day)}
                 className={`
                   border-b border-r p-2 min-h-[100px] cursor-pointer transition-colors hover:bg-gray-50
@@ -191,10 +192,10 @@ export default function Agenda() {
                     </span>
                   )}
                 </div>
-                
+
                 <div className="space-y-1 overflow-y-auto max-h-[80px]">
                   {dayEvents.map(event => (
-                    <div 
+                    <div
                       key={event.id}
                       onClick={(e) => handleEventClick(e, event)}
                       className={`
@@ -225,7 +226,7 @@ export default function Agenda() {
                 <X size={20} />
               </button>
             </div>
-            
+
             <form onSubmit={handleSubmit} className="p-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Data</label>
@@ -237,12 +238,12 @@ export default function Agenda() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   required
                   className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
                   value={formData.title}
-                  onChange={e => setFormData({...formData, title: e.target.value})}
+                  onChange={e => setFormData({ ...formData, title: e.target.value })}
                   placeholder="Reunião, Visita, etc."
                 />
               </div>
@@ -252,22 +253,22 @@ export default function Agenda() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Horário</label>
                   <div className="relative">
                     <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
-                    <input 
-                      type="time" 
+                    <input
+                      type="time"
                       required
                       className="w-full border p-2 pl-9 rounded focus:ring-2 focus:ring-blue-500 outline-none"
                       value={formData.time}
-                      onChange={e => setFormData({...formData, time: e.target.value})}
+                      onChange={e => setFormData({ ...formData, time: e.target.value })}
                     />
                   </div>
                 </div>
                 <div className="flex items-center pt-6">
                   <label className="flex items-center gap-2 cursor-pointer">
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                       checked={formData.is_reminder}
-                      onChange={e => setFormData({...formData, is_reminder: e.target.checked})}
+                      onChange={e => setFormData({ ...formData, is_reminder: e.target.checked })}
                     />
                     <span className="text-sm font-medium text-gray-700 flex items-center gap-1">
                       <Bell size={16} className={formData.is_reminder ? "text-amber-500" : "text-gray-400"} />
@@ -279,18 +280,18 @@ export default function Agenda() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
-                <textarea 
+                <textarea
                   className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
                   rows={3}
                   value={formData.description}
-                  onChange={e => setFormData({...formData, description: e.target.value})}
+                  onChange={e => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Detalhes adicionais..."
                 ></textarea>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
                 {editingEvent && (
-                  <button 
+                  <button
                     type="button"
                     onClick={handleDelete}
                     className="px-4 py-2 text-red-600 hover:bg-red-50 rounded font-medium flex items-center gap-2 mr-auto"
@@ -298,15 +299,15 @@ export default function Agenda() {
                     <Trash2 size={18} /> Excluir
                   </button>
                 )}
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setShowModal(false)}
                   className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded font-medium"
                 >
                   Cancelar
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className="px-6 py-2 bg-blue-900 text-white rounded hover:bg-blue-800 font-medium shadow-sm"
                 >
                   Salvar

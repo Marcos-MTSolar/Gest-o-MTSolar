@@ -14,14 +14,18 @@ export default function Homologation() {
   }, []);
 
   const fetchProjects = async () => {
-    const res = await axios.get('/api/projects');
-    // Filter projects that are in homologation or ready for it (unlocked by documents)
-    setProjects(res.data.filter((p: any) =>
-      p.status !== 'completed' && (
-        ['homologation', 'conclusion'].includes(p.current_stage) ||
-        !!p.homologation_status
-      )
-    ));
+    try {
+      const res = await axios.get('/api/projects');
+      if (Array.isArray(res.data)) {
+        setProjects(res.data.filter((p: any) =>
+          ['homologation', 'conclusion', 'completed'].includes(p.current_stage)
+        ));
+      } else {
+        setProjects([]);
+      }
+    } catch {
+      setProjects([]);
+    }
   };
 
   const handleUpdate = async (id: number, status: string, reason: string = '') => {

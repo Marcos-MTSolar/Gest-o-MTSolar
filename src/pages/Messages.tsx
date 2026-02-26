@@ -11,7 +11,20 @@ export default function Messages() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    axios.get('/api/messages').then(res => setHistory(res.data));
+    const fetchMessages = async () => {
+      try {
+        const res = await axios.get('/api/messages');
+        if (Array.isArray(res.data)) {
+          setHistory(res.data);
+        } else {
+          setHistory([]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch messages:", error);
+        setHistory([]);
+      }
+    };
+    fetchMessages();
   }, []);
 
   useEffect(() => {
@@ -23,7 +36,7 @@ export default function Messages() {
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
-    
+
     // Optimistic update
     const tempMsg = {
       id: Date.now(),
@@ -32,7 +45,7 @@ export default function Messages() {
       content: input,
       created_at: new Date().toISOString()
     };
-    
+
     // Send via API (which triggers socket broadcast)
     axios.post('/api/messages', { content: input });
     setInput('');
@@ -47,7 +60,7 @@ export default function Messages() {
       <div className="p-4 border-b bg-gray-50">
         <h1 className="text-lg font-bold text-gray-800">Chat da Equipe</h1>
       </div>
-      
+
       <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>
         {allMessages.map((msg, i) => {
           const isMe = msg.sender_id === user?.id;
@@ -79,7 +92,7 @@ export default function Messages() {
           <span className="bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded text-[10px]">{user?.role}</span>
         </div>
         <div className="flex gap-2">
-          <input 
+          <input
             className="flex-1 border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Digite sua mensagem..."
             value={input}

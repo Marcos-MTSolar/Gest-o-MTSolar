@@ -11,11 +11,19 @@ export default function FinishedProjects() {
   }, []);
 
   const fetchProjects = async () => {
-    const res = await axios.get('/api/projects');
-    setProjects(res.data.filter((p: any) => p.status === 'completed'));
+    try {
+      const res = await axios.get('/api/projects');
+      if (Array.isArray(res.data)) {
+        setProjects(res.data.filter((p: any) => p.current_stage === 'completed'));
+      } else {
+        setProjects([]);
+      }
+    } catch {
+      setProjects([]);
+    }
   };
 
-  const filteredProjects = projects.filter(p => 
+  const filteredProjects = projects.filter(p =>
     p.client_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
