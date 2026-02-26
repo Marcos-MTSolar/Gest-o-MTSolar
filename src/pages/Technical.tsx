@@ -18,8 +18,8 @@ export default function Technical() {
     // Filter projects that are ready for inspection or already in inspection
     // Exclude projects where technical inspection is already approved
     setProjects(res.data.filter((p: any) =>
-      p.technical_status !== 'approved' &&
-      (['inspection', 'installation', 'homologation', 'conclusion'].includes(p.current_stage) || p.commercial_status === 'approved')
+      p.technical_status !== 'approved' && p.technical_status !== 'vistoria_concluida' &&
+      (['inspection', 'installation', 'homologation', 'conclusion'].includes(p.current_stage) || p.commercial_status === 'approved' || p.commercial_status === 'proposta_enviada')
     ));
   };
 
@@ -46,7 +46,7 @@ export default function Technical() {
     });
 
     const action = submitAction.current || 'pending';
-    const isApproving = action === 'approved';
+    const isApproving = action === 'approved' || action === 'vistoria_concluida';
 
     if (isApproving) {
       // Validation: Check if any required field is empty
@@ -233,7 +233,7 @@ export default function Technical() {
             </div>
 
             <div className="p-6 border-t bg-gray-50 flex justify-end gap-3 items-center">
-              {selectedProject.technical_status === 'approved' && (
+              {['approved', 'vistoria_concluida'].includes(selectedProject.technical_status) && (
                 <div className="flex items-center text-green-600 font-bold gap-2 mr-auto">
                   <CheckCircle size={24} />
                   <span>Vistoria Concluída</span>
@@ -248,10 +248,10 @@ export default function Technical() {
               </button>
               <button
                 type="submit"
-                onClick={() => { submitAction.current = 'approved'; }}
+                onClick={() => { submitAction.current = 'vistoria_concluida'; }}
                 className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-bold shadow-sm flex items-center gap-2"
               >
-                <CheckCircle size={18} /> {selectedProject.technical_status === 'approved' ? 'Atualizar Vistoria' : 'Finalizar Vistoria'}
+                <CheckCircle size={18} /> {['approved', 'vistoria_concluida'].includes(selectedProject.technical_status) ? 'Atualizar Vistoria' : 'Finalizar Vistoria'}
               </button>
             </div>
           </form>
@@ -267,8 +267,8 @@ export default function Technical() {
                 <h3 className="text-lg font-bold text-gray-800">{p.client_name}</h3>
                 <p className="text-sm text-gray-500">{p.title}</p>
                 <div className="flex gap-2 mt-2">
-                  <span className={`text-xs px-2 py-1 rounded ${p.technical_status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
-                    {p.technical_status === 'approved' ? 'Vistoria Concluída' : 'Vistoria Pendente'}
+                  <span className={`text-xs px-2 py-1 rounded ${['approved', 'vistoria_concluida'].includes(p.technical_status) ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
+                    {['approved', 'vistoria_concluida'].includes(p.technical_status) ? 'Vistoria Concluída' : 'Vistoria Pendente'}
                   </span>
                 </div>
               </div>
@@ -279,9 +279,9 @@ export default function Technical() {
                   setSelectedProject(res.data);
                   setIsReinforcementNeeded(res.data.reinforcement_needed === 1 || res.data.reinforcement_needed === true);
                 }}
-                className={`px-4 py-2 rounded text-white ${p.technical_status === 'approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-900 hover:bg-blue-800'}`}
+                className={`px-4 py-2 rounded text-white ${['approved', 'vistoria_concluida'].includes(p.technical_status) ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-900 hover:bg-blue-800'}`}
               >
-                {p.technical_status === 'approved' ? 'Ver Detalhes' : 'Iniciar Vistoria'}
+                {['approved', 'vistoria_concluida'].includes(p.technical_status) ? 'Ver Detalhes' : 'Iniciar Vistoria'}
               </button>
             </div>
           ))}

@@ -14,7 +14,7 @@ export default function KitPurchase() {
     const res = await axios.get('/api/projects');
     // Filter projects that are commercially approved or have advanced past commercial
     setProjects(res.data.filter((p: any) =>
-      p.commercial_status === 'approved' ||
+      p.commercial_status === 'approved' || p.commercial_status === 'proposta_enviada' ||
       ['inspection', 'installation', 'homologation', 'conclusion', 'completed'].includes(p.current_stage)
     ));
   };

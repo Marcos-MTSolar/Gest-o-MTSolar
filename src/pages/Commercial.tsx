@@ -24,7 +24,7 @@ export default function Commercial() {
       id: p.id, title: p.title, commercial_status: p.commercial_status
     })));
     // Hide projects that have already been finalized in the commercial stage
-    setProjects(res.data.filter((p: any) => p.commercial_status !== 'approved'));
+    setProjects(res.data.filter((p: any) => p.commercial_status !== 'approved' && p.commercial_status !== 'proposta_enviada'));
   };
 
   const handleCreateClient = async (e: React.FormEvent) => {
@@ -47,7 +47,7 @@ export default function Commercial() {
     const proposal_value = formData.get('proposal_value') as string;
     const payment_method = formData.get('payment_method') as string;
 
-    const action = submitAction.current || 'pending';
+    const action = submitAction.current || 'pendente_comercial';
 
     if (!proposal_value || !payment_method) {
       alert("Por favor, preencha o Valor da Proposta e a Forma de Pagamento antes de salvar.");
@@ -62,7 +62,7 @@ export default function Commercial() {
         pendencies: formData.get('pendencies'),
         status: action
       });
-      alert(action === 'approved' ? "Proposta Comercial Aprovada!" : "Dados comerciais salvos como pendente.");
+      alert(action === 'proposta_enviada' ? "Proposta Comercial Aprovada!" : "Dados comerciais salvos como pendente.");
       await fetchProjects();
       setSelectedProject(null);
     } catch (error) {
@@ -172,10 +172,10 @@ export default function Commercial() {
                   )}
 
                   <div className="flex gap-2 mt-2">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${p.commercial_status === 'approved' ? 'bg-green-100 text-green-800' :
-                      p.commercial_status === 'pending' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800'
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'bg-green-100 text-green-800' :
+                      ['pending', 'pendente_comercial'].includes(p.commercial_status) ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800'
                       }`}>
-                      {p.commercial_status === 'approved' ? 'Finalizado' : 'Pendente'}
+                      {['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'Finalizado' : 'Pendente'}
                     </span>
                   </div>
                 </div>
@@ -184,9 +184,9 @@ export default function Commercial() {
                     const res = await axios.get(`/api/projects/${p.id}`);
                     setSelectedProject(res.data);
                   }}
-                  className={`px-4 py-2 rounded text-white ${p.commercial_status === 'approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-900 hover:bg-blue-800'}`}
+                  className={`px-4 py-2 rounded text-white ${['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-900 hover:bg-blue-800'}`}
                 >
-                  {p.commercial_status === 'approved' ? 'Ver Detalhes' : 'Gerenciar'}
+                  {['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'Ver Detalhes' : 'Gerenciar'}
                 </button>
               </div>
             ))}
@@ -264,10 +264,10 @@ export default function Commercial() {
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t">
-                <button type="submit" onClick={() => { submitAction.current = 'pending'; }} className="bg-amber-100 text-amber-800 border border-amber-300 px-6 py-3 rounded-lg hover:bg-amber-200 font-bold shadow-sm flex items-center gap-2">
+                <button type="submit" onClick={() => { submitAction.current = 'pendente_comercial'; }} className="bg-amber-100 text-amber-800 border border-amber-300 px-6 py-3 rounded-lg hover:bg-amber-200 font-bold shadow-sm flex items-center gap-2">
                   Salvar como Pendente
                 </button>
-                <button type="submit" onClick={() => { submitAction.current = 'approved'; }} className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-bold shadow-sm flex items-center gap-2">
+                <button type="submit" onClick={() => { submitAction.current = 'proposta_enviada'; }} className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-bold shadow-sm flex items-center gap-2">
                   <CheckCircle size={20} /> Salvar e Aprovar Proposta
                 </button>
               </div>

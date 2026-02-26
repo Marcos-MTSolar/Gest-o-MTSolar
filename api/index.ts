@@ -316,6 +316,8 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
 
 app.delete('/api/projects/:id', authenticateToken, async (req: any, res) => {
   // Cascading deletes manually in case DB does not have ON DELETE CASCADE
+  const { data: project } = await supabase.from('projects').select('client_id').eq('id', req.params.id).single();
+
   await supabase.from('commercial_data').delete().eq('project_id', req.params.id);
   await supabase.from('technical_data').delete().eq('project_id', req.params.id);
   await supabase.from('documents').delete().eq('project_id', req.params.id);
@@ -324,6 +326,9 @@ app.delete('/api/projects/:id', authenticateToken, async (req: any, res) => {
 
 
   await supabase.from('projects').delete().eq('id', req.params.id);
+  if (project?.client_id) {
+    await supabase.from('clients').delete().eq('id', project.client_id);
+  }
   broadcast('PROJECT_DELETED', { id: req.params.id });
   res.json({ success: true });
 });
@@ -336,8 +341,10 @@ app.put('/api/projects/:id/commercial', authenticateToken, async (req: any, res)
     .update({ proposal_value, payment_method, notes, pendencies, status, updated_at: new Date() })
     .eq('project_id', req.params.id);
 
-  if (status === 'approved') {
-    await supabase.from('projects').update({ current_stage: 'inspection', updated_at: new Date() }).eq('id', req.params.id);
+  if (status === 'proposta_enviada') {
+    await supabase.from('projects').update({ current_stage: 'inspection', status: 'proposta_enviada', updated_at: new Date() }).eq('id', req.params.id);
+  } else if (status === 'pendente_comercial') {
+    await supabase.from('projects').update({ status: 'pendente_comercial', updated_at: new Date() }).eq('id', req.params.id);
   }
 
   broadcast('PROJECT_UPDATED', { id: req.params.id, type: 'commercial' });
@@ -362,7 +369,7 @@ app.put('/api/projects/:id/kit', authenticateToken, async (req: any, res) => {
     }).eq('project_id', req.params.id);
 
     // Update main project status
-    await supabase.from('projects').update(updatePayload).eq('id', req.params.id);
+    await supabase.from('projects').update({ ...updatePayload, status: 'kit_definido' }).eq('id', req.params.id);
 
     broadcast('PROJECT_UPDATED', { id: req.params.id, type: 'kit' });
     res.json({ success: true });
@@ -410,8 +417,8 @@ app.put('/api/projects/:id/technical', authenticateToken, upload.any(), async (r
     await supabase.from('projects').update({ structure_type }).eq('id', req.params.id);
   }
 
-  if (status === 'approved') {
-    await supabase.from('projects').update({ current_stage: 'installation', updated_at: new Date() }).eq('id', req.params.id);
+  if (status === 'vistoria_concluida') {
+    await supabase.from('projects').update({ current_stage: 'installation', status: 'vistoria_concluida', updated_at: new Date() }).eq('id', req.params.id);
   }
 
   broadcast('PROJECT_UPDATED', { id: req.params.id, type: 'technical' });
