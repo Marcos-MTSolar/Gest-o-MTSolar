@@ -443,9 +443,9 @@ app.put('/api/projects/:id/technical', authenticateToken, upload.any(), async (r
     return res.status(500).json({ error: upsertError.message });
   }
 
-  // Update project stage when vistoria is finalized
+  // Update project stage when vistoria is finalized — goes directly to homologation
   if (status === 'vistoria_concluida') {
-    await supabase.from('projects').update({ current_stage: 'installation', status: 'vistoria_concluida', updated_at: new Date() }).eq('id', req.params.id);
+    await supabase.from('projects').update({ current_stage: 'homologation', status: 'vistoria_concluida', updated_at: new Date() }).eq('id', req.params.id);
   }
 
   broadcast('PROJECT_UPDATED', { id: req.params.id, type: 'technical' });
@@ -588,6 +588,13 @@ app.put('/api/events/:id', authenticateToken, async (req: any, res) => {
 
 app.delete('/api/events/:id', authenticateToken, async (req: any, res) => {
   await supabase.from('events').delete().eq('id', req.params.id);
+  res.json({ success: true });
+});
+
+app.put('/api/events/:id/complete', authenticateToken, async (req: any, res) => {
+  const { completed } = req.body;
+  await supabase.from('events').update({ completed: !!completed }).eq('id', req.params.id);
+  broadcast('EVENT_UPDATED', { id: req.params.id, completed });
   res.json({ success: true });
 });
 

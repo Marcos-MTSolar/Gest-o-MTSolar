@@ -14,14 +14,15 @@ import {
   parseISO
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Clock, Bell, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Clock, Bell, Trash2, X, CheckCircle2 } from 'lucide-react';
 
 interface Event {
   id: number;
   title: string;
   description: string;
-  event_date: string; // ISO string
+  event_date: string;
   is_reminder: boolean;
+  completed?: boolean;
 }
 
 export default function Agenda() {
@@ -31,12 +32,12 @@ export default function Agenda() {
   const [showModal, setShowModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
 
-  // Form State
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     time: '09:00',
-    is_reminder: false
+    is_reminder: false,
+    completed: false,
   });
 
   useEffect(() => {
@@ -49,7 +50,7 @@ export default function Agenda() {
       setEvents(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
       console.error('Error fetching events:', error);
-      setEvents([]); // Ensure events is an empty array on error to prevent crashes
+      setEvents([]);
     }
   };
 
@@ -63,7 +64,8 @@ export default function Agenda() {
       title: '',
       description: '',
       time: format(new Date(), 'HH:mm'),
-      is_reminder: false
+      is_reminder: false,
+      completed: false,
     });
     setShowModal(true);
   };
@@ -76,7 +78,8 @@ export default function Agenda() {
       title: event.title,
       description: event.description || '',
       time: format(parseISO(event.event_date), 'HH:mm'),
-      is_reminder: !!event.is_reminder
+      is_reminder: !!event.is_reminder,
+      completed: !!event.completed,
     });
     setShowModal(true);
   };
@@ -85,7 +88,6 @@ export default function Agenda() {
     e.preventDefault();
     if (!selectedDate) return;
 
-    // Combine date and time
     const [hours, minutes] = formData.time.split(':');
     const eventDate = new Date(selectedDate);
     eventDate.setHours(parseInt(hours), parseInt(minutes));
@@ -94,12 +96,16 @@ export default function Agenda() {
       title: formData.title,
       description: formData.description,
       event_date: eventDate.toISOString(),
-      is_reminder: formData.is_reminder
+      is_reminder: formData.is_reminder,
     };
 
     try {
       if (editingEvent) {
         await axios.put(`/api/events/${editingEvent.id}`, payload);
+        // Update completed status separately if changed
+        if (formData.completed !== !!editingEvent.completed) {
+          await axios.put(`/api/events/${editingEvent.id}/complete`, { completed: formData.completed });
+        }
       } else {
         await axios.post('/api/events', payload);
       }
@@ -123,7 +129,6 @@ export default function Agenda() {
     }
   };
 
-  // Calendar Grid Generation
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(monthStart);
   const startDate = startOfWeek(monthStart);
@@ -168,6 +173,7 @@ export default function Agenda() {
             const dayEvents = events.filter(e => isSameDay(parseISO(e.event_date), day));
             const isCurrentMonth = isSameMonth(day, monthStart);
             const isToday = isSameDay(day, new Date());
+            const allDone = dayEvents.length > 0 && dayEvents.every(e => e.completed);
 
             return (
               <div
@@ -187,8 +193,8 @@ export default function Agenda() {
                     {format(day, 'd')}
                   </span>
                   {dayEvents.length > 0 && (
-                    <span className="text-xs bg-gray-200 text-gray-600 px-1.5 rounded-full">
-                      {dayEvents.length}
+                    <span className={`text-xs px-1.5 rounded-full ${allDone ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                      {allDone ? '✓' : dayEvents.length}
                     </span>
                   )}
                 </div>
@@ -200,10 +206,20 @@ export default function Agenda() {
                       onClick={(e) => handleEventClick(e, event)}
                       className={`
                         text-xs p-1 rounded truncate flex items-center gap-1
-                        ${event.is_reminder ? 'bg-amber-100 text-amber-800 border-l-2 border-amber-500' : 'bg-blue-100 text-blue-800 border-l-2 border-blue-500'}
+                        ${event.completed
+                          ? 'bg-green-50 text-green-700 border-l-2 border-green-500 line-through opacity-70'
+                          : event.is_reminder
+                            ? 'bg-amber-100 text-amber-800 border-l-2 border-amber-500'
+                            : 'bg-blue-100 text-blue-800 border-l-2 border-blue-500'
+                        }
                       `}
                     >
-                      {event.is_reminder && <Bell size={10} />}
+                      {event.completed
+                        ? <CheckCircle2 size={10} />
+                        : event.is_reminder
+                          ? <Bell size={10} />
+                          : null
+                      }
                       <span className="truncate">{format(parseISO(event.event_date), 'HH:mm')} {event.title}</span>
                     </div>
                   ))}
@@ -241,7 +257,7 @@ export default function Agenda() {
                 <input
                   type="text"
                   required
-                  className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                  className={`w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none ${formData.completed ? 'line-through text-gray-400' : ''}`}
                   value={formData.title}
                   onChange={e => setFormData({ ...formData, title: e.target.value })}
                   placeholder="Reunião, Visita, etc."
@@ -286,8 +302,28 @@ export default function Agenda() {
                   value={formData.description}
                   onChange={e => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Detalhes adicionais..."
-                ></textarea>
+                />
               </div>
+
+              {/* Attended Toggle — only show when editing */}
+              {editingEvent && (
+                <div className={`flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer ${formData.completed
+                    ? 'bg-green-50 border-green-300'
+                    : 'bg-gray-50 border-gray-200 hover:border-green-300'
+                  }`}
+                  onClick={() => setFormData(d => ({ ...d, completed: !d.completed }))}
+                >
+                  <CheckCircle2 size={20} className={formData.completed ? 'text-green-600' : 'text-gray-400'} />
+                  <div>
+                    <p className={`text-sm font-semibold ${formData.completed ? 'text-green-700' : 'text-gray-700'}`}>
+                      {formData.completed ? 'Compromisso Atendido ✓' : 'Marcar como Atendido'}
+                    </p>
+                    {formData.completed && (
+                      <p className="text-xs text-green-600">Clique para desfazer</p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-2">
                 {editingEvent && (

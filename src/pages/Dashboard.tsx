@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { addDays, isSameDay, parseISO, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Calendar as CalendarIcon, Bell } from 'lucide-react';
+import { Calendar as CalendarIcon, Bell, CheckCircle2, RotateCcw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {
@@ -13,33 +13,39 @@ export default function Dashboard() {
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const { user } = useAuth();
 
-  useEffect(() => {
-    // Fetch stats
-    axios.get('/api/stats').then(res => setStats(res.data));
-
-    // Fetch events and filter for today and tomorrow
-    axios.get('/api/events').then(res => {
+  const fetchEvents = useCallback(async () => {
+    try {
+      const res = await axios.get('/api/events');
       if (Array.isArray(res.data)) {
-        setAllEvents(res.data);
+        const all = res.data;
+        setAllEvents(all);
         const today = new Date();
         const tomorrow = addDays(new Date(), 1);
-
-        const todayFiltered = res.data.filter((e: any) =>
-          isSameDay(parseISO(e.event_date), today)
-        );
-        const tomorrowFiltered = res.data.filter((e: any) =>
-          isSameDay(parseISO(e.event_date), tomorrow)
-        );
-
-        setTodayEvents(todayFiltered);
-        setTomorrowEvents(tomorrowFiltered);
+        setTodayEvents(all.filter((e: any) => isSameDay(parseISO(e.event_date), today)));
+        setTomorrowEvents(all.filter((e: any) => isSameDay(parseISO(e.event_date), tomorrow)));
       } else {
         setAllEvents([]);
         setTodayEvents([]);
         setTomorrowEvents([]);
       }
-    }).catch(err => console.error("Error fetching events:", err));
+    } catch (err) {
+      console.error('Error fetching events:', err);
+    }
   }, []);
+
+  useEffect(() => {
+    axios.get('/api/stats').then(res => setStats(res.data));
+    fetchEvents();
+  }, [fetchEvents]);
+
+  const toggleComplete = async (ev: any) => {
+    try {
+      await axios.put(`/api/events/${ev.id}/complete`, { completed: !ev.completed });
+      fetchEvents();
+    } catch (err) {
+      console.error('Erro ao atualizar compromisso:', err);
+    }
+  };
 
   const selectedDateFiltered = allEvents.filter((e: any) => {
     try {
@@ -48,6 +54,49 @@ export default function Dashboard() {
       return false;
     }
   });
+
+  const EventItem = ({ ev, accentBg, accentText }: { ev: any; accentBg: string; accentText: string }) => (
+    <li className={`p-4 hover:bg-gray-50 transition-colors flex items-start gap-4 ${ev.completed ? 'opacity-60' : ''}`}>
+      <div className={`${accentBg} ${accentText} p-3 rounded-lg flex flex-col items-center justify-center min-w-[70px] relative`}>
+        <CalendarIcon size={20} className="mb-1" />
+        <span className="text-xs font-bold">{format(parseISO(ev.event_date), 'HH:mm')}</span>
+        {ev.completed && (
+          <div className="absolute inset-0 flex items-center justify-center bg-green-600/80 rounded-lg">
+            <CheckCircle2 size={28} className="text-white" />
+          </div>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <h4 className={`font-bold text-gray-800 text-base flex flex-wrap items-center gap-2 ${ev.completed ? 'line-through text-gray-500' : ''}`}>
+          {ev.title}
+          {ev.is_reminder && !ev.completed && (
+            <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Lembrete</span>
+          )}
+          {ev.completed && (
+            <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full uppercase tracking-wider font-bold flex items-center gap-1">
+              <CheckCircle2 size={12} /> Atendido
+            </span>
+          )}
+        </h4>
+        {ev.description && (
+          <p className={`text-sm mt-0.5 ${ev.completed ? 'line-through text-gray-400' : 'text-gray-600'}`}>{ev.description}</p>
+        )}
+        <button
+          onClick={() => toggleComplete(ev)}
+          className={`mt-2 text-xs font-semibold flex items-center gap-1 px-3 py-1 rounded-full border transition-all ${ev.completed
+              ? 'border-gray-300 text-gray-500 hover:border-red-300 hover:text-red-600 hover:bg-red-50'
+              : 'border-green-400 text-green-700 hover:bg-green-50'
+            }`}
+        >
+          {ev.completed ? (
+            <><RotateCcw size={12} /> Desfazer</>
+          ) : (
+            <><CheckCircle2 size={12} /> Marcar como Atendido</>
+          )}
+        </button>
+      </div>
+    </li>
+  );
 
   return (
     <div className="p-6">
@@ -84,20 +133,8 @@ export default function Dashboard() {
           <div className="p-0 h-96 overflow-y-auto">
             {todayEvents.length > 0 ? (
               <ul className="divide-y divide-gray-100">
-                {todayEvents.map((ev, idx) => (
-                  <li key={idx} className="p-4 hover:bg-gray-50 transition-colors flex items-start gap-4">
-                    <div className="bg-amber-100 text-amber-800 p-3 rounded-lg flex flex-col items-center justify-center min-w-[70px]">
-                      <CalendarIcon size={20} className="mb-1" />
-                      <span className="text-xs font-bold">{format(parseISO(ev.event_date), 'HH:mm')}</span>
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-gray-800 text-lg flex items-center gap-2">
-                        {ev.title}
-                        {ev.is_reminder && <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Lembrete</span>}
-                      </h4>
-                      {ev.description && <p className="text-gray-600 mt-1">{ev.description}</p>}
-                    </div>
-                  </li>
+                {todayEvents.map((ev) => (
+                  <EventItem key={ev.id} ev={ev} accentBg="bg-amber-100" accentText="text-amber-800" />
                 ))}
               </ul>
             ) : (
@@ -122,20 +159,8 @@ export default function Dashboard() {
           <div className="p-0 h-96 overflow-y-auto">
             {tomorrowEvents.length > 0 ? (
               <ul className="divide-y divide-gray-100">
-                {tomorrowEvents.map((ev, idx) => (
-                  <li key={idx} className="p-4 hover:bg-gray-50 transition-colors flex items-start gap-4">
-                    <div className="bg-blue-100 text-blue-800 p-3 rounded-lg flex flex-col items-center justify-center min-w-[70px]">
-                      <CalendarIcon size={20} className="mb-1" />
-                      <span className="text-xs font-bold">{format(parseISO(ev.event_date), 'HH:mm')}</span>
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-gray-800 text-lg flex items-center gap-2">
-                        {ev.title}
-                        {ev.is_reminder && <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Lembrete</span>}
-                      </h4>
-                      {ev.description && <p className="text-gray-600 mt-1">{ev.description}</p>}
-                    </div>
-                  </li>
+                {tomorrowEvents.map((ev) => (
+                  <EventItem key={ev.id} ev={ev} accentBg="bg-blue-100" accentText="text-blue-800" />
                 ))}
               </ul>
             ) : (
@@ -167,20 +192,8 @@ export default function Dashboard() {
           <div className="p-0 h-96 overflow-y-auto">
             {selectedDateFiltered.length > 0 ? (
               <ul className="divide-y divide-gray-100">
-                {selectedDateFiltered.map((ev, idx) => (
-                  <li key={idx} className="p-4 hover:bg-gray-50 transition-colors flex items-start gap-4">
-                    <div className="bg-emerald-100 text-emerald-800 p-3 rounded-lg flex flex-col items-center justify-center min-w-[70px]">
-                      <CalendarIcon size={20} className="mb-1" />
-                      <span className="text-xs font-bold">{format(parseISO(ev.event_date), 'HH:mm')}</span>
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-gray-800 text-lg flex items-center gap-2">
-                        {ev.title}
-                        {ev.is_reminder && <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Lembrete</span>}
-                      </h4>
-                      {ev.description && <p className="text-gray-600 mt-1">{ev.description}</p>}
-                    </div>
-                  </li>
+                {selectedDateFiltered.map((ev) => (
+                  <EventItem key={ev.id} ev={ev} accentBg="bg-emerald-100" accentText="text-emerald-800" />
                 ))}
               </ul>
             ) : (
