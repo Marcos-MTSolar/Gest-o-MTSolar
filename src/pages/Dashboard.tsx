@@ -55,8 +55,8 @@ export default function Dashboard() {
     }
   });
 
-  const EventItem = ({ ev, accentBg, accentText }: { ev: any; accentBg: string; accentText: string }) => (
-    <li className={`p-4 hover:bg-gray-50 transition-colors flex items-start gap-4 ${ev.completed ? 'opacity-60' : ''}`}>
+  const renderEvent = (ev: any, accentBg: string, accentText: string) => (
+    <li key={ev.id} className={`p-4 hover:bg-gray-50 transition-colors flex items-start gap-4 ${ev.completed ? 'opacity-60' : ''}`}>
       <div className={`${accentBg} ${accentText} p-3 rounded-lg flex flex-col items-center justify-center min-w-[70px] relative`}>
         <CalendarIcon size={20} className="mb-1" />
         <span className="text-xs font-bold">{format(parseISO(ev.event_date), 'HH:mm')}</span>
@@ -133,9 +133,7 @@ export default function Dashboard() {
           <div className="p-0 h-96 overflow-y-auto">
             {todayEvents.length > 0 ? (
               <ul className="divide-y divide-gray-100">
-                {todayEvents.map((ev) => (
-                  <EventItem key={ev.id} ev={ev} accentBg="bg-amber-100" accentText="text-amber-800" />
-                ))}
+                {todayEvents.map((ev) => renderEvent(ev, 'bg-amber-100', 'text-amber-800'))}
               </ul>
             ) : (
               <div className="p-8 text-center text-gray-500 flex flex-col items-center justify-center h-full">
@@ -159,9 +157,7 @@ export default function Dashboard() {
           <div className="p-0 h-96 overflow-y-auto">
             {tomorrowEvents.length > 0 ? (
               <ul className="divide-y divide-gray-100">
-                {tomorrowEvents.map((ev) => (
-                  <EventItem key={ev.id} ev={ev} accentBg="bg-blue-100" accentText="text-blue-800" />
-                ))}
+                {tomorrowEvents.map((ev) => renderEvent(ev, 'bg-blue-100', 'text-blue-800'))}
               </ul>
             ) : (
               <div className="p-8 text-center text-gray-500 flex flex-col items-center justify-center h-full">
@@ -192,9 +188,7 @@ export default function Dashboard() {
           <div className="p-0 h-96 overflow-y-auto">
             {selectedDateFiltered.length > 0 ? (
               <ul className="divide-y divide-gray-100">
-                {selectedDateFiltered.map((ev) => (
-                  <EventItem key={ev.id} ev={ev} accentBg="bg-emerald-100" accentText="text-emerald-800" />
-                ))}
+                {selectedDateFiltered.map((ev) => renderEvent(ev, 'bg-emerald-100', 'text-emerald-800'))}
               </ul>
             ) : (
               <div className="p-8 text-center text-gray-500 flex flex-col items-center justify-center h-full">
