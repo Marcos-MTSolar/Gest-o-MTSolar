@@ -155,19 +155,11 @@ export default function Dashboard() {
                 <CalendarIcon size={20} className="text-emerald-100" />
                 <h2 className="text-lg font-bold">Mural por Data</h2>
               </div>
-            </div>
-            <div className="flex items-center justify-between gap-2 mt-2">
-              <button
-                onClick={() => setSelectedDate(format(new Date(), 'yyyy-MM-dd'))}
-                className="text-xs bg-emerald-500 hover:bg-emerald-400 text-white px-3 py-1.5 rounded border border-emerald-400 font-bold transition-colors shadow-sm"
-              >
-                Visualizar Fixados Hoje
-              </button>
               <input
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="px-2 py-1 flex-1 max-w-[140px] rounded text-emerald-900 text-sm font-bold border-none outline-none focus:ring-2 focus:ring-emerald-300 ml-2"
+                className="px-2 py-1 rounded text-emerald-900 text-sm font-bold border-none outline-none focus:ring-2 focus:ring-emerald-300"
               />
             </div>
           </div>

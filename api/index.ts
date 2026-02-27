@@ -145,12 +145,8 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', authenticateToken, async (req: any, res) => {
   const { data: user } = await supabase.from('users').select('id, name, email, role, avatar_url').eq('id', req.user.id).single();
-  if (user) {
-    res.json(user);
-  } else {
-    // If DB fails (RLS block or missing user), fallback to token payload to keep session alive
-    res.json({ id: req.user.id, name: req.user.name, role: req.user.role, email: 'ceo@mtsolar.com' });
-  }
+  // Always return a valid user object — either from DB or from token payload
+  res.json(user || { id: req.user.id, name: req.user.name, role: req.user.role, email: req.user.email || 'ceo@mtsolar.com' });
 });
 
 // Users
@@ -266,14 +262,24 @@ app.get('/api/projects', authenticateToken, async (req: any, res) => {
     .order('updated_at', { ascending: false });
 
   // Flatten for frontend compatibility
-  const formatted = projects?.map((p: any) => ({
-    ...p,
-    client_name: p.clients?.name,
-    commercial_status: p.commercial_data?.[0]?.status, // Supabase returns array for 1:many/1:1 unless specified
-    commercial_pendencies: p.commercial_data?.[0]?.pendencies,
-    technical_status: p.technical_data?.[0]?.status,
-    structure_type: p.structure_type || p.technical_data?.[0]?.structure_type
-  }));
+  const formatted = projects?.map((p: any) => {
+    // Supabase may return technical_data as array or direct object for 1:1 unique FK
+    const techData = Array.isArray(p.technical_data)
+      ? p.technical_data[0]
+      : p.technical_data;
+    const commData = Array.isArray(p.commercial_data)
+      ? p.commercial_data[0]
+      : p.commercial_data;
+
+    return {
+      ...p,
+      client_name: p.clients?.name,
+      commercial_status: commData?.status,
+      commercial_pendencies: commData?.pendencies,
+      technical_status: techData?.status,
+      structure_type: techData?.structure_type || null
+    };
+  });
 
   res.json(formatted);
 });
@@ -296,6 +302,7 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
   const { data: documents } = await supabase.from('documents').select('*').eq('project_id', project.id);
 
   // Flatten
+  const techData = project.technical_data?.[0] || {};
   const formatted = {
     ...project,
     client_name: project.clients?.name,
@@ -312,11 +319,20 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
     commercial_status: project.commercial_data?.[0]?.status,
     commercial_pendencies: project.commercial_data?.[0]?.pendencies,
 
-    // Technical
-    ...project.technical_data?.[0], // Spread all technical fields
-    technical_notes: project.technical_data?.[0]?.observations,
-    technical_status: project.technical_data?.[0]?.status,
-    structure_type: project.structure_type || project.technical_data?.[0]?.structure_type,
+    // Technical — spread tech fields then explicitly override structure_type to ensure it comes from technical_data
+    entrance_pattern: techData.entrance_pattern,
+    grounding: techData.grounding,
+    roof_structure: techData.roof_structure,
+    roof_overview: techData.roof_overview,
+    breaker_box: techData.breaker_box,
+    module_quantity: techData.module_quantity,
+    reinforcement_needed: techData.reinforcement_needed,
+    observations: techData.observations,
+    inspection_media: techData.inspection_media,
+    technical_status: techData.status,
+    technical_notes: techData.observations,
+    // Always read structure_type from technical_data, NOT from projects table (column doesn't exist there)
+    structure_type: techData.structure_type || null,
 
     documents
   };
@@ -414,19 +430,20 @@ app.put('/api/projects/:id/technical', authenticateToken, upload.any(), async (r
 
   const finalMedia = [...existingMedia, ...mediaUrls];
 
-  await supabase.from('technical_data')
-    .update({
+  // Use UPSERT so it works even if technical_data row doesn't exist yet for this project
+  const { error: upsertError } = await supabase.from('technical_data')
+    .upsert({
+      project_id: parseInt(req.params.id),
       entrance_pattern, grounding, roof_structure, roof_overview, breaker_box,
       structure_type, module_quantity, reinforcement_needed: reinforcement_needed === 'true', observations, status,
       inspection_media: JSON.stringify(finalMedia), updated_at: new Date()
-    })
-    .eq('project_id', req.params.id);
+    }, { onConflict: 'project_id' });
 
-  // Sync the structure_type to the projects table for KitPurchase to read reliably
-  if (structure_type) {
-    await supabase.from('projects').update({ structure_type }).eq('id', req.params.id);
+  if (upsertError) {
+    return res.status(500).json({ error: upsertError.message });
   }
 
+  // Update project stage when vistoria is finalized
   if (status === 'vistoria_concluida') {
     await supabase.from('projects').update({ current_stage: 'installation', status: 'vistoria_concluida', updated_at: new Date() }).eq('id', req.params.id);
   }
@@ -434,6 +451,7 @@ app.put('/api/projects/:id/technical', authenticateToken, upload.any(), async (r
   broadcast('PROJECT_UPDATED', { id: req.params.id, type: 'technical' });
   res.json({ success: true });
 });
+
 
 // Installation Update
 app.put('/api/projects/:id/installation', authenticateToken, upload.any(), async (req: any, res) => {
@@ -575,13 +593,17 @@ app.delete('/api/events/:id', authenticateToken, async (req: any, res) => {
 
 // Stats
 app.get('/api/stats', authenticateToken, async (req: any, res) => {
-  const { count: activeProjects } = await supabase.from('projects').select('*', { count: 'exact', head: true }).or('status.eq.pending,status.eq.in_progress');
+  // Count all projects that are not completed
+  const { count: totalProjects } = await supabase.from('projects').select('*', { count: 'exact', head: true });
+  const { count: completedProjects } = await supabase.from('projects').select('*', { count: 'exact', head: true })
+    .or('status.eq.completed,current_stage.eq.completed');
   const { count: pendingInspections } = await supabase.from('projects').select('*', { count: 'exact', head: true }).eq('current_stage', 'inspection');
   const { count: pendingInstallations } = await supabase.from('projects').select('*', { count: 'exact', head: true }).eq('current_stage', 'installation');
-  const { count: completedProjects } = await supabase.from('projects').select('*', { count: 'exact', head: true }).eq('status', 'completed');
+
+  const activeProjects = (totalProjects || 0) - (completedProjects || 0);
 
   res.json({
-    activeProjects: activeProjects || 0,
+    activeProjects,
     pendingInspections: pendingInspections || 0,
     pendingInstallations: pendingInstallations || 0,
     completedProjects: completedProjects || 0,
@@ -589,16 +611,20 @@ app.get('/api/stats', authenticateToken, async (req: any, res) => {
   });
 });
 
-// Settings
+// Settings - accessible to all authenticated users
 app.get('/api/settings', authenticateToken, async (req: any, res) => {
-  const { data: settings, error } = await supabase.from('settings').select('*');
-  const dict: any = {};
-  if (settings) {
-    settings.forEach(s => {
-      dict[s.key] = s.value;
-    });
+  try {
+    const { data: settings } = await supabase.from('settings').select('*');
+    const dict: any = {};
+    if (settings) {
+      settings.forEach(s => {
+        dict[s.key] = s.value;
+      });
+    }
+    res.json({ logo_url: dict.logo_url || null });
+  } catch (e) {
+    res.json({ logo_url: null });
   }
-  res.json({ logo_url: dict.logo_url || null });
 });
 
 app.post('/api/settings/logo', authenticateToken, upload.single('logo'), async (req: any, res) => {

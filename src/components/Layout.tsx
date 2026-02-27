@@ -12,7 +12,6 @@ import {
   LogOut,
   Menu,
   X,
-  FileText,
   ShoppingCart,
   CheckSquare,
   Archive,
@@ -31,6 +30,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [hasCompletedInspection, setHasCompletedInspection] = useState(false);
   const prevMessagesLength = useRef(0);
 
   useEffect(() => {
@@ -40,6 +40,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
     // Check for unread messages on mount
     checkUnreadMessages();
+
+    // Check if any project has completed inspection (to unlock Homologação)
+    axios.get('/api/projects').then(res => {
+      if (Array.isArray(res.data)) {
+        const hasInspection = res.data.some((p: any) =>
+          p.technical_status === 'vistoria_concluida' ||
+          p.technical_status === 'approved' ||
+          ['homologation', 'conclusion', 'completed'].includes(p.current_stage)
+        );
+        setHasCompletedInspection(hasInspection);
+      }
+    }).catch(() => { });
   }, []);
 
   const checkUnreadMessages = async () => {
@@ -70,6 +82,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         }
       });
     }
+
+    // Re-check inspection status on every navigation change
+    // so Homologação menu appears right after a vistoria is finalized
+    axios.get('/api/projects').then(res => {
+      if (Array.isArray(res.data)) {
+        const hasInspection = res.data.some((p: any) =>
+          p.technical_status === 'vistoria_concluida' ||
+          p.technical_status === 'approved' ||
+          ['homologation', 'conclusion', 'completed'].includes(p.current_stage)
+        );
+        setHasCompletedInspection(hasInspection);
+      }
+    }).catch(() => { });
   }, [location.pathname]);
 
   useEffect(() => {
@@ -94,9 +119,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: 'Comercial', path: '/commercial', icon: Briefcase, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Técnica', path: '/technical', icon: Wrench, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
     { name: 'Obra Finalizada', path: '/installation', icon: Hammer, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
-    { name: 'Documentação', path: '/documents', icon: FileText, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Kit Solar', path: '/kit-purchase', icon: ShoppingCart, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
-    { name: 'Homologação', path: '/homologation', icon: CheckSquare, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
+    ...(hasCompletedInspection ? [{ name: 'Homologação', path: '/homologation', icon: CheckSquare, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] }] : []),
     { name: 'Finalizados', path: '/finished', icon: Archive, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Mensagens', path: '/messages', icon: MessageSquare, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Configurações', path: '/settings', icon: Settings, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },

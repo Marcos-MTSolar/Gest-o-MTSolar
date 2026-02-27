@@ -22,8 +22,14 @@ export default function Commercial() {
     try {
       const res = await axios.get('/api/projects');
       if (Array.isArray(res.data)) {
-        // Hide projects that have already been finalized in the commercial stage
-        setProjects(res.data.filter((p: any) => p.commercial_status !== 'approved' && p.commercial_status !== 'proposta_enviada'));
+        // Show only projects that are still in the commercial stage (pending/not approved) 
+        // AND have NOT advanced beyond the commercial stage (current_stage is still 'pending')
+        const ADVANCED_STAGES = ['inspection', 'installation', 'homologation', 'conclusion', 'completed'];
+        setProjects(res.data.filter((p: any) =>
+          !ADVANCED_STAGES.includes(p.current_stage) &&
+          p.commercial_status !== 'approved' &&
+          p.commercial_status !== 'proposta_enviada'
+        ));
       } else {
         setProjects([]);
       }

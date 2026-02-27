@@ -7,6 +7,8 @@ export default function Technical() {
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isReinforcementNeeded, setIsReinforcementNeeded] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const submitAction = useRef('pending');
 
   useEffect(() => {
@@ -17,11 +19,17 @@ export default function Technical() {
     try {
       const res = await axios.get('/api/projects');
       if (Array.isArray(res.data)) {
-        // Filter projects that are ready for inspection or already in inspection
-        // Exclude projects where technical inspection is already approved
+        // Show projects that:
+        // 1. Are in inspection or installation stage (have passed commercial approval)
+        // 2. Have not yet completed technical inspection
+        const TECHNICAL_STAGES = ['inspection', 'installation'];
         setProjects(res.data.filter((p: any) =>
           p.technical_status !== 'approved' && p.technical_status !== 'vistoria_concluida' &&
-          (['inspection', 'installation', 'homologation', 'conclusion'].includes(p.current_stage) || p.commercial_status === 'approved' || p.commercial_status === 'proposta_enviada')
+          (
+            TECHNICAL_STAGES.includes(p.current_stage) ||
+            p.commercial_status === 'approved' ||
+            p.commercial_status === 'proposta_enviada'
+          )
         ));
       } else {
         setProjects([]);
@@ -56,29 +64,28 @@ export default function Technical() {
     const action = submitAction.current || 'pending';
     const isApproving = action === 'approved' || action === 'vistoria_concluida';
 
+    setSaveError('');
+
     if (isApproving) {
-      // Validation: Check if any required field is empty
       const requiredFields = [
         'entrance_pattern', 'grounding', 'roof_structure', 'roof_overview', 'breaker_box',
         'structure_type', 'module_quantity'
       ];
 
-      // Check if any text field is empty
-      let hasEmptyField = requiredFields.some(field => !formData.get(field));
+      const emptyFields = requiredFields.filter(field => !formData.get(field));
 
-      if (hasEmptyField) {
-        alert('Por favor, preencha todos os campos obrigatórios para finalizar a vistoria.');
+      if (emptyFields.length > 0) {
+        setSaveError('Preencha todos os campos obrigatórios para finalizar a vistoria: ' + emptyFields.join(', '));
         return;
       }
 
       const observations = formData.get('observations') as string;
-      if (isReinforcementNeeded && !observations.trim()) {
-        alert('Obrigatório preencher as Observações Gerais justificando o Reforço Estrutural.');
+      if (isReinforcementNeeded && !observations?.trim()) {
+        setSaveError('Preencha as Observações Gerais justificando o Reforço Estrutural.');
         return;
       }
     }
 
-    // Append status and reinforcement boolean mapping correctly
     formData.set('reinforcement_needed', isReinforcementNeeded ? 'true' : 'false');
     formData.set('status', action);
 
@@ -86,14 +93,35 @@ export default function Technical() {
       await axios.put(`/api/projects/${selectedProject.id}/technical`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      alert('Vistoria técnica concluída com sucesso!');
-      await fetchProjects();
+
+      // Close form immediately for responsive UX
       setSelectedProject(null);
-      setSelectedFiles([]); // Clear files after upload
-    } catch (error) {
-      alert('Erro ao atualizar vistoria');
+      setSelectedFiles([]);
+      submitAction.current = 'pending'; // reset for next use
+
+      // Refresh list after a short delay to allow DB to propagate
+      setTimeout(() => { fetchProjects(); }, 400);
+    } catch (error: any) {
+      setSaveError(error?.response?.data?.error || 'Erro ao salvar vistoria. Tente novamente.');
     }
   };
+
+  const handleIniciarVistoria = async (p: any) => {
+    try {
+      // Fetch full project detail so form fields have all previously saved values
+      const res = await axios.get(`/api/projects/${p.id}`);
+      const full = res.data;
+      // Merge list-level data with full detail
+      setSelectedProject({ ...p, ...full });
+      setIsReinforcementNeeded(full.reinforcement_needed || false);
+      setSaveError('');
+    } catch {
+      // Fallback: use list-level data
+      setSelectedProject(p);
+      setSaveError('');
+    }
+  };
+
 
   return (
     <div className="p-6">
@@ -109,6 +137,11 @@ export default function Technical() {
             <button onClick={() => setSelectedProject(null)} className="text-gray-500 hover:text-gray-700 font-medium">Voltar</button>
           </div>
 
+          {saveError && (
+            <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+              {saveError}
+            </div>
+          )}
           <form onSubmit={handleUpdate}>
             <div className="p-6">
               <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6 text-sm text-blue-800">

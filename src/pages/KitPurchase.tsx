@@ -14,10 +14,12 @@ export default function KitPurchase() {
     try {
       const res = await axios.get('/api/projects');
       if (Array.isArray(res.data)) {
-        // Filter projects that are commercially approved or have advanced past commercial
+        // Show projects that are commercially approved OR have advanced past commercial stage
+        const KIT_STAGES = ['inspection', 'installation', 'homologation', 'conclusion', 'completed'];
         setProjects(res.data.filter((p: any) =>
-          p.commercial_status === 'approved' || p.commercial_status === 'proposta_enviada' ||
-          ['inspection', 'installation', 'homologation', 'conclusion', 'completed'].includes(p.current_stage)
+          p.commercial_status === 'approved' ||
+          p.commercial_status === 'proposta_enviada' ||
+          KIT_STAGES.includes(p.current_stage)
         ));
       } else {
         setProjects([]);
@@ -51,10 +53,10 @@ export default function KitPurchase() {
 
     try {
       await axios.put(`/api/projects/${selectedProject.id}/kit`, data);
-      fetchProjects();
-      alert('Dados de compra atualizados!');
+      // Refresh both the project detail and the list
       const updatedRes = await axios.get(`/api/projects/${selectedProject.id}`);
       setSelectedProject(updatedRes.data);
+      fetchProjects();
     } catch (error) {
       alert('Erro ao atualizar dados de compra');
     }
@@ -74,7 +76,7 @@ export default function KitPurchase() {
                 <div>
                   <h3 className="text-lg font-bold text-gray-800">{p.client_name}</h3>
                   <p className="text-sm text-gray-500">{p.title}</p>
-                  <p className="text-xs text-gray-400 mt-1">Tipo de Estrutura: <span className="font-semibold text-gray-600">{structureMap[p.structure_type] || p.structure_type || 'Não definido'}</span></p>
+                  <p className="text-xs text-gray-400 mt-1">Tipo de Estrutura: <span className="font-semibold text-gray-600">{structureMap[p.structure_type || p.technical_data?.structure_type || p.technical_data?.[0]?.structure_type] || p.structure_type || p.technical_data?.structure_type || p.technical_data?.[0]?.structure_type || 'Não definido'}</span></p>
                   <div className="mt-2">
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${p.kit_purchased ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
                       {p.kit_purchased ? 'Kit Comprado' : 'Pendente Compra'}
@@ -107,7 +109,7 @@ export default function KitPurchase() {
           <div className="p-6">
             <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
               <p className="text-sm text-gray-600 mb-1">Tipo de Estrutura Definido na Vistoria:</p>
-              <p className="text-lg font-bold text-blue-900">{structureMap[selectedProject.structure_type] || selectedProject.structure_type || 'Não informado'}</p>
+              <p className="text-lg font-bold text-blue-900">{structureMap[selectedProject.structure_type || selectedProject.technical_data?.structure_type || selectedProject.technical_data?.[0]?.structure_type] || selectedProject.structure_type || selectedProject.technical_data?.structure_type || selectedProject.technical_data?.[0]?.structure_type || 'Não informado'}</p>
             </div>
 
             <form onSubmit={handleUpdate} className="grid grid-cols-1 md:grid-cols-2 gap-6">
