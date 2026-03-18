@@ -480,16 +480,24 @@ app.put('/api/projects/:id/installation', authenticateToken, upload.any(), async
 
 // Homologation Update
 app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, res) => {
-  const { homologation_status, rejection_reason } = req.body;
+  const { homologation_status, rejection_reason, homologation_observations, homologation_checklist } = req.body;
 
-  await supabase.from('projects').update({
-    homologation_status,
-    rejection_reason,
-    updated_at: new Date()
-  }).eq('id', req.params.id);
+  const updates: any = { updated_at: new Date() };
+  if (homologation_status !== undefined) updates.homologation_status = homologation_status;
+  if (rejection_reason !== undefined) updates.rejection_reason = rejection_reason;
+  if (homologation_observations !== undefined) updates.homologation_observations = homologation_observations;
+  if (homologation_checklist !== undefined) updates.homologation_checklist = homologation_checklist;
+
+  // Previous status check
+  const { data: project } = await supabase.from('projects').select('homologation_status').eq('id', req.params.id).single();
+
+  await supabase.from('projects').update(updates).eq('id', req.params.id);
 
   if (homologation_status === 'connection_point_approved') {
     await supabase.from('projects').update({ current_stage: 'completed', status: 'completed', updated_at: new Date() }).eq('id', req.params.id);
+  } else if (homologation_status === 'technical_analysis' && project?.homologation_status !== 'technical_analysis') {
+    // Log the automatic transition
+    await supabase.from('logs').insert({ user_id: req.user.id, action: 'HOMOLOGATION_STARTED', details: `Checklist concluído. Processo de homologação iniciado para o projeto ID ${req.params.id}` });
   }
 
   broadcast('PROJECT_UPDATED', { id: req.params.id, type: 'homologation' });

@@ -115,7 +115,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const menuItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Agenda', path: '/agenda', icon: Calendar, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
-    { name: 'Usuários', path: '/users', icon: Users, roles: ['CEO', 'ADMIN'] },
     { name: 'Comercial', path: '/commercial', icon: Briefcase, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Técnica', path: '/technical', icon: Wrench, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
     { name: 'Obra Finalizada', path: '/installation', icon: Hammer, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
@@ -123,6 +122,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     ...(hasCompletedInspection ? [{ name: 'Homologação', path: '/homologation', icon: CheckSquare, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] }] : []),
     { name: 'Finalizados', path: '/finished', icon: Archive, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Mensagens', path: '/messages', icon: MessageSquare, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
+    { name: 'Usuários', path: '/users', icon: Users, roles: ['CEO', 'ADMIN'] },
     { name: 'Configurações', path: '/settings', icon: Settings, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
   ];
 
