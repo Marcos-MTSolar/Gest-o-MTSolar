@@ -13,8 +13,9 @@ export default function Homologation() {
   const [activeTab, setActiveTab] = useState<'observations' | 'process'>('observations');
   const [observationsText, setObservationsText] = useState('');
   const [checklist, setChecklist] = useState<{ id: string, label: string, completed: boolean }[]>([]);
+
   const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const defaultChecklist = [
     { id: 'docs_ok', label: 'Documentação do cliente verificada e completa', completed: false },
@@ -68,40 +69,51 @@ export default function Homologation() {
       const updatedRes = await axios.get(`/api/projects/${id}`);
       setSelectedProject(updatedRes.data);
     } catch (error) {
-      alert('Erro ao atualizar homologação');
+      console.error(error);
+      alert('Erro ao atualizar status da homologação');
     }
   };
 
-  const saveObservationsAndChecklist = async (obs: string, check: any[], showFeedback = false) => {
+  const manualSave = async () => {
+    if (!selectedProject) return;
+    setIsSaving(true);
+    setSaveMessage(null);
+
     try {
-      if (!selectedProject) return;
-      if (showFeedback) setIsSaving(true);
+      // Faz a requisição PUT explicitamente com os dados atuais do state
+      console.log('Enviando PUT request para salvar:', { observationsText, checklist });
       await axios.put(`/api/projects/${selectedProject.id}/homologation`, {
-        homologation_observations: obs,
-        homologation_checklist: check
+        homologation_observations: observationsText,
+        homologation_checklist: checklist
       });
-      if (showFeedback) {
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
-      }
-      // Re-fetch quietamente para garantir sync
-      fetchProjects();
-    } catch (e) {
-      console.error('Error saving checklist', e);
-      alert('Erro ao salvar os dados.');
-    } finally {
-      if (showFeedback) setIsSaving(false);
-    }
-  };
 
-  const manualSave = () => {
-    saveObservationsAndChecklist(observationsText, checklist, true);
+      setSaveMessage({ type: 'success', text: 'Dados salvos com sucesso!' });
+
+      // Limpa a mensagem após 3 segundos
+      setTimeout(() => setSaveMessage(null), 3000);
+
+      // Atualiza a lista por trás
+      fetchProjects();
+    } catch (error) {
+      console.error('Erro no manualSave:', error);
+      setSaveMessage({ type: 'error', text: 'Erro ao salvar, tente novamente.' });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleChecklistItemToggle = async (id: string, completed: boolean) => {
     const newChecklist = checklist.map(item => item.id === id ? { ...item, completed } : item);
     setChecklist(newChecklist);
-    await saveObservationsAndChecklist(observationsText, newChecklist, false);
+
+    // Auto-save no toggle para evitar perder por desatenção, enviamos diretamente a nova lista
+    try {
+      await axios.put(`/api/projects/${selectedProject.id}/homologation`, {
+        homologation_observations: observationsText,
+        homologation_checklist: newChecklist
+      });
+      fetchProjects();
+    } catch (e) { console.error('auto-save falhou', e); }
 
     const allCompleted = newChecklist.every(item => item.completed);
 
@@ -147,8 +159,8 @@ export default function Homologation() {
                   <p className="text-sm text-gray-500">{p.title}</p>
 
                   {/* Snippet de Observações na View Externa */}
-                  {p.homologation_observations && (
-                    <div className="mt-2 text-sm text-gray-600 bg-amber-50/50 p-2.5 rounded-lg border border-amber-100/50 flex items-start gap-2">
+                  {p.homologation_observations && p.homologation_observations.trim() !== '' && (
+                    <div className="mt-2 text-sm text-gray-600 bg-amber-50/50 p-2.5 rounded-lg border border-amber-100/50 flex items-start gap-2 max-w-2xl">
                       <FileText size={16} className="text-amber-500 mt-0.5 shrink-0" />
                       <span className="line-clamp-2 italic">"{p.homologation_observations}"</span>
                     </div>
@@ -165,7 +177,7 @@ export default function Homologation() {
                     {/* Exibe a data nas tags da tela inicial */}
                     {p.homologation_expected_date && expectsDateStatus.includes(p.homologation_status) && (
                       <span className="ml-2 px-3 py-1 rounded-full text-xs font-medium inline-flex items-center gap-1 bg-purple-100 text-purple-800 border border-purple-200">
-                        <Calendar size={12} /> Prev: {new Date(p.homologation_expected_date).toLocaleDateString('pt-BR')}
+                        <Calendar size={12} /> Prev: {new Date(p.homologation_expected_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
                       </span>
                     )}
                   </div>
@@ -179,6 +191,8 @@ export default function Homologation() {
                     setObservationsText(savedObs);
 
                     const savedChecklist = res.data.homologation_checklist;
+                    // REGRA RIGOROSA DO USUÁRIO: Utilizar do DB se houver, ou fallback.
+                    console.log('Checklist do Banco para projeto', p.id, ':', savedChecklist);
                     const loadedChecklist = (Array.isArray(savedChecklist) && savedChecklist.length > 0) ? savedChecklist : defaultChecklist;
                     setChecklist(loadedChecklist);
 
@@ -234,24 +248,28 @@ export default function Homologation() {
                   className="w-full border border-gray-300 p-4 rounded-xl flex-1 min-h-[250px] focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all resize-none shadow-sm bg-white text-gray-700"
                   value={observationsText}
                   onChange={e => setObservationsText(e.target.value)}
-                  onBlur={() => saveObservationsAndChecklist(observationsText, checklist, false)}
                   placeholder="Digite as observações, pendências comerciais ou restrições técnicas..."
                 />
 
-                {/* Botão Salvar dedicado */}
-                <div className="mt-4 flex items-center justify-between bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                {/* Botão Salvar dedicado com ação explícita exigida pelo usuário */}
+                <div className="mt-4 flex items-center justify-between bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex-wrap gap-4">
                   <span className="text-sm text-gray-500 flex items-center gap-2">
-                    <AlertTriangle size={16} className="text-amber-500" />
-                    Certifique-se de salvar ao fazer grandes edições verbais.
+                    <AlertTriangle size={16} className="text-amber-500 shrink-0" />
+                    Clique em Salvar para garantir a gravação das notas.
                   </span>
                   <div className="flex items-center gap-3">
-                    {saveSuccess && <span className="text-sm text-green-600 font-bold flex items-center gap-1.5"><CheckCircle size={18} /> Salvo com sucesso!</span>}
+                    {saveMessage && (
+                      <span className={`text-sm font-bold flex items-center gap-1.5 ${saveMessage.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                        {saveMessage.type === 'success' ? <CheckCircle size={18} /> : <AlertTriangle size={18} />}
+                        {saveMessage.text}
+                      </span>
+                    )}
                     <button
                       onClick={manualSave}
                       disabled={isSaving}
-                      className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-blue-700 transition-all shadow-md active:scale-95 disabled:bg-blue-400"
+                      className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-blue-700 transition-all shadow-md active:scale-95 disabled:bg-blue-400 whitespace-nowrap"
                     >
-                      <Save size={18} /> {isSaving ? 'Salvando...' : 'Salvar Alterações'}
+                      <Save size={18} /> {isSaving ? 'Gravando dados...' : 'Salvar Alterações'}
                     </button>
                   </div>
                 </div>
@@ -261,7 +279,7 @@ export default function Homologation() {
                 <h3 className="text-lg font-bold mb-2 text-gray-800 flex items-center gap-2">
                   <CheckSquare size={20} className="text-blue-600" /> Checklist Obrigatório
                 </h3>
-                <p className="text-sm text-gray-500 mb-4 tracking-tight">A etapa de Análise Técnica só é liberada mediante 100% de conclusão nesta verificação.</p>
+                <p className="text-sm text-gray-500 mb-4 tracking-tight">O fluxo de Análise Técnica só é liberado mediante 100% de conclusão nesta verificação.</p>
 
                 <div className="space-y-3 bg-white p-3 rounded-xl border border-gray-200 flex-1 shadow-sm">
                   {checklist.map(item => (
@@ -298,18 +316,15 @@ export default function Homologation() {
 
               <div className={isProcessLocked ? 'opacity-40 pointer-events-none filter blur-[2px] transition-all' : ''}>
 
-                {/* Note: Documentação Obrigatória was completely removed per requested cleanup */}
-
                 <div className="mb-6">
                   <h3 className="text-lg font-bold mb-4 text-gray-800 border-b border-gray-200 pb-2">Linha do Tempo / Status do Processo</h3>
 
-                  {/* Se houver uma data prevista salva, ela ganha destaque aqui */}
                   {selectedProject.homologation_expected_date && expectsDateStatus.includes(selectedProject.homologation_status) && (
                     <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-xl flex items-center gap-3 w-fit pr-8">
                       <div className="bg-purple-100 text-purple-700 p-2 rounded-lg"><Calendar size={24} /></div>
                       <div>
                         <p className="text-xs text-purple-800 font-bold uppercase tracking-wider">Data Prevista para Conclusão</p>
-                        <p className="text-lg font-black text-purple-900">{new Date(selectedProject.homologation_expected_date).toLocaleDateString('pt-BR')}</p>
+                        <p className="text-lg font-black text-purple-900">{new Date(selectedProject.homologation_expected_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</p>
                       </div>
                     </div>
                   )}
@@ -319,12 +334,10 @@ export default function Homologation() {
                       <button
                         key={opt.value}
                         onClick={() => {
-                          // Se é um dos status de prazo, abre o modal de data. Se for rejected, abre modal de texto (motivo).
                           if (['rejected', 'waiting_inspection', 'performing_inspection', 'technical_analysis'].includes(opt.value)) {
-                            // Se estivermos clicando no botão que já é o status atual, não fazemos nada, ou podemos permitir alteração na data clicando novamente.
-                            // Mas para seguir o fluxo flexível:
                             setStatusNote(selectedProject.rejection_reason || '');
-                            setStatusDate(selectedProject.homologation_expected_date || '');
+                            // Set default date to today to help UI if empty
+                            setStatusDate(selectedProject.homologation_expected_date ? selectedProject.homologation_expected_date.split('T')[0] : new Date().toISOString().split('T')[0]);
                             setStatusModal({ projectId: selectedProject.id, status: opt.value, isOpen: true });
                           } else {
                             handleUpdate(selectedProject.id, opt.value, '');
@@ -349,7 +362,7 @@ export default function Homologation() {
                       <h4 className="font-bold mb-1 text-red-900">
                         Motivo da Reprovação
                       </h4>
-                      <p className="text-sm text-red-800 bg-red-100/50 p-3 rounded-lg border border-red-200 mt-2 font-medium">{selectedProject.rejection_reason}</p>
+                      <p className="text-sm text-red-800 bg-red-100/50 p-3 rounded-lg border border-red-200 mt-2 font-medium whitespace-pre-line">{selectedProject.rejection_reason}</p>
                     </div>
                   </div>
                 )}
@@ -377,7 +390,7 @@ export default function Homologation() {
             {expectsDateStatus.includes(statusModal.status) ? (
               <>
                 <h2 className="text-xl font-bold mb-3 text-blue-900 flex items-center gap-2">
-                  <Calendar /> Definir Em Andamento
+                  <Calendar /> Definir Data Prevista
                 </h2>
                 <p className="text-gray-600 mb-6 text-sm">Por favor, informe a <strong>Data prevista para conclusão</strong> da etapa <strong>{statusOptions.find(o => o.value === statusModal.status)?.label}</strong>:</p>
                 <input
@@ -418,7 +431,7 @@ export default function Homologation() {
                 className={`px-6 py-2.5 text-white rounded-lg font-bold shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${expectsDateStatus.includes(statusModal.status) ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'}`}
                 disabled={expectsDateStatus.includes(statusModal.status) ? !statusDate : !statusNote.trim()}
               >
-                Confirmar
+                Confirmar e Salvar
               </button>
             </div>
           </div>

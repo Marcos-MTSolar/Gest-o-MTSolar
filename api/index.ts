@@ -482,6 +482,10 @@ app.put('/api/projects/:id/installation', authenticateToken, upload.any(), async
 app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, res) => {
   const { homologation_status, rejection_reason, homologation_observations, homologation_checklist, homologation_expected_date } = req.body;
 
+  console.log('--- PUT /api/projects/:id/homologation ---');
+  console.log('ID:', req.params.id);
+  console.log('Payload recebido:', req.body);
+
   const updates: any = { updated_at: new Date() };
   if (homologation_status !== undefined) updates.homologation_status = homologation_status;
   if (rejection_reason !== undefined) updates.rejection_reason = rejection_reason;
@@ -489,10 +493,17 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
   if (homologation_checklist !== undefined) updates.homologation_checklist = homologation_checklist;
   if (homologation_expected_date !== undefined) updates.homologation_expected_date = homologation_expected_date;
 
+  console.log('Updates object que será enviado pro Supabase:', updates);
+
   // Previous status check
   const { data: project } = await supabase.from('projects').select('homologation_status').eq('id', req.params.id).single();
 
-  await supabase.from('projects').update(updates).eq('id', req.params.id);
+  const { error: updateError } = await supabase.from('projects').update(updates).eq('id', req.params.id);
+  if (updateError) {
+    console.error('Supabase Update Error:', updateError);
+  } else {
+    console.log('Update executado com sucesso no bd!');
+  }
 
   if (homologation_status === 'connection_point_approved') {
     await supabase.from('projects').update({ current_stage: 'completed', status: 'completed', updated_at: new Date() }).eq('id', req.params.id);
