@@ -498,6 +498,9 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
   } else if (homologation_status === 'technical_analysis' && project?.homologation_status !== 'technical_analysis') {
     // Log the automatic transition
     await supabase.from('logs').insert({ user_id: req.user.id, action: 'HOMOLOGATION_STARTED', details: `Checklist concluído. Processo de homologação iniciado para o projeto ID ${req.params.id}` });
+  } else if ((homologation_status === null || homologation_status === '') && project?.homologation_status === 'technical_analysis') {
+    // Log the regression
+    await supabase.from('logs').insert({ user_id: req.user.id, action: 'HOMOLOGATION_SUSPENDED', details: `Checklist reaberto/pendente. Processo de homologação suspenso para o projeto ID ${req.params.id}` });
   }
 
   broadcast('PROJECT_UPDATED', { id: req.params.id, type: 'homologation' });
