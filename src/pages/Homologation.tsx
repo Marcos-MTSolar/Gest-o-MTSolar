@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { CheckSquare, AlertTriangle, CheckCircle, FileText, ListChecks, Save, Lock, Unlock } from 'lucide-react';
+import { CheckSquare, AlertTriangle, CheckCircle, FileText, ListChecks, Save, Lock, Unlock, Calendar } from 'lucide-react';
 
 export default function Homologation() {
   const [projects, setProjects] = useState<any[]>([]);
@@ -8,6 +8,7 @@ export default function Homologation() {
 
   const [statusModal, setStatusModal] = useState<{ projectId: number, status: string, isOpen: boolean }>({ projectId: 0, status: '', isOpen: false });
   const [statusNote, setStatusNote] = useState('');
+  const [statusDate, setStatusDate] = useState('');
 
   const [activeTab, setActiveTab] = useState<'observations' | 'process'>('observations');
   const [observationsText, setObservationsText] = useState('');
@@ -40,17 +41,19 @@ export default function Homologation() {
     }
   };
 
-  const handleUpdate = async (id: number, status: string | null, reason: string = '') => {
+  const handleUpdate = async (id: number, status: string | null, reason: string = '', expectedDate: string | null = null) => {
     try {
-      await axios.put(`/api/projects/${id}/homologation`, {
-        homologation_status: status,
-        rejection_reason: reason
-      });
+      const payload: any = { homologation_status: status };
+      if (reason) payload.rejection_reason = reason;
+      if (expectedDate !== null) payload.homologation_expected_date = expectedDate;
+
+      await axios.put(`/api/projects/${id}/homologation`, payload);
 
       if (status === 'connection_point_approved') {
         alert('Ponto de conexão aprovado! Projeto finalizado com sucesso.');
         setStatusModal({ projectId: 0, status: '', isOpen: false });
         setStatusNote('');
+        setStatusDate('');
         await fetchProjects();
         setSelectedProject(null);
         return;
@@ -58,9 +61,10 @@ export default function Homologation() {
 
       setStatusModal({ projectId: 0, status: '', isOpen: false });
       setStatusNote('');
+      setStatusDate('');
       await fetchProjects();
 
-      // Update selected project to reflect changes immediately or close detail view
+      // Recarrega o projeto selecionado para atualizar UI
       const updatedRes = await axios.get(`/api/projects/${id}`);
       setSelectedProject(updatedRes.data);
     } catch (error) {
@@ -80,6 +84,8 @@ export default function Homologation() {
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
       }
+      // Re-fetch quietamente para garantir sync
+      fetchProjects();
     } catch (e) {
       console.error('Error saving checklist', e);
       alert('Erro ao salvar os dados.');
@@ -102,12 +108,12 @@ export default function Homologation() {
     // Regra de Liberação
     if (allCompleted && (!selectedProject.homologation_status || selectedProject.homologation_status === 'none')) {
       alert('Checklist 100% concluído! A etapa de Análise Técnica foi habilitada.');
-      handleUpdate(selectedProject.id, 'technical_analysis', selectedProject.rejection_reason);
+      handleUpdate(selectedProject.id, 'technical_analysis');
     }
     // Regra de Regressão: Desmarcou e estava na Análise Técnica
     else if (!allCompleted && selectedProject.homologation_status === 'technical_analysis') {
       alert('Ops! Um item do checklist foi desmarcado. O processo "Análise Técnica" foi bloqueado novamente.');
-      handleUpdate(selectedProject.id, null, selectedProject.rejection_reason); // Revoga status
+      handleUpdate(selectedProject.id, null); // Revoga status
       setActiveTab('observations');
     }
   };
@@ -119,6 +125,8 @@ export default function Homologation() {
     { value: 'performing_inspection', label: 'Realizando Vistoria' },
     { value: 'connection_point_approved', label: 'Ponto de Conexão Aprovado' },
   ];
+
+  const expectsDateStatus = ['technical_analysis', 'waiting_inspection', 'performing_inspection'];
 
   const isChecklistComplete = checklist.length > 0 && checklist.every(i => i.completed);
   const isProcessLocked = !isChecklistComplete;
@@ -133,21 +141,32 @@ export default function Homologation() {
               <p className="text-gray-500">Nenhum projeto em fase de homologação.</p>
             )}
             {projects.map(p => (
-              <div key={p.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
-                <div>
+              <div key={p.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center transition hover:shadow-md">
+                <div className="flex-1 mr-4">
                   <h3 className="text-lg font-bold text-gray-800">{p.client_name}</h3>
                   <p className="text-sm text-gray-500">{p.title}</p>
-                  <div className="mt-2">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold inline-block mb-1 ${p.homologation_status === 'connection_point_approved' ? 'bg-green-100 text-green-800' :
-                      p.homologation_status === 'rejected' ? 'bg-red-100 text-red-800' :
-                        !p.homologation_status ? 'bg-gray-100 text-gray-800' : 'bg-blue-100 text-blue-800'
+
+                  {/* Snippet de Observações na View Externa */}
+                  {p.homologation_observations && (
+                    <div className="mt-2 text-sm text-gray-600 bg-amber-50/50 p-2.5 rounded-lg border border-amber-100/50 flex items-start gap-2">
+                      <FileText size={16} className="text-amber-500 mt-0.5 shrink-0" />
+                      <span className="line-clamp-2 italic">"{p.homologation_observations}"</span>
+                    </div>
+                  )}
+
+                  <div className="mt-3">
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1 ${p.homologation_status === 'connection_point_approved' ? 'bg-green-100 text-green-800 border border-green-200' :
+                      p.homologation_status === 'rejected' ? 'bg-red-100 text-red-800 border border-red-200' :
+                        !p.homologation_status ? 'bg-gray-100 text-gray-600 border border-gray-200' : 'bg-blue-100 text-blue-800 border border-blue-200'
                       }`}>
-                      {statusOptions.find(o => o.value === p.homologation_status)?.label || 'Aguardando Checklist'}
+                      {statusOptions.find(o => o.value === p.homologation_status)?.label || 'Aguardando Checklist de Pré-Homologação'}
                     </span>
-                    {p.homologation_status && !['connection_point_approved', 'technical_analysis'].includes(p.homologation_status) && p.rejection_reason && (
-                      <p className="text-xs text-amber-700 mt-1 bg-amber-50 p-2 rounded border border-amber-200 block w-fit">
-                        <strong>Motivo / Pendência:</strong> {p.rejection_reason}
-                      </p>
+
+                    {/* Exibe a data nas tags da tela inicial */}
+                    {p.homologation_expected_date && expectsDateStatus.includes(p.homologation_status) && (
+                      <span className="ml-2 px-3 py-1 rounded-full text-xs font-medium inline-flex items-center gap-1 bg-purple-100 text-purple-800 border border-purple-200">
+                        <Calendar size={12} /> Prev: {new Date(p.homologation_expected_date).toLocaleDateString('pt-BR')}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -170,7 +189,7 @@ export default function Homologation() {
                       setActiveTab('observations');
                     }
                   }}
-                  className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-800"
+                  className="bg-blue-900 text-white px-5 py-2.5 rounded-lg hover:bg-blue-800 shadow shadow-blue-900/20 font-medium shrink-0"
                 >
                   Gerenciar
                 </button>
@@ -180,16 +199,16 @@ export default function Homologation() {
         </>
       ) : (
         <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
-          <div className="p-6 border-b flex justify-between items-center bg-gray-50">
+          <div className="p-6 border-b flex justify-between items-center bg-gray-50/80">
             <div>
               <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">Homologação: {selectedProject.client_name}</h2>
               <p className="text-sm text-gray-500">{selectedProject.title}</p>
             </div>
-            <button onClick={() => { setSelectedProject(null); fetchProjects(); }} className="text-gray-600 hover:bg-gray-200 font-medium px-4 py-2 rounded-lg transition-colors bg-white border border-gray-300 shadow-sm">Voltar para Lista</button>
+            <button onClick={() => { setSelectedProject(null); fetchProjects(); }} className="text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow font-medium px-4 py-2 rounded-lg transition-all border border-gray-300 shadow-sm bg-gray-50">Voltar para Lista</button>
           </div>
 
-          <div className="flex border-b bg-white overflow-x-auto">
-            <button onClick={() => setActiveTab('observations')} className={`px-6 py-4 font-semibold transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'observations' ? 'border-b-[3px] border-blue-600 text-blue-700 bg-blue-50/30' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}>
+          <div className="flex border-b bg-white overflow-x-auto select-none">
+            <button onClick={() => setActiveTab('observations')} className={`px-6 py-4 font-semibold transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'observations' ? 'border-b-[3px] border-blue-600 text-blue-800 bg-blue-50/40' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}>
               <FileText size={20} /> Observações Pré-Homologação
               {isChecklistComplete ? <CheckCircle size={16} className="text-green-500 ml-1" /> : <AlertTriangle size={16} className="text-amber-500 ml-1" />}
             </button>
@@ -198,7 +217,7 @@ export default function Homologation() {
                 if (!isProcessLocked) setActiveTab('process');
               }}
               disabled={isProcessLocked}
-              className={`px-6 py-4 font-semibold flex items-center gap-2 transition-colors whitespace-nowrap ${activeTab === 'process' ? 'border-b-[3px] border-blue-600 text-blue-700 bg-blue-50/30' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'} ${isProcessLocked ? 'opacity-60 cursor-not-allowed bg-gray-50/50' : ''}`}>
+              className={`px-6 py-4 font-semibold flex items-center gap-2 transition-colors whitespace-nowrap ${activeTab === 'process' ? 'border-b-[3px] border-blue-600 text-blue-800 bg-blue-50/40' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'} ${isProcessLocked ? 'opacity-60 cursor-not-allowed bg-gray-50/50' : ''}`}>
               <ListChecks size={20} /> Processo de Homologação
               {isProcessLocked ? <Lock size={16} className="text-gray-400 ml-1" /> : <Unlock size={16} className="text-green-500 ml-1" />}
             </button>
@@ -208,11 +227,11 @@ export default function Homologation() {
             <div className="p-6 flex flex-col xl:flex-row gap-8 bg-gray-50/30 relative">
               <div className="flex-1 flex flex-col">
                 <h3 className="text-lg font-bold mb-2 text-gray-800 flex items-center gap-2">
-                  <FileText size={20} className="text-blue-600" /> Notas e Pendências Geras
+                  <FileText size={20} className="text-blue-600" /> Notas e Pendências Gerais
                 </h3>
-                <p className="text-sm text-gray-500 mb-4 tracking-tight">Registre informações relevantes antes do início formal da homologação. Todas as anotações e checklists precisam estar verificados.</p>
+                <p className="text-sm text-gray-500 mb-4 tracking-tight">Registre informações relevantes antes do início formal da homologação. Esta anotação fica exposta na tela principal de listagem.</p>
                 <textarea
-                  className="w-full border border-gray-300 p-4 rounded-xl flex-1 min-h-[250px] focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all resize-none shadow-sm bg-white"
+                  className="w-full border border-gray-300 p-4 rounded-xl flex-1 min-h-[250px] focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all resize-none shadow-sm bg-white text-gray-700"
                   value={observationsText}
                   onChange={e => setObservationsText(e.target.value)}
                   onBlur={() => saveObservationsAndChecklist(observationsText, checklist, false)}
@@ -226,7 +245,7 @@ export default function Homologation() {
                     Certifique-se de salvar ao fazer grandes edições verbais.
                   </span>
                   <div className="flex items-center gap-3">
-                    {saveSuccess && <span className="text-sm text-green-600 font-medium flex items-center gap-1"><CheckCircle size={16} /> Salvo com sucesso</span>}
+                    {saveSuccess && <span className="text-sm text-green-600 font-bold flex items-center gap-1.5"><CheckCircle size={18} /> Salvo com sucesso!</span>}
                     <button
                       onClick={manualSave}
                       disabled={isSaving}
@@ -242,29 +261,21 @@ export default function Homologation() {
                 <h3 className="text-lg font-bold mb-2 text-gray-800 flex items-center gap-2">
                   <CheckSquare size={20} className="text-blue-600" /> Checklist Obrigatório
                 </h3>
-                <p className="text-sm text-gray-500 mb-4 tracking-tight">O fluxo de Análise Técnica só é liberado mediante 100% de conclusão nesta lista.</p>
+                <p className="text-sm text-gray-500 mb-4 tracking-tight">A etapa de Análise Técnica só é liberada mediante 100% de conclusão nesta verificação.</p>
 
-                <div className="space-y-3 bg-white p-2 rounded-xl border border-gray-200 flex-1">
+                <div className="space-y-3 bg-white p-3 rounded-xl border border-gray-200 flex-1 shadow-sm">
                   {checklist.map(item => (
-                    <label key={item.id} className={`flex items-start space-x-4 p-4 rounded-lg cursor-pointer transition-all border ${item.completed ? 'bg-green-50/40 border-green-200' : 'bg-white border-gray-200 shadow-sm hover:border-blue-300 hover:shadow-md'}`}>
+                    <label key={item.id} className={`flex items-start space-x-4 p-4 rounded-lg cursor-pointer transition-all border ${item.completed ? 'bg-green-50/60 border-green-200' : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm'}`}>
                       <div className="mt-0.5">
                         <input type="checkbox" className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer" checked={item.completed} onChange={(e) => handleChecklistItemToggle(item.id, e.target.checked)} />
                       </div>
                       <div>
-                        <span className={`font-semibold block ${item.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>{item.label}</span>
-                        {!item.completed && <span className="text-xs text-amber-600 font-medium mt-1 inline-block bg-amber-50 px-2 py-0.5 rounded border border-amber-100">Pendente</span>}
-                        {item.completed && <span className="text-xs text-green-600 font-medium mt-1 inline-block bg-green-50 px-2 py-0.5 rounded border border-green-100">Concluído</span>}
+                        <span className={`font-semibold block transition-colors ${item.completed ? 'text-gray-400' : 'text-gray-800'}`}>{item.label}</span>
+                        {!item.completed && <span className="text-xs text-amber-600 font-bold mt-1 inline-block bg-amber-50 px-2.5 py-0.5 rounded border border-amber-100 uppercase tracking-wide">Pendente</span>}
+                        {item.completed && <span className="text-xs text-green-600 font-bold mt-1 inline-block bg-green-50 px-2.5 py-0.5 rounded border border-green-100 uppercase tracking-wide">Resolvido</span>}
                       </div>
                     </label>
                   ))}
-
-                  <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-100 flex items-start gap-3">
-                    <AlertTriangle className="text-blue-600 shrink-0 mt-0.5" size={20} />
-                    <div>
-                      <h4 className="font-semibold text-blue-900 text-sm">Regras de Validação</h4>
-                      <p className="text-xs text-blue-800 mt-1">O botão de salvar abaixo protege o texto. Os checkboxes do checklist disparam auto-salvamento imediato e recalibram as travas do sistema de homologação no backend.</p>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -277,8 +288,8 @@ export default function Homologation() {
                       <Lock size={32} />
                     </div>
                     <h3 className="text-xl font-bold text-gray-800 mb-2">Etapa Bloqueada</h3>
-                    <p className="text-gray-600 mb-6">Finalize todas as observações e marque 100% do checklist Pré-Homologação antes de avançar para a Análise Técnica.</p>
-                    <button onClick={() => setActiveTab('observations')} className="bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg w-full hover:bg-blue-700 transition-colors shadow-md">
+                    <p className="text-gray-600 mb-6 font-medium">Finalize todas as observações e marque 100% do checklist Pré-Homologação antes de avançar para a Análise Técnica.</p>
+                    <button onClick={() => setActiveTab('observations')} className="bg-blue-600 text-white font-bold py-3 px-6 rounded-lg w-full hover:bg-blue-700 transition-colors shadow-lg active:scale-95">
                       Ir para Checklist
                     </button>
                   </div>
@@ -286,77 +297,71 @@ export default function Homologation() {
               )}
 
               <div className={isProcessLocked ? 'opacity-40 pointer-events-none filter blur-[2px] transition-all' : ''}>
-                <div className="mb-8">
-                  <h3 className="text-lg font-semibold mb-4 text-gray-800 border-b pb-2">Documentação Obrigatória</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {['rg_cnh', 'art', 'bill_generator', 'bill_beneficiary'].map(type => {
-                      const hasDoc = selectedProject.documents?.some((d: any) => d.type === type);
-                      const label = {
-                        'rg_cnh': 'RG ou CNH',
-                        'art': 'ART',
-                        'bill_generator': 'Conta Geradora',
-                        'bill_beneficiary': 'Conta Beneficiária'
-                      }[type as keyof typeof label];
 
-                      return (
-                        <div key={type} className={`p-4 rounded-xl border flex flex-col justify-between h-full gap-3 transition-colors ${hasDoc ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-                          <div className="flex justify-between items-start">
-                            <span className={`font-semibold text-sm ${hasDoc ? 'text-green-800' : 'text-red-800'}`}>{label}</span>
-                            {hasDoc ? <CheckCircle size={20} className="text-green-600 shrink-0" /> : <AlertTriangle size={20} className="text-red-600 shrink-0" />}
-                          </div>
-                          {!hasDoc && <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded inline-block w-fit font-medium">Falta Arquivo</span>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                {/* Note: Documentação Obrigatória was completely removed per requested cleanup */}
 
                 <div className="mb-6">
-                  <h3 className="text-lg font-semibold mb-4 text-gray-800 border-b pb-2">Gerenciar Status</h3>
+                  <h3 className="text-lg font-bold mb-4 text-gray-800 border-b border-gray-200 pb-2">Linha do Tempo / Status do Processo</h3>
+
+                  {/* Se houver uma data prevista salva, ela ganha destaque aqui */}
+                  {selectedProject.homologation_expected_date && expectsDateStatus.includes(selectedProject.homologation_status) && (
+                    <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-xl flex items-center gap-3 w-fit pr-8">
+                      <div className="bg-purple-100 text-purple-700 p-2 rounded-lg"><Calendar size={24} /></div>
+                      <div>
+                        <p className="text-xs text-purple-800 font-bold uppercase tracking-wider">Data Prevista para Conclusão</p>
+                        <p className="text-lg font-black text-purple-900">{new Date(selectedProject.homologation_expected_date).toLocaleDateString('pt-BR')}</p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap gap-3">
                     {statusOptions.map(opt => (
                       <button
                         key={opt.value}
                         onClick={() => {
-                          if (['rejected', 'waiting_inspection', 'performing_inspection'].includes(opt.value)) {
+                          // Se é um dos status de prazo, abre o modal de data. Se for rejected, abre modal de texto (motivo).
+                          if (['rejected', 'waiting_inspection', 'performing_inspection', 'technical_analysis'].includes(opt.value)) {
+                            // Se estivermos clicando no botão que já é o status atual, não fazemos nada, ou podemos permitir alteração na data clicando novamente.
+                            // Mas para seguir o fluxo flexível:
                             setStatusNote(selectedProject.rejection_reason || '');
+                            setStatusDate(selectedProject.homologation_expected_date || '');
                             setStatusModal({ projectId: selectedProject.id, status: opt.value, isOpen: true });
                           } else {
                             handleUpdate(selectedProject.id, opt.value, '');
                           }
                         }}
                         className={`px-5 py-3 text-sm rounded-xl border transition-all font-semibold flex items-center gap-2 ${selectedProject.homologation_status === opt.value
-                          ? 'bg-blue-900 text-white border-blue-900 shadow-md ring-2 ring-blue-900/20 ring-offset-2'
-                          : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:bg-blue-50'
+                          ? 'bg-blue-900 text-white border-blue-900 shadow-lg ring-2 ring-blue-900/20 ring-offset-2'
+                          : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:bg-blue-50 shadow-sm hover:shadow'
                           }`}
                       >
-                        {selectedProject.homologation_status === opt.value && <CheckCircle size={16} />}
+                        {selectedProject.homologation_status === opt.value && <CheckCircle size={18} />}
                         {opt.label}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {selectedProject.homologation_status && !['connection_point_approved', 'technical_analysis'].includes(selectedProject.homologation_status) && selectedProject.rejection_reason && (
-                  <div className="p-5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 flex items-start gap-4 shadow-sm">
-                    <AlertTriangle size={24} className="mt-0.5 flex-shrink-0 text-amber-600" />
+                {selectedProject.homologation_status === 'rejected' && selectedProject.rejection_reason && (
+                  <div className="p-5 bg-red-50 border border-red-200 rounded-xl text-red-800 flex items-start gap-4 shadow-sm mb-6">
+                    <AlertTriangle size={24} className="mt-0.5 flex-shrink-0 text-red-600" />
                     <div>
-                      <h4 className="font-bold mb-1 text-amber-900">
-                        Pendência Sinalizada: {statusOptions.find(o => o.value === selectedProject.homologation_status)?.label}
+                      <h4 className="font-bold mb-1 text-red-900">
+                        Motivo da Reprovação
                       </h4>
-                      <p className="text-sm text-amber-800 bg-amber-100/50 p-3 rounded-lg border border-amber-200 mt-2">{selectedProject.rejection_reason}</p>
+                      <p className="text-sm text-red-800 bg-red-100/50 p-3 rounded-lg border border-red-200 mt-2 font-medium">{selectedProject.rejection_reason}</p>
                     </div>
                   </div>
                 )}
 
                 {selectedProject.homologation_status === 'connection_point_approved' && (
-                  <div className="p-6 bg-green-50 border border-green-200 rounded-xl text-green-900 flex items-center gap-4 shadow-sm">
+                  <div className="p-6 bg-green-50 border border-green-200 rounded-xl text-green-900 flex items-center gap-4 shadow-sm mb-6">
                     <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center shrink-0">
                       <CheckCircle size={28} className="text-green-600" />
                     </div>
                     <div>
                       <h4 className="font-bold text-lg">Homologação Concluída com Sucesso</h4>
-                      <p className="text-sm text-green-700 mt-1">O ponto de conexão foi aprovado e o processo validado. O projeto prosseguirá para o arquivamento ou conclusão final.</p>
+                      <p className="text-sm text-green-700 mt-1 font-medium">O ponto de conexão foi aprovado e o processo validado. O projeto prosseguirá para a conclusão final.</p>
                     </div>
                   </div>
                 )}
@@ -368,30 +373,52 @@ export default function Homologation() {
 
       {statusModal.isOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-6 rounded-2xl w-full max-w-lg shadow-2xl">
-            <h2 className="text-xl font-bold mb-2 text-amber-600 flex items-center gap-2">
-              <AlertTriangle /> Adicionar Pendência de Status
-            </h2>
-            <p className="text-gray-600 mb-6 text-sm">Por favor, informe uma observação ou motivo que justifique o status <strong>{statusOptions.find(o => o.value === statusModal.status)?.label}</strong>:</p>
-            <textarea
-              className="w-full border border-gray-300 p-4 rounded-xl mb-4 h-32 focus:ring-4 focus:ring-amber-500/20 outline-none resize-none transition-all"
-              placeholder="Descreva a restrição ou motivo..."
-              value={statusNote}
-              onChange={e => setStatusNote(e.target.value)}
-            ></textarea>
-            <div className="flex justify-end gap-3 mt-2">
+          <div className="bg-white p-8 rounded-2xl w-full max-w-lg shadow-2xl">
+            {expectsDateStatus.includes(statusModal.status) ? (
+              <>
+                <h2 className="text-xl font-bold mb-3 text-blue-900 flex items-center gap-2">
+                  <Calendar /> Definir Em Andamento
+                </h2>
+                <p className="text-gray-600 mb-6 text-sm">Por favor, informe a <strong>Data prevista para conclusão</strong> da etapa <strong>{statusOptions.find(o => o.value === statusModal.status)?.label}</strong>:</p>
+                <input
+                  type="date"
+                  className="w-full border border-gray-300 p-4 rounded-xl mb-6 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-medium text-gray-700"
+                  value={statusDate}
+                  onChange={e => setStatusDate(e.target.value)}
+                />
+              </>
+            ) : (
+              <>
+                <h2 className="text-xl font-bold mb-3 text-red-600 flex items-center gap-2">
+                  <AlertTriangle /> Reprovar Análise
+                </h2>
+                <p className="text-gray-600 mb-6 text-sm">Por favor, informe detalhadamente o motivo da reprovação para o status <strong>{statusOptions.find(o => o.value === statusModal.status)?.label}</strong>:</p>
+                <textarea
+                  className="w-full border border-gray-300 p-4 rounded-xl mb-6 h-32 focus:ring-4 focus:ring-red-500/20 focus:border-red-500 outline-none resize-none transition-all"
+                  placeholder="Descreva a restrição..."
+                  value={statusNote}
+                  onChange={e => setStatusNote(e.target.value)}
+                ></textarea>
+              </>
+            )}
+
+            <div className="flex justify-end gap-3 border-t pt-4">
               <button
                 onClick={() => setStatusModal({ projectId: 0, status: '', isOpen: false })}
-                className="px-5 py-2.5 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-colors"
+                className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg font-bold transition-colors"
               >
-                Cancelar Operação
+                Cancelar
               </button>
               <button
-                onClick={() => handleUpdate(statusModal.projectId, statusModal.status, statusNote)}
-                className="px-6 py-2.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 font-semibold shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!statusNote.trim()}
+                onClick={() => {
+                  const reason = expectsDateStatus.includes(statusModal.status) ? '' : statusNote;
+                  const targetDate = expectsDateStatus.includes(statusModal.status) ? statusDate : null;
+                  handleUpdate(statusModal.projectId, statusModal.status, reason, targetDate);
+                }}
+                className={`px-6 py-2.5 text-white rounded-lg font-bold shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${expectsDateStatus.includes(statusModal.status) ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'}`}
+                disabled={expectsDateStatus.includes(statusModal.status) ? !statusDate : !statusNote.trim()}
               >
-                Confirmar e Alterar Status
+                Confirmar
               </button>
             </div>
           </div>
