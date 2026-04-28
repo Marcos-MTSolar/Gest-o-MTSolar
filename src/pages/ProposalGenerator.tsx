@@ -1,4 +1,4 @@
-﻿// PÃ¡gina criada para MT Solar â€” Gerador de Propostas Solares
+// Página criada para MT Solar — Gerador de Propostas Solares
 import React, { useState, useEffect } from 'react';
 import { 
   User, 
@@ -70,45 +70,45 @@ interface Results {
 const AVAILABLE_SERVICES = [
   {
     id: 'limpeza',
-    name: 'Limpeza de MÃ³dulos',
-    description: 'Limpeza tÃ©cnica dos mÃ³dulos fotovoltaicos com produtos adequados, removendo sujeira, pÃ³ e resÃ­duos que reduzem a eficiÃªncia do sistema.',
-    norms: 'NBR 16274, recomendaÃ§Ãµes do fabricante dos mÃ³dulos.'
+    name: 'Limpeza de Módulos',
+    description: 'Limpeza técnica dos módulos fotovoltaicos com produtos adequados, removendo sujeira, pó e resíduos que reduzem a eficiência do sistema.',
+    norms: 'NBR 16274, recomendações do fabricante dos módulos.'
   },
   {
     id: 'instalacao',
-    name: 'InstalaÃ§Ã£o dos MÃ³dulos Fotovoltaicos',
-    description: 'InstalaÃ§Ã£o completa dos mÃ³dulos fotovoltaicos, incluindo fixaÃ§Ã£o estrutural, cabeamento CC, conexÃ£o ao inversor e testes de funcionamento.',
-    norms: 'NBR 16690, NBR 5410, ResoluÃ§Ã£o Normativa ANEEL 482/2012 e atualizaÃ§Ãµes.'
+    name: 'Instalação dos Módulos Fotovoltaicos',
+    description: 'Instalação completa dos módulos fotovoltaicos, incluindo fixação estrutural, cabeamento CC, conexão ao inversor e testes de funcionamento.',
+    norms: 'NBR 16690, NBR 5410, Resolução Normativa ANEEL 482/2012 e atualizações.'
   },
   {
     id: 'terreno',
     name: 'Limpeza de Terreno',
-    description: 'Limpeza e preparaÃ§Ã£o do terreno para instalaÃ§Ã£o de usinas fotovoltaicas, incluindo remoÃ§Ã£o de vegetaÃ§Ã£o e nivelamento bÃ¡sico.',
-    norms: 'LegislaÃ§Ã£o ambiental municipal e estadual aplicÃ¡vel.'
+    description: 'Limpeza e preparação do terreno para instalação de usinas fotovoltaicas, incluindo remoção de vegetação e nivelamento básico.',
+    norms: 'Legislação ambiental municipal e estadual aplicável.'
   },
   {
     id: 'comissionamento',
     name: 'Comissionamento Fotovoltaico',
-    description: 'VerificaÃ§Ã£o e testes completos do sistema instalado, incluindo mediÃ§Ã£o de parÃ¢metros elÃ©tricos, verificaÃ§Ã£o de string, anÃ¡lise de inversores e emissÃ£o de laudo tÃ©cnico.',
+    description: 'Verificação e testes completos do sistema instalado, incluindo medição de parâmetros elétricos, verificação de string, análise de inversores e emissão de laudo técnico.',
     norms: 'NBR 16274, IEC 62446-1.'
   },
   {
     id: 'projeto_subestacao',
-    name: 'Projeto de SubestaÃ§Ã£o',
-    description: 'ElaboraÃ§Ã£o de projeto elÃ©trico de subestaÃ§Ã£o conforme requisitos da concessionÃ¡ria local, incluindo memorial descritivo, diagramas unifilares e especificaÃ§Ã£o de equipamentos.',
-    norms: 'NBR 14039, NBR 5460, normas da concessionÃ¡ria local.'
+    name: 'Projeto de Subestação',
+    description: 'Elaboração de projeto elétrico de subestação conforme requisitos da concessionária local, incluindo memorial descritivo, diagramas unifilares e especificação de equipamentos.',
+    norms: 'NBR 14039, NBR 5460, normas da concessionária local.'
   },
   {
     id: 'projeto_usina',
     name: 'Projeto de Usina Fotovoltaica',
-    description: 'ElaboraÃ§Ã£o de projeto completo de usina fotovoltaica, incluindo dimensionamento do sistema, memorial de cÃ¡lculo, diagramas elÃ©tricos, layout e documentaÃ§Ã£o para homologaÃ§Ã£o.',
-    norms: 'NBR 16690, NBR 5410, NBR 16274, ResoluÃ§Ã£o Normativa ANEEL 482/2012.'
+    description: 'Elaboração de projeto completo de usina fotovoltaica, incluindo dimensionamento do sistema, memorial de cálculo, diagramas elétricos, layout e documentação para homologação.',
+    norms: 'NBR 16690, NBR 5410, NBR 16274, Resolução Normativa ANEEL 482/2012.'
   },
   {
     id: 'homologacao',
-    name: 'HomologaÃ§Ã£o',
-    description: 'Acompanhamento e execuÃ§Ã£o de todo o processo de homologaÃ§Ã£o junto Ã  concessionÃ¡ria de energia, incluindo protocolo de documentos, acompanhamento do processo e vistoria tÃ©cnica.',
-    norms: 'ResoluÃ§Ã£o Normativa ANEEL 482/2012, ResoluÃ§Ã£o Normativa ANEEL 687/2015 e normativas da concessionÃ¡ria local.'
+    name: 'Homologação',
+    description: 'Acompanhamento e execução de todo o processo de homologação junto à concessionária de energia, incluindo protocolo de documentos, acompanhamento do processo e vistoria técnica.',
+    norms: 'Resolução Normativa ANEEL 482/2012, Resolução Normativa ANEEL 687/2015 e normativas da concessionária local.'
   }
 ];
 
@@ -165,7 +165,7 @@ export default function ProposalGenerator() {
       const res = await api.get('/api/proposal-history');
       setHistory(res.data);
     } catch (error) {
-      console.error('Erro ao buscar histÃ³rico:', error);
+      console.error('Erro ao buscar histórico:', error);
     }
   };
 
@@ -175,17 +175,19 @@ export default function ProposalGenerator() {
     }
   }, [activeTab]);
 
-  const saveToHistory = async () => {
+  const saveToHistory = async (proposalNumber: string) => {
     try {
+      const salePrice = results.salePrice || (Number(formData.kitCost) * (1 + Number(formData.marginPercent)/100));
+      
       await api.post('/api/proposal-history', {
         client_name: formData.clientName || 'Cliente sem nome',
         margin: parseFloat(formData.marginPercent) || 0,
-        kit_value: parseFloat(formData.kitCost) || 0,
-        proposal_id: `PROP-${Date.now().toString().slice(-6)}`
+        kit_value: salePrice,
+        proposal_number: proposalNumber
       });
       fetchHistory();
     } catch (error) {
-      console.error('Erro ao salvar no histÃ³rico:', error);
+      console.error('Erro ao salvar no histórico:', error);
     }
   };
 
@@ -193,7 +195,7 @@ export default function ProposalGenerator() {
     clientName: '',
     selectedServices: [] as string[],
     totalValue: '',
-    executionTime: '15 dias Ãºteis',
+    executionTime: '15 dias úteis',
     responsible: '',
     validityDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   });
@@ -214,8 +216,10 @@ export default function ProposalGenerator() {
     const servicesList = AVAILABLE_SERVICES.filter(s => serviceFormData.selectedServices.includes(s.id));
 
     const htmlContent = `
+      <!DOCTYPE html>
       <html>
       <head>
+        <meta charset="UTF-8">
         <style>
           @page { margin: 0; }
           body { font-family: Arial, sans-serif; color: #333; margin: 0; padding: 0; }
@@ -239,10 +243,10 @@ export default function ProposalGenerator() {
       <body>
         <div class="page">
           <div class="header">
-            <h1>Proposta de ServiÃ§os</h1>
+            <h1>Proposta de Serviços</h1>
             <div style="text-align: right;">
               <div class="logo-text">MT SOLAR</div>
-              <div style="color: #fff; font-size: 8pt;">ENERGIA RENOVÃVEL</div>
+              <div style="color: #fff; font-size: 8pt;">ENERGIA RENOVÁVEL</div>
             </div>
           </div>
 
@@ -250,37 +254,37 @@ export default function ProposalGenerator() {
           <table class="data-table">
             <tr>
               <td class="label">Cliente:</td>
-              <td class="value">${serviceFormData.clientName || 'â€”'}</td>
+              <td class="value">${serviceFormData.clientName || '—'}</td>
             </tr>
             <tr>
-              <td class="label">Data de EmissÃ£o:</td>
+              <td class="label">Data de Emissão:</td>
               <td class="value">${dataGerada}</td>
             </tr>
             <tr>
-              <td class="label">ResponsÃ¡vel TÃ©cnico:</td>
-              <td class="value">${serviceFormData.responsible || 'â€”'}</td>
+              <td class="label">Responsável Técnico:</td>
+              <td class="value">${serviceFormData.responsible || '—'}</td>
             </tr>
           </table>
 
-          <div class="section-title">ServiÃ§os Contratados</div>
+          <div class="section-title">Serviços Contratados</div>
           ${servicesList.map(s => `
             <div class="service-item">
-              <div class="service-name">âœ“ ${s.name}</div>
+              <div class="service-name">✓ ${s.name}</div>
               <div class="service-desc">${s.description}</div>
               <div class="service-norms">Normas: ${s.norms}</div>
             </div>
           `).join('')}
 
-          <div class="section-title">CondiÃ§Ãµes Comerciais</div>
+          <div class="section-title">Condições Comerciais</div>
           <div class="conditions-card">
             <table style="width: 100%;">
               <tr>
                 <td>
-                  <div style="font-size: 9pt; color: #64748b; text-transform: uppercase;">Valor Total dos ServiÃ§os</div>
+                  <div style="font-size: 9pt; color: #64748b; text-transform: uppercase;">Valor Total dos Serviços</div>
                   <div style="font-size: 18pt; font-weight: 900; color: #1e3a5f;">R$ ${parseFloat(serviceFormData.totalValue || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                 </td>
                 <td style="text-align: right;">
-                  <div style="font-size: 9pt; color: #64748b; text-transform: uppercase;">Tempo de ExecuÃ§Ã£o</div>
+                  <div style="font-size: 9pt; color: #64748b; text-transform: uppercase;">Tempo de Execução</div>
                   <div style="font-size: 14pt; font-weight: bold; color: #1e3a5f;">${serviceFormData.executionTime}</div>
                 </td>
               </tr>
@@ -293,11 +297,11 @@ export default function ProposalGenerator() {
           <div class="footer">
             <div style="display: flex; justify-content: space-between;">
               <div>
-                <strong>MT SOLAR â€” ENERGIA RENOVÃVEL</strong><br/>
+                <strong>MT SOLAR — ENERGIA RENOVÁVEL</strong><br/>
                 mtsolar.energia@gmail.com | (81) 99700-3260
               </div>
               <div style="text-align: right;">
-                NÂº da Proposta: <strong>SRV-${Date.now().toString().slice(-6)}</strong>
+                Nº da Proposta: <strong>SRV-${Date.now().toString().slice(-6)}</strong>
               </div>
             </div>
           </div>
@@ -323,11 +327,11 @@ export default function ProposalGenerator() {
         validity_date: serviceFormData.validityDate
       });
     } catch (err) {
-      console.error('Erro ao salvar proposta de serviÃ§o:', err);
+      console.error('Erro ao salvar proposta de serviço:', err);
     }
   };
 
-  const updateForm = (field: string, value: string) => setFormData(prev => ({ ...prev, [field]: value }));
+  const updateForm = (field: string, value: string | boolean) => setFormData(prev => ({ ...prev, [field]: value }));
   const inputStyle = "border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
 
   useEffect(() => {
@@ -368,10 +372,17 @@ export default function ProposalGenerator() {
     }));
   };
 
-  const isReady = formData.clientName && formData.kitCost && formData.marginPercent && formData.kitPower;
+  const generatePDF = async () => {
+    if (!formData.clientName || !formData.kitCost) {
+      alert('Preencha os dados do cliente e do kit antes de gerar a proposta.');
+      return;
+    }
 
+    const proposalNumber = `PROP-${Date.now().toString().slice(-6)}`;
+    
+    // Salvar no histórico antes de qualquer coisa
+    await saveToHistory(proposalNumber);
 
-  const generatePDF = () => {
     const AZUL = '#1e3a5f';
     const AZUL_CLARO = '#d6e4f0';
     const AMARELO = '#f59e0b';
@@ -380,7 +391,7 @@ export default function ProposalGenerator() {
     const newWindow = window.open('', '_blank');
     if (!newWindow) return;
 
-    // CÃ¡lculos para o grÃ¡fico da PÃ¡gina 4
+    // Cálculos para o gráfico da Página 4
     const monthlyBillVal = Number(formData.monthlyBill) || 450;
     const energyRateVal = Number(formData.energyRate) || 0.85;
     const consumoMensal = Math.round(monthlyBillVal / energyRateVal);
@@ -390,7 +401,7 @@ export default function ProposalGenerator() {
     const geracaoMes = fatorSazonalidade.map(f => Math.round(kitPowerVal * 30 * 4.5 * f));
     const maxVal = Math.max(consumoMensal, ...geracaoMes) + 100;
 
-    // CÃ¡lculos para PÃ¡gina 5: Indicadores de Viabilidade
+    // Cálculos para Página 5: Indicadores de Viabilidade
     const saleP = results.salePrice || (Number(formData.kitCost) * (1 + Number(formData.marginPercent)/100));
     const annualSav = results.annualSavings;
     const reajusteAnual = 0.10; // 10% ao ano
@@ -398,7 +409,6 @@ export default function ProposalGenerator() {
     const paybackAnos = Math.floor(paybackMeses / 12);
     const paybackMesesRest = Math.round(paybackMeses % 12);
     const roi = annualSav > 0 ? (annualSav * 25 / saleP).toFixed(2) : '0';
-    const tir = annualSav > 0 ? ((annualSav / saleP) * 100).toFixed(2) : '0';
 
     let economiaTotal25 = 0;
     let fluxoCaixa = [];
@@ -418,7 +428,6 @@ export default function ProposalGenerator() {
 
     const geracaoAnual = kitPowerVal * 365 * 4.5;
     const custokWh = geracaoAnual > 0 ? (saleP / (geracaoAnual * 25)).toFixed(2) : '0';
-    const economiakWh = (Number(formData.energyRate) - Number(custokWh)).toFixed(2);
 
     const dataGerada = new Date().toLocaleDateString('pt-BR');
     const dataValidade = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR');
@@ -435,10 +444,10 @@ export default function ProposalGenerator() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Proposta Comercial MT Solar</title>
         <style>
-          body { margin: 0; padding: 0; font-family: Arial, sans-serif; background: #fff; }
+          body { margin: 0; padding: 0; font-family: Arial, sans-serif; background: #fff; color: #333; }
           .page { 
             width: 210mm; 
-            min-height: 297mm; 
+            height: 297mm; 
             margin: 0 auto; 
             page-break-after: always; 
             position: relative; 
@@ -446,973 +455,299 @@ export default function ProposalGenerator() {
             box-sizing: border-box; 
             background: #fff;
           }
+          .sidebar { position: absolute; left: 0; top: 0; bottom: 0; width: 12mm; background: ${AZUL}; z-index: 5; }
+          .top-bar { position: absolute; left: 0; right: 0; top: 0; height: 10mm; background: ${AZUL}; display: flex; align-items: center; padding-left: 20mm; color: #fff; font-size: 8pt; font-weight: bold; letter-spacing: 1px; z-index: 6; }
+          .grid-background { position: absolute; inset: 0; background-image: radial-gradient(#e2e8f0 0.5px, transparent 0.5px); background-size: 10mm 10mm; z-index: 1; }
+          .content-area { position: relative; z-index: 10; padding: 20mm 20mm 20mm 28mm; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; }
+          .section-title { font-size: 18pt; font-weight: 900; color: ${AZUL}; margin-bottom: 4mm; border-bottom: 3px solid ${AMARELO}; display: inline-block; padding-bottom: 1mm; }
+          .card { background: #fff; border: 1px solid ${AZUL_CLARO}; border-radius: 8px; padding: 5mm; margin-bottom: 5mm; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 4mm; }
+          th { text-align: left; font-size: 9pt; color: ${CINZA}; text-transform: uppercase; padding: 2mm; border-bottom: 1px solid #eee; }
+          td { padding: 2mm; font-size: 10pt; border-bottom: 1px solid #f9f9f9; }
+          .highlight { color: ${AZUL}; font-weight: bold; }
           @media print {
             @page { size: A4; margin: 0; }
             body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          }
-
-          /* Capa Styles */
-          .sidebar {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 18mm;
-            height: 100%;
-            background: ${AZUL};
-            z-index: 20;
-          }
-          .top-bar {
-            width: 100%;
-            height: 14mm;
-            background: #fff;
-            border-bottom: 2px solid ${AZUL_CLARO};
-            display: flex;
-            align-items: center;
-            padding-left: 24mm;
-            box-sizing: border-box;
-          }
-          .top-bar span {
-            font-size: 9pt;
-            color: ${AZUL};
-            font-weight: bold;
-            letter-spacing: 2px;
-          }
-          .grid-background {
-            position: absolute;
-            top: 0;
-            left: 18mm;
-            right: 0;
-            bottom: 0;
-            background-image: 
-              linear-gradient(${AZUL_CLARO}22 1px, transparent 1px), 
-              linear-gradient(90deg, ${AZUL_CLARO}22 1px, transparent 1px);
-            background-size: 20mm 20mm;
-            opacity: 0.5;
-            z-index: 1;
-          }
-          .content-container {
-            position: relative;
-            z-index: 10;
-            padding-left: 28mm;
-            height: calc(100% - 14mm);
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
-          }
-          .logo-section {
-            margin-top: 60mm;
-          }
-          .title-section {
-            margin-top: 20mm;
-          }
-          .title-main {
-            font-size: 52pt;
-            font-weight: 900;
-            color: ${AZUL};
-            line-height: 1.1;
-            display: block;
-            text-transform: uppercase;
-          }
-          .footer-capa {
-            position: absolute;
-            bottom: 12mm;
-            left: 28mm;
-            font-size: 9pt;
-            color: ${CINZA};
-            line-height: 1.8;
-            z-index: 10;
+            .page { box-shadow: none; margin: 0; }
           }
         </style>
       </head>
       <body>
-        <!-- PÃGINA 1: CAPA -->
-        <div style="width:210mm;height:297mm;margin:0 auto;page-break-after:always;overflow:hidden;position:relative;">
-          <img src="/Pag__1.jpeg" style="width:100%;height:100%;object-fit:cover;display:block;" />
-        </div>
-
-        <!-- PÃGINA 2: SOBRE NÃ“S -->
-        <div style="width:210mm;height:297mm;margin:0 auto;page-break-after:always;overflow:hidden;position:relative;">
-          <img src="/Pag__2.jpeg" style="width:100%;height:100%;object-fit:cover;display:block;" />
-        </div>
-
-        <!-- PÃGINA 3: ESPAÃ‡O DA CARNE (CLIENTES) -->
-        <div style="width:210mm;height:297mm;margin:0 auto;page-break-after:always;overflow:hidden;position:relative;">
-          <img src="/Pag__3.jpeg" style="width:100%;height:100%;object-fit:cover;display:block;" />
-        </div>
-
-        <!-- PÃGINA 4: SIMPLA ENERGIA (CLIENTES) -->
-        <div style="width:210mm;height:297mm;margin:0 auto;page-break-after:always;overflow:hidden;position:relative;">
-          <img src="/Pag__4.jpeg" style="width:100%;height:100%;object-fit:cover;display:block;" />
-        </div>
-
-        <!-- PÃGINA 5: DADOS DO CLIENTE + EQUIPAMENTOS -->
-        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
-          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;position:relative;">
-
-          <!-- FAIXA DECORATIVA TOPO -->
-          <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
-            height:28mm;padding:0 14mm;display:flex;align-items:center;
-            justify-content:space-between;">
-            <div>
-              <div style="color:#f59e0b;font-size:9pt;font-weight:bold;
-                letter-spacing:2px;text-transform:uppercase;">MT Solar â€” Energia RenovÃ¡vel</div>
-              <div style="color:#fff;font-size:16pt;font-weight:900;margin-top:1mm;">
-                Proposta Comercial</div>
-            </div>
-            <div style="text-align:right;">
-              <div style="color:rgba(255,255,255,0.7);font-size:8pt;">Proposta NÂº</div>
-              <div style="color:#f59e0b;font-size:13pt;font-weight:bold;">
-                PROP-${Date.now().toString().slice(-6)}</div>
-              <div style="color:rgba(255,255,255,0.7);font-size:8pt;">
-                ${new Date().toLocaleDateString('pt-BR')}</div>
-            </div>
+        <!-- PÁGINA 1: CAPA -->
+        <div class="page" style="display:flex; flex-direction:column; justify-content:space-between; padding:20mm; background: linear-gradient(135deg, #f8fafc 0%, #e8f4fd 100%);">
+          <div class="grid-background" style="left:0; opacity: 0.3;"></div>
+          <div style="border-bottom: 3px solid #1e3a5f; padding-bottom: 4mm; position: relative; z-index: 10;">
+            <div style="font-size: 14pt; font-weight: 900; color: #1e3a5f; letter-spacing: 2px;">MT SOLAR — ENERGIA RENOVÁVEL</div>
           </div>
-
-          <!-- BARRA AMARELA FINA DECORATIVA -->
-          <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24,#f59e0b);"></div>
-
-          <!-- CORPO DA PÃGINA -->
-          <div style="padding:8mm 14mm;">
-
-            <!-- DADOS DO CLIENTE -->
-            <div style="margin-bottom:6mm;">
-              <div style="display:flex;align-items:center;gap:3mm;margin-bottom:3mm;">
-                <div style="width:4px;height:16px;background:#f59e0b;border-radius:2px;"></div>
-                <span style="font-size:12pt;font-weight:900;color:#1e3a5f;
-                  text-transform:uppercase;letter-spacing:1px;">Dados do Cliente</span>
-              </div>
-              <div style="background:linear-gradient(135deg,#f0f7ff,#e8f4fd);
-                border-radius:8px;border-left:4px solid #1e3a5f;padding:5mm 6mm;">
-                <table style="width:100%;border-collapse:collapse;font-size:10pt;">
-                  <tr>
-                    <td style="padding:1mm 0;color:#6b7280;width:35%;">Nome:</td>
-                    <td style="padding:1mm 0;font-weight:bold;color:#1e3a5f;">
-                      ${formData.clientName || 'â€”'}</td>
-                    <td style="padding:1mm 0;color:#6b7280;width:20%;">Telefone:</td>
-                    <td style="padding:1mm 0;font-weight:bold;color:#1e3a5f;">
-                      ${formData.clientPhone || 'â€”'}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:1mm 0;color:#6b7280;">E-mail:</td>
-                    <td style="padding:1mm 0;color:#1e3a5f;" colspan="3">
-                      ${formData.clientEmail || 'â€”'}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:1mm 0;color:#6b7280;">EndereÃ§o:</td>
-                    <td style="padding:1mm 0;color:#1e3a5f;" colspan="3">
-                      ${formData.clientAddress || 'â€”'}, ${formData.clientCity || 'â€”'} - ${formData.clientState || 'â€”'}
-                    </td>
-                  </tr>
-                </table>
+          <div style="text-align: center; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10mm; position: relative; z-index: 10;">
+            <div style="width: 60mm; height: 60mm; background: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(30,58,95,0.15); border: 4px solid #f59e0b;">
+              <div style="text-align: center;">
+                <div style="font-size: 24pt; font-weight: 900; color: #1e3a5f; line-height: 1;">MT</div>
+                <div style="font-size: 24pt; font-weight: 900; color: #f59e0b; line-height: 1;">SOLAR</div>
               </div>
             </div>
-
-            <!-- TÃTULO EQUIPAMENTOS -->
-            <div style="display:flex;align-items:center;gap:3mm;margin-bottom:4mm;">
-              <div style="width:4px;height:16px;background:#f59e0b;border-radius:2px;"></div>
-              <span style="font-size:12pt;font-weight:900;color:#1e3a5f;
-                text-transform:uppercase;letter-spacing:1px;">Equipamentos do Sistema</span>
+            <div style="height: 2px; width: 40mm; background: #f59e0b; border-radius: 2px;"></div>
+            <div style="font-size: 14pt; color: #6b7280; font-weight: bold;">
+              Preparada para: <span style="color: #1e3a5f;">${formData.clientName || 'Cliente'}</span>
             </div>
-
-            <!-- FORNECEDOR (OPCIONAL) -->
-            ${formData.kitSupplier ? `
-            <div style="font-size:9pt;color:#6b7280;margin-bottom:1.5mm;text-align:right;">
-              Fornecedor: <span style="font-weight:bold;color:#1e3a5f;">${formData.kitSupplier}</span>
-            </div>` : ''}
-
-            <!-- KIT DESCRIPTION BADGE -->
-            ${formData.kitName ? `
-            <div style="background:#1e3a5f;color:#f59e0b;border-radius:6px;
-              padding:3mm 5mm;margin-bottom:4mm;font-size:10pt;font-weight:bold;
-              text-align:center;letter-spacing:0.5px;">
-              â˜€ï¸ ${formData.kitName}
-            </div>` : ''}
-
-            <!-- GRID MÃ“DULO + INVERSOR -->
-            <table style="width:100%;border-collapse:separate;border-spacing:4mm 0;margin-bottom:4mm;">
-              <tr style="vertical-align:top;">
-
-                <!-- MÃ“DULO FOTOVOLTAICO -->
-                <td style="width:50%;background:#f8fafc;border-radius:8px;
-                  border:2px solid #d6e4f0;padding:5mm;position:relative;">
-                  <div style="background:linear-gradient(135deg,#1e3a5f,#2d5a8e);
-                    color:#f59e0b;font-size:10pt;font-weight:900;padding:2mm 4mm;
-                    border-radius:5px;margin-bottom:4mm;text-align:center;
-                    letter-spacing:0.5px;">
-                    ðŸ”² MÃ³dulo Fotovoltaico
-                  </div>
-                  <table style="width:100%;border-collapse:collapse;font-size:9.5pt;">
-                    <tr style="border-bottom:1px solid #e5e7eb;">
-                      <td style="padding:1.5mm 0;color:#6b7280;">Fabricante</td>
-                      <td style="padding:1.5mm 0;font-weight:bold;color:#1e3a5f;text-align:right;">
-                        ${formData.moduleModel || 'Conforme proposta'}</td>
-                    </tr>
-                    <tr style="border-bottom:1px solid #e5e7eb;">
-                      <td style="padding:1.5mm 0;color:#6b7280;">PotÃªncia</td>
-                      <td style="padding:1.5mm 0;font-weight:bold;color:#1e3a5f;text-align:right;">
-                        ${formData.modulePower ? formData.modulePower + ' Wp' : 'â€”'}</td>
-                    </tr>
-                    <tr style="border-bottom:1px solid #e5e7eb;">
-                      <td style="padding:1.5mm 0;color:#6b7280;">Qtd. MÃ³dulos</td>
-                      <td style="padding:1.5mm 0;font-weight:bold;color:#1e3a5f;text-align:right;">
-                        ${formData.moduleQty || 'â€”'}</td>
-                    </tr>
-                    <tr style="border-bottom:1px solid #e5e7eb;">
-                      <td style="padding:1.5mm 0;color:#6b7280;">Gar. Defeitos</td>
-                      <td style="padding:1.5mm 0;text-align:right;">
-                        <span style="background:#dcfce7;color:#166534;border-radius:4px;
-                          padding:0.5mm 2mm;font-size:8.5pt;font-weight:bold;">
-                          ${gModuloDefeito} Anos</span></td>
-                    </tr>
-                    <tr>
-                      <td style="padding:1.5mm 0;color:#6b7280;">Gar. EficiÃªncia</td>
-                      <td style="padding:1.5mm 0;text-align:right;">
-                        <span style="background:#dcfce7;color:#166534;border-radius:4px;
-                          padding:0.5mm 2mm;font-size:8.5pt;font-weight:bold;">
-                          ${gModuloEfic} Anos</span></td>
-                    </tr>
-                  </table>
-                </td>
-
-                <!-- INVERSOR -->
-                <td style="width:50%;background:#f8fafc;border-radius:8px;
-                  border:2px solid #d6e4f0;padding:5mm;">
-                  <div style="background:linear-gradient(135deg,#1e3a5f,#2d5a8e);
-                    color:#f59e0b;font-size:10pt;font-weight:900;padding:2mm 4mm;
-                    border-radius:5px;margin-bottom:4mm;text-align:center;
-                    letter-spacing:0.5px;">
-                    âš¡ Inversor
-                  </div>
-                  <table style="width:100%;border-collapse:collapse;font-size:9.5pt;">
-                    <tr style="border-bottom:1px solid #e5e7eb;">
-                      <td style="padding:1.5mm 0;color:#6b7280;">Modelo</td>
-                      <td style="padding:1.5mm 0;font-weight:bold;color:#1e3a5f;text-align:right;">
-                        ${formData.inverterModel || 'â€”'}</td>
-                    </tr>
-                    <tr style="border-bottom:1px solid #e5e7eb;">
-                      <td style="padding:1.5mm 0;color:#6b7280;">Fabricante</td>
-                      <td style="padding:1.5mm 0;font-weight:bold;color:#1e3a5f;text-align:right;">
-                        ${formData.inverterBrand || 'â€”'}</td>
-                    </tr>
-                    <tr style="border-bottom:1px solid #e5e7eb;">
-                      <td style="padding:1.5mm 0;color:#6b7280;">PotÃªncia</td>
-                      <td style="padding:1.5mm 0;font-weight:bold;color:#1e3a5f;text-align:right;">
-                        ${formData.inverterPower ? Number(formData.inverterPower).toLocaleString('pt-BR') + ' W' : 'â€”'}</td>
-                    </tr>
-                    <tr style="border-bottom:1px solid #e5e7eb;">
-                      <td style="padding:1.5mm 0;color:#6b7280;">Monitoramento</td>
-                      <td style="padding:1.5mm 0;font-weight:bold;color:#1e3a5f;text-align:right;">Wi-Fi</td>
-                    </tr>
-                    <tr style="border-bottom:1px solid #e5e7eb;">
-                      <td style="padding:1.5mm 0;color:#6b7280;">Quantidade</td>
-                      <td style="padding:1.5mm 0;font-weight:bold;color:#1e3a5f;text-align:right;">
-                        ${formData.inverterQty || '1'}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding:1.5mm 0;color:#6b7280;">Gar. Defeitos</td>
-                      <td style="padding:1.5mm 0;text-align:right;">
-                        <span style="background:#dcfce7;color:#166534;border-radius:4px;
-                          padding:0.5mm 2mm;font-size:8.5pt;font-weight:bold;">
-                          ${gInversor} Anos</span></td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-            </table>
-
-            <!-- ESTRUTURA + ELÃ‰TRICA (linha extra) -->
-            <table style="width:100%;border-collapse:separate;border-spacing:4mm 0;margin-bottom:5mm;">
-              <tr>
-                <td style="width:50%;background:#fff8e7;border:2px solid #f59e0b;
-                  border-radius:8px;padding:3mm 5mm;">
-                  <div style="font-size:9.5pt;font-weight:bold;color:#1e3a5f;margin-bottom:1mm;">
-                    ðŸ”© Estrutura de FixaÃ§Ã£o
-                  </div>
-                  <div style="display:flex;justify-content:space-between;font-size:9pt;">
-                    <span style="color:#6b7280;">Garantia:</span>
-                    <span style="background:#dcfce7;color:#166534;border-radius:4px;
-                      padding:0.5mm 2mm;font-weight:bold;">${gEstrutura} Anos</span>
-                  </div>
-                  <div style="font-size:8.5pt;color:#6b7280;margin-top:1mm;">
-                    Conforme tipo de telhado/solo do projeto
-                  </div>
-                </td>
-                <td style="width:50%;background:#fff8e7;border:2px solid #f59e0b;
-                  border-radius:8px;padding:3mm 5mm;">
-                  <div style="font-size:9.5pt;font-weight:bold;color:#1e3a5f;margin-bottom:1mm;">
-                    ðŸ”Œ InstalaÃ§Ã£o ElÃ©trica
-                  </div>
-                  <div style="display:flex;justify-content:space-between;font-size:9pt;">
-                    <span style="color:#6b7280;">Garantia:</span>
-                    <span style="background:#dcfce7;color:#166534;border-radius:4px;
-                      padding:0.5mm 2mm;font-weight:bold;">${gInstalacao} Ano(s)</span>
-                  </div>
-                  <div style="font-size:8.5pt;color:#6b7280;margin-top:1mm;">
-                    Garantia de mÃ£o de obra da instalaÃ§Ã£o
-                  </div>
-                </td>
-              </tr>
-            </table>
-
-            <!-- RODAPÃ‰ DA PÃGINA -->
-            <div style="border-top:3px solid #f59e0b;padding-top:4mm;margin-top:8mm;">
-              <div style="display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                  <div style="font-size:9pt;font-weight:bold;color:#1e3a5f;">
-                    MT SOLAR â€” ENERGIA RENOVÃVEL</div>
-                  <div style="font-size:8pt;color:#6b7280;">
-                    mtsolar.energia@gmail.com | @mtsolar_</div>
-                  <div style="font-size:8pt;color:#6b7280;">
-                    Rua Rossini Roosevelt de Albuquerque, nÂº10 - Piedade, JaboatÃ£o dos Guararapes - PE</div>
-                  <div style="font-size:8pt;color:#6b7280;">
-                    (81) 99700-3260 | (81) 99504-3980</div>
-                </div>
-                <div style="text-align:right;">
-                  <div style="color:#6b7280;font-size:8pt;">NÂº da Proposta</div>
-                  <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
-                    PROP-${Date.now().toString().slice(-6)}</div>
-                </div>
-              </div>
-            </div>
-
+            <div style="font-size: 10pt; color: ${CINZA}; margin-top: 4mm;">Ref: ${proposalNumber} | Data: ${dataGerada}</div>
+          </div>
+          <div style="border-top: 2px solid #f59e0b; padding-top: 6mm; text-align: center; font-size: 9pt; color: #6b7280; position: relative; z-index: 10;">
+            <div>mtsolar.energia@gmail.com | @mtsolar_</div>
+            <div style="margin-top: 2mm; font-weight: bold; color: #1e3a5f;">(81) 99700-3260 | (81) 99504-3980</div>
           </div>
         </div>
 
-        <!-- PÃGINA 6: INFORMAÃ‡Ã•ES DO SISTEMA -->
-        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
-          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
-
-          <!-- FAIXA TOPO (mesmo padrÃ£o) -->
-          <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
-            height:18mm;padding:0 14mm;display:flex;align-items:center;
-            justify-content:space-between;">
-            <span style="color:#fff;font-size:13pt;font-weight:900;">
-              InformaÃ§Ãµes do Sistema</span>
-            <span style="color:#f59e0b;font-size:9pt;font-weight:bold;">MT Solar</span>
-          </div>
-          <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24,#f59e0b);"></div>
-
-          <div style="padding:8mm 14mm;">
-
-            <!-- SUBTÃTULO -->
-            <p style="font-size:10pt;color:#6b7280;text-align:center;margin:0 0 5mm 0;">
-              As principais informaÃ§Ãµes do sistema proposto estÃ£o indicadas nesta seÃ§Ã£o.
+        <!-- PÁGINA 2: SOBRE NÓS -->
+        <div class="page">
+          <div class="sidebar"></div>
+          <div class="top-bar"><span>MT SOLAR — SOBRE NÓS</span></div>
+          <div class="content-area">
+            <div class="section-title">Sobre Nós</div>
+            <p style="font-size: 11pt; line-height: 1.6; text-align: justify; color: #444;">
+              Somos uma empresa integradora de sistemas de energia solar fotovoltaica, fundamentada em valores cristãos que norteiam nossas ações com ética, transparência e respeito ao próximo. Nosso objetivo é proporcionar a maior economia possível na conta de energia para nossos clientes, através de soluções de engenharia de alta performance e equipamentos de primeira linha.
             </p>
-
-            <!-- 4 CARDS DE DADOS -->
-            <table style="width:100%;border-collapse:separate;border-spacing:3mm;margin-bottom:6mm;">
-              <tr>
-                <td style="background:linear-gradient(135deg,#1e3a5f,#2d5a8e);
-                  border-radius:8px;padding:4mm;text-align:center;">
-                  <div style="color:#f59e0b;font-size:8pt;font-weight:bold;
-                    text-transform:uppercase;letter-spacing:1px;">PotÃªncia</div>
-                  <div style="color:#fff;font-size:16pt;font-weight:900;margin:1mm 0;">
-                    ${formData.kitPower || '0'} <span style="font-size:11pt;">kWp</span></div>
-                  <div style="color:rgba(255,255,255,0.6);font-size:7.5pt;">do sistema</div>
-                </td>
-                <td style="background:#fff8e7;border:2px solid #f59e0b;
-                  border-radius:8px;padding:4mm;text-align:center;">
-                  <div style="color:#92400e;font-size:8pt;font-weight:bold;
-                    text-transform:uppercase;letter-spacing:1px;">Ãrea MÃ­nima</div>
-                  <div style="color:#1e3a5f;font-size:16pt;font-weight:900;margin:1mm 0;">
-                    ${(Number(formData.moduleQty||9)*1.87).toFixed(2)} <span style="font-size:11pt;">mÂ²</span></div>
-                  <div style="color:#6b7280;font-size:7.5pt;">requerida</div>
-                </td>
-                <td style="background:#f0fdf4;border:2px solid #86efac;
-                  border-radius:8px;padding:4mm;text-align:center;">
-                  <div style="color:#166534;font-size:8pt;font-weight:bold;
-                    text-transform:uppercase;letter-spacing:1px;">Peso Dist.</div>
-                  <div style="color:#1e3a5f;font-size:16pt;font-weight:900;margin:1mm 0;">
-                    ${(Number(formData.moduleQty||9)*1.6).toFixed(2)} <span style="font-size:11pt;">kg/mÂ²</span></div>
-                  <div style="color:#6b7280;font-size:7.5pt;">dos mÃ³dulos</div>
-                </td>
-                <td style="background:#f8fafc;border:2px solid #d6e4f0;
-                  border-radius:8px;padding:4mm;text-align:center;">
-                  <div style="color:#1e3a5f;font-size:8pt;font-weight:bold;
-                    text-transform:uppercase;letter-spacing:1px;">Vida Ãštil</div>
-                  <div style="color:#1e3a5f;font-size:13pt;font-weight:900;margin:1mm 0;">
-                    25â€“35 <span style="font-size:10pt;">Anos</span></div>
-                  <div style="color:#6b7280;font-size:7.5pt;">do sistema</div>
-                </td>
-              </tr>
-            </table>
-
-            <!-- TÃTULO GRÃFICO -->
-            <div style="display:flex;align-items:center;gap:3mm;margin-bottom:3mm;">
-              <div style="width:4px;height:16px;background:#f59e0b;border-radius:2px;"></div>
-              <span style="font-size:12pt;font-weight:900;color:#1e3a5f;">
-                Consumo X GeraÃ§Ã£o</span>
-              <span style="font-size:9pt;color:#6b7280;">(kWh mensais estimados)</span>
-            </div>
-
-            <!-- GRÃFICO SVG -->
-            <div style="width: 100%; height: 180px;">
-              <svg width="100%" height="160" viewBox="0 0 500 160">
-                <line x1="10" y1="140" x2="490" y2="140" stroke="#1e3a5f" stroke-width="1" />
-                ${meses.map((mes, i) => {
-                  const xBase = i * 40 + 10;
-                  const hConsumo = (consumoMensal / maxVal) * 120;
-                  const hGeracao = (geracaoMes[i] / maxVal) * 120;
-                  return `
-                    <rect x="${xBase}" y="${140 - hConsumo}" width="14" height="${hConsumo}" fill="#d6e4f0" rx="2" />
-                    <rect x="${xBase + 16}" y="${140 - hGeracao}" width="14" height="${hGeracao}" fill="#1e3a5f" rx="2" />
-                    <text x="${xBase + 15}" y="155" font-size="7" text-anchor="middle" fill="#6b7280">${mes}</text>
-                  `;
-                }).join('')}
-              </svg>
-            </div>
-
-            <!-- LEGENDA DO GRÃFICO -->
-            <div style="display:flex;justify-content:center;gap:8mm;
-              margin-top:3mm;font-size:9pt;color:#6b7280;">
-              <span>â¬› <span style="color:#d6e4f0;background:#d6e4f0;
-                border-radius:2px;padding:0 4px;">__</span> Consumo (kWh)</span>
-              <span>â¬› <span style="color:#1e3a5f;background:#1e3a5f;
-                border-radius:2px;padding:0 4px;">__</span> GeraÃ§Ã£o (kWh)</span>
-            </div>
-
-            <!-- GLOSSÃRIO kWp / kWh -->
-            <div style="background:#f8fafc;border-radius:8px;border-left:4px solid #f59e0b;
-              padding:4mm 5mm;margin-top:5mm;font-size:9pt;color:#374151;line-height:1.7;">
-              <p style="margin:0 0 2mm 0;">
-                <strong style="color:#1e3a5f;">kWp:</strong>
-                Simplificadamente, Ã© a mÃ¡xima potÃªncia que o sistema poderia alcanÃ§ar na ausÃªncia
-                de perdas. Tecnicamente, corresponde Ã  mÃ¡xima potÃªncia instantÃ¢nea que o conjunto
-                de mÃ³dulos fotovoltaicos pode fornecer dentro dos padrÃµes STC.</p>
-              <p style="margin:0;">
-                <strong style="color:#1e3a5f;">kWh:</strong>
-                Unidade de medida padrÃ£o de energia elÃ©trica consumida ou gerada em um determinado
-                perÃ­odo (convencionalmente, perÃ­odo de um mÃªs).</p>
-            </div>
-
-            <!-- RODAPÃ‰ DA PÃGINA -->
-            <div style="border-top:3px solid #f59e0b;padding-top:4mm;margin-top:8mm;">
-              <div style="display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                  <div style="font-size:9pt;font-weight:bold;color:#1e3a5f;">
-                    MT SOLAR â€” ENERGIA RENOVÃVEL</div>
-                  <div style="font-size:8pt;color:#6b7280;">
-                    mtsolar.energia@gmail.com | @mtsolar_</div>
-                  <div style="font-size:8pt;color:#6b7280;">
-                    Rua Rossini Roosevelt de Albuquerque, nÂº10 - Piedade, JaboatÃ£o dos Guararapes - PE</div>
-                  <div style="font-size:8pt;color:#6b7280;">
-                    (81) 99700-3260 | (81) 99504-3980</div>
-                </div>
-                <div style="text-align:right;">
-                  <div style="color:#6b7280;font-size:8pt;">NÂº da Proposta</div>
-                  <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
-                    PROP-${Date.now().toString().slice(-6)}</div>
-                </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4mm; margin-top: 10mm;">
+              <div class="card" style="text-align: center;">
+                <div style="font-weight: bold; color: ${AZUL}; margin-bottom: 2mm;">Missão</div>
+                <div style="font-size: 9pt;">Levar economia e sustentabilidade através da energia solar.</div>
+              </div>
+              <div class="card" style="text-align: center;">
+                <div style="font-weight: bold; color: ${AZUL}; margin-bottom: 2mm;">Visão</div>
+                <div style="font-size: 9pt;">Ser referência em energia renovável no Nordeste.</div>
+              </div>
+              <div class="card" style="text-align: center;">
+                <div style="font-weight: bold; color: ${AZUL}; margin-bottom: 2mm;">Valores</div>
+                <div style="font-size: 9pt;">Ética, Transparência e Compromisso com o Cliente.</div>
               </div>
             </div>
-
-          </div>
-        </div>
-
-        <!-- PÃGINA 7: INDICADORES DE VIABILIDADE -->
-        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
-          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
-
-          <!-- FAIXA TOPO -->
-          <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
-            height:18mm;padding:0 14mm;display:flex;align-items:center;
-            justify-content:space-between;">
-            <span style="color:#fff;font-size:13pt;font-weight:900;">
-              Indicadores de Viabilidade</span>
-            <span style="color:#f59e0b;font-size:9pt;font-weight:bold;">MT Solar</span>
-          </div>
-          <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24,#f59e0b);"></div>
-
-          <div style="padding:8mm 14mm;">
-
-            <!-- DESTAQUE: VALOR DO SISTEMA -->
-            <div style="background:linear-gradient(135deg,#1e3a5f,#2d5a8e);
-              border-radius:10px;padding:5mm 8mm;margin-bottom:5mm;
-              display:flex;justify-content:space-between;align-items:center;">
-              <div>
-                <div style="color:#f59e0b;font-size:8.5pt;font-weight:bold;
-                  text-transform:uppercase;letter-spacing:1px;">
-                  Valor Total do Sistema</div>
-                <div style="color:#fff;font-size:22pt;font-weight:900;margin-top:1mm;">
-                  R$ ${saleP.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
-                </div>
-              </div>
-              <div style="text-align:right;">
-                <div style="color:rgba(255,255,255,0.7);font-size:8pt;">Reajuste anual previsto</div>
-                <div style="color:#f59e0b;font-size:14pt;font-weight:bold;">10% a.a.</div>
-              </div>
-            </div>
-
-            <!-- GRID 3 INDICADORES -->
-            <table style="width:100%;border-collapse:separate;border-spacing:3mm;margin-bottom:5mm;">
-              <tr>
-                <td style="background:#fff8e7;border:2px solid #f59e0b;border-radius:8px;
-                  padding:4mm;text-align:center;">
-                  <div style="color:#92400e;font-size:8pt;font-weight:bold;
-                    text-transform:uppercase;letter-spacing:1px;">Payback</div>
-                  <div style="color:#1e3a5f;font-size:15pt;font-weight:900;margin:1mm 0;">
-                    ${paybackAnos} anos</div>
-                  <div style="color:#6b7280;font-size:8pt;">e ${paybackMesesRest} meses</div>
-                </td>
-                <td style="background:#f0fdf4;border:2px solid #86efac;border-radius:8px;
-                  padding:4mm;text-align:center;">
-                  <div style="color:#166534;font-size:8pt;font-weight:bold;
-                    text-transform:uppercase;letter-spacing:1px;">ROI</div>
-                  <div style="color:#1e3a5f;font-size:15pt;font-weight:900;margin:1mm 0;">
-                    ${roi}x</div>
-                  <div style="color:#6b7280;font-size:8pt;">retorno sobre investimento</div>
-                </td>
-                <td style="background:#fdf4ff;border:2px solid #e9d5ff;border-radius:8px;
-                  padding:4mm;text-align:center;">
-                  <div style="color:#6b21a8;font-size:8pt;font-weight:bold;
-                    text-transform:uppercase;letter-spacing:1px;">TIR</div>
-                  <div style="color:#1e3a5f;font-size:15pt;font-weight:900;margin:1mm 0;">
-                    ${tir}%</div>
-                  <div style="color:#6b7280;font-size:8pt;">taxa interna de retorno</div>
-                </td>
-              </tr>
-            </table>
-
-            <!-- ECONOMIA EM DESTAQUE -->
-            <div style="background:#f0fdf4;border:2px solid #86efac;border-radius:10px;
-              padding:4mm 6mm;margin-bottom:5mm;
-              display:flex;justify-content:space-between;align-items:center;">
-              <div>
-                <div style="color:#166534;font-size:8.5pt;font-weight:bold;
-                  text-transform:uppercase;letter-spacing:1px;">Economia Total em 25 Anos</div>
-                <div style="color:#1e3a5f;font-size:18pt;font-weight:900;">
-                  R$ ${economiaTotal25.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
-                </div>
-              </div>
-              <div style="text-align:right;">
-                <div style="color:#6b7280;font-size:8pt;">kWh do sistema FV</div>
-                <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
-                  R$ ${custokWh}/kWh</div>
-                <div style="color:#166534;font-size:8.5pt;font-weight:bold;">
-                  R$ ${economiakWh} economia/kWh</div>
-              </div>
-            </div>
-
-            <!-- TÃTULO GRÃFICO FLUXO -->
-            <div style="display:flex;align-items:center;gap:3mm;margin-bottom:3mm;">
-              <div style="width:4px;height:16px;background:#f59e0b;border-radius:2px;"></div>
-              <span style="font-size:12pt;font-weight:900;color:#1e3a5f;">
-                Fluxo de Caixa</span>
-              <span style="font-size:9pt;color:#6b7280;">(Ano x R$)</span>
-            </div>
-
-            <!-- GRÃFICO SVG DE FLUXO DE CAIXA -->
-            <div style="width: 100%; height: 180px;">
-              <svg width="100%" height="150" viewBox="0 0 520 150">
-                <line x1="10" y1="100" x2="510" y2="100" stroke="#1e3a5f" stroke-width="1.5" />
-                ${fluxoCaixa.map((val, i) => {
-                  const xBase = i * 20 + 10;
-                  const isPositive = val >= 0;
-                  const barHeight = Math.abs((val / maxFluxo) * 100);
-                  const yPos = isPositive ? 100 - barHeight : 100;
-                  return `
-                    <rect x="${xBase}" y="${yPos}" width="14" height="${barHeight}" fill="${isPositive ? '#1e3a5f' : '#fca5a5'}" rx="1" />
-                    ${[1, 5, 10, 15, 20, 25].includes(i + 1) ? `<text x="${xBase + 7}" y="145" font-size="7" text-anchor="middle" fill="#6b7280">${i + 1}Âºa</text>` : ''}
-                  `;
-                }).join('')}
-              </svg>
-            </div>
-
-            <!-- LEGENDA -->
-            <div style="display:flex;justify-content:center;gap:6mm;
-              margin-top:2mm;font-size:8.5pt;color:#6b7280;">
-              <span>â–  <span style="color:#1e3a5f;font-weight:bold;">Fluxo positivo</span></span>
-              <span>â–  <span style="color:#fca5a5;font-weight:bold;">PerÃ­odo de retorno</span></span>
-            </div>
-
-            <!-- RODAPÃ‰ DA PÃGINA -->
-            <div style="border-top:3px solid #f59e0b;padding-top:4mm;margin-top:8mm;">
-              <div style="display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                  <div style="font-size:9pt;font-weight:bold;color:#1e3a5f;">
-                    MT SOLAR â€” ENERGIA RENOVÃVEL</div>
-                  <div style="font-size:8pt;color:#6b7280;">
-                    mtsolar.energia@gmail.com | @mtsolar_</div>
-                  <div style="font-size:8pt;color:#6b7280;">
-                    Rua Rossini Roosevelt de Albuquerque, nÂº10 - Piedade, JaboatÃ£o dos Guararapes - PE</div>
-                  <div style="font-size:8pt;color:#6b7280;">
-                    (81) 99700-3260 | (81) 99504-3980</div>
-                </div>
-                <div style="text-align:right;">
-                  <div style="color:#6b7280;font-size:8pt;">NÂº da Proposta</div>
-                  <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
-                    PROP-${Date.now().toString().slice(-6)}</div>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-        <!-- PÃGINA 8: SIMULAÃ‡ÃƒO DE FINANCIAMENTO (SE APLICÃVEL) -->
-        ${parseFloat(formData.financeValue || results.salePrice.toString()) > 0 ? `
-        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
-          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
-
-          <!-- FAIXA TOPO -->
-          <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
-            height:18mm;padding:0 14mm;display:flex;align-items:center;
-            justify-content:space-between;">
-            <span style="color:#fff;font-size:13pt;font-weight:900;">
-              SimulaÃ§Ã£o de Financiamento</span>
-            <span style="color:#f59e0b;font-size:9pt;font-weight:bold;">MT Solar</span>
-          </div>
-          <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24,#f59e0b);"></div>
-
-          <div style="padding:10mm 14mm;">
-            <p style="font-size:10.5pt;color:#6b7280;text-align:center;margin-bottom:8mm;">
-              Abaixo apresentamos uma simulaÃ§Ã£o de financiamento para o seu sistema fotovoltaico.
-            </p>
-
-            <div style="background:linear-gradient(135deg,#f8fafc,#f1f5f9);border-radius:12px;
-              border:2px solid #e2e8f0;padding:8mm;margin-bottom:8mm;">
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8mm;">
-                <div>
-                  <div style="font-size:9pt;color:#64748b;text-transform:uppercase;font-weight:bold;margin-bottom:1mm;">
-                    Valor Financiado</div>
-                  <div style="font-size:18pt;font-weight:900;color:#1e3a5f;">
-                    R$ ${parseFloat(formData.financeValue || results.salePrice.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                </div>
-                <div>
-                  <div style="font-size:9pt;color:#64748b;text-transform:uppercase;font-weight:bold;margin-bottom:1mm;">
-                    Prazo</div>
-                  <div style="font-size:18pt;font-weight:900;color:#1e3a5f;">
-                    ${formData.financeTerm} meses</div>
-                </div>
-                <div>
-                  <div style="font-size:9pt;color:#64748b;text-transform:uppercase;font-weight:bold;margin-bottom:1mm;">
-                    Valor da Parcela (Estimado)</div>
-                  <div style="font-size:22pt;font-weight:900;color:#f59e0b;">
-                    R$ ${results.monthlyInstallment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                </div>
-                <div>
-                  <div style="font-size:9pt;color:#64748b;text-transform:uppercase;font-weight:bold;margin-bottom:1mm;">
-                    CarÃªncia</div>
-                  <div style="font-size:18pt;font-weight:900;color:#1e3a5f;">
-                    ${formData.financeGracePeriod || '0'} meses</div>
-                </div>
-              </div>
-
-              <div style="margin-top:8mm;padding-top:6mm;border-top:1px solid #cbd5e1;font-size:9.5pt;color:#475569;line-height:1.6;">
-                * SimulaÃ§Ã£o baseada na taxa de <strong>${formData.financeRate}% a.m.</strong><br/>
-                * Sujeito a anÃ¡lise de crÃ©dito e alteraÃ§Ã£o de taxa pelo banco parceiro.<br/>
-                * CarÃªncia: <strong>${formData.financeGracePeriod || '0'} meses</strong> para o primeiro pagamento.
-              </div>
-            </div>
-
-            <div style="background:#fff8e7;border:1.5px solid #f59e0b;border-radius:8px;padding:5mm;margin-top:5mm;">
-              <div style="font-size:10pt;font-weight:bold;color:#92400e;margin-bottom:2mm;">
-                ðŸ’¡ Dica de Economia
-              </div>
-              <p style="font-size:9.5pt;color:#374151;margin:0;">
-                Em muitos casos, a parcela do financiamento Ã© inferior ou equivalente Ã  sua conta de luz atual. 
-                Dessa forma, o sistema se paga com a prÃ³pria economia gerada!
-              </p>
-            </div>
-
-            <!-- RODAPÃ‰ DA PÃGINA -->
-            <div style="position:absolute;bottom:10mm;left:14mm;right:14mm;border-top:3px solid #f59e0b;padding-top:4mm;">
-              <div style="display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                  <div style="font-size:9pt;font-weight:bold;color:#1e3a5f;">
-                    MT SOLAR â€” ENERGIA RENOVÃVEL</div>
-                  <div style="font-size:8pt;color:#6b7280;">
-                    mtsolar.energia@gmail.com | @mtsolar_</div>
-                </div>
-                <div style="text-align:right;">
-                  <div style="color:#6b7280;font-size:8pt;">NÂº da Proposta</div>
-                  <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
-                    PROP-${Date.now().toString().slice(-6)}</div>
-                </div>
+            <div style="margin-top: 10mm; text-align: center;">
+              <div style="font-weight: bold; color: ${AZUL}; margin-bottom: 4mm;">Onde Atuamos</div>
+              <div style="display: flex; justify-content: center; gap: 10mm; font-weight: bold; color: ${AMARELO};">
+                <span>PERNAMBUCO</span>
+                <span>PARAÍBA</span>
+                <span>ALAGOAS</span>
+                <span>BAHIA</span>
               </div>
             </div>
           </div>
         </div>
-        ` : ''}
 
-        <!-- PÃGINA 9: SERVIÃ‡OS INCLUSOS -->
-        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
-          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
-
-          <!-- FAIXA TOPO -->
-          <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
-            height:18mm;padding:0 14mm;display:flex;align-items:center;
-            justify-content:space-between;">
-            <span style="color:#fff;font-size:13pt;font-weight:900;">
-              ServiÃ§os Inclusos</span>
-            <span style="color:#f59e0b;font-size:9pt;font-weight:bold;">MT Solar</span>
-          </div>
-          <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24,#f59e0b);"></div>
-
-
-          <div style="padding:8mm 14mm;">
-
-            <!-- LISTA DE SERVIÃ‡OS -->
-            ${[
-              'Vistoria tÃ©cnica e projeto elÃ©trico do sistema.',
-              'AnotaÃ§Ã£o da responsabilidade tÃ©cnica (ART) do projeto e instalaÃ§Ã£o.',
-              'ObtenÃ§Ã£o das licenÃ§as junto Ã  concessionÃ¡ria de energia local.',
-              'Montagem dos mÃ³dulos fotovoltaicos com estruturas apropriadas para o tipo de telhado/solo.',
-              'InstalaÃ§Ã£o e montagem elÃ©trica do sistema.',
-              'GestÃ£o, supervisÃ£o e fiscalizaÃ§Ã£o da Obra de instalaÃ§Ã£o.',
-              'Frete incluso de todos equipamentos referentes ao sistema.',
-              'DocumentaÃ§Ã£o personalizada do projeto fotovoltaico.'
-            ].map((servico, i) => `
-              <div style="display:flex;align-items:flex-start;gap:4mm;
-                padding:4mm 0;border-bottom:1px solid #f0f0f0;">
-                <div style="min-width:8mm;height:8mm;background:${i % 2 === 0 ? '#1e3a5f' : '#f59e0b'};
-                  border-radius:50%;display:flex;align-items:center;justify-content:center;
-                  color:${i % 2 === 0 ? '#f59e0b' : '#1e3a5f'};font-weight:900;
-                  font-size:9pt;flex-shrink:0;">${i + 1}</div>
-                <div style="font-size:10.5pt;color:#374151;line-height:1.5;
-                  padding-top:0.5mm;">${servico}</div>
-              </div>
-            `).join('')}
-
-            <!-- OBS -->
-            <div style="background:#fff8e7;border:1.5px solid #f59e0b;border-radius:8px;
-              padding:4mm 5mm;margin-top:5mm;">
-              <div style="font-size:9pt;font-weight:bold;color:#92400e;margin-bottom:1mm;">
-                âš ï¸ ObservaÃ§Ã£o Importante
-              </div>
-              <div style="font-size:9.5pt;color:#374151;text-align:justify;line-height:1.6;">
-                NÃ£o estÃ£o inclusos eventuais serviÃ§os de alvenaria, reforÃ§o estrutural, e/ou
-                alteraÃ§Ãµes na rede de distribution as quais eventualmente podem ser solicitadas
-                pela concessionÃ¡ria.
-              </div>
-            </div>
-
-            <!-- TABELA DE GARANTIAS -->
-            <div style="margin-top:5mm;">
-              <div style="display:flex;align-items:center;gap:3mm;margin-bottom:3mm;">
-                <div style="width:4px;height:16px;background:#f59e0b;border-radius:2px;"></div>
-                <span style="font-size:12pt;font-weight:900;color:#1e3a5f;">
-                  Garantias do Sistema</span>
-              </div>
-              <table style="width:100%;border-collapse:collapse;font-size:9.5pt;">
-                <thead>
-                  <tr style="background:linear-gradient(135deg,#1e3a5f,#2d5a8e);">
-                    <th style="padding:3mm 4mm;text-align:left;color:#f59e0b;
-                      border-radius:6px 0 0 0;">Componente</th>
-                    <th style="padding:3mm 4mm;text-align:center;color:#fff;">
-                      Garantia Defeitos</th>
-                    <th style="padding:3mm 4mm;text-align:center;color:#fff;
-                      border-radius:0 6px 0 0;">Garantia EficiÃªncia</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr style="background:#f8fafc;">
-                    <td style="padding:2.5mm 4mm;color:#374151;border-bottom:1px solid #e5e7eb;">
-                      MÃ³dulos Fotovoltaicos</td>
-                    <td style="padding:2.5mm 4mm;text-align:center;border-bottom:1px solid #e5e7eb;">
-                      <span style="background:#dcfce7;color:#166534;border-radius:4px;
-                        padding:0.5mm 3mm;font-weight:bold;">${gModuloDefeito} Anos</span></td>
-                    <td style="padding:2.5mm 4mm;text-align:center;border-bottom:1px solid #e5e7eb;">
-                      <span style="background:#dcfce7;color:#166534;border-radius:4px;
-                        padding:0.5mm 3mm;font-weight:bold;">${gModuloEfic} Anos</span></td>
-                  </tr>
-                  <tr>
-                    <td style="padding:2.5mm 4mm;color:#374151;border-bottom:1px solid #e5e7eb;">
-                      Inversor</td>
-                    <td style="padding:2.5mm 4mm;text-align:center;border-bottom:1px solid #e5e7eb;">
-                      <span style="background:#dcfce7;color:#166534;border-radius:4px;
-                        padding:0.5mm 3mm;font-weight:bold;">${gInversor} Anos</span></td>
-                    <td style="padding:2.5mm 4mm;text-align:center;border-bottom:1px solid #e5e7eb;
-                      color:#9ca3af;">â€”</td>
-                  </tr>
-                  <tr style="background:#f8fafc;">
-                    <td style="padding:2.5mm 4mm;color:#374151;border-bottom:1px solid #e5e7eb;">
-                      Estrutura de FixaÃ§Ã£o</td>
-                    <td style="padding:2.5mm 4mm;text-align:center;border-bottom:1px solid #e5e7eb;">
-                      <span style="background:#dcfce7;color:#166534;border-radius:4px;
-                        padding:0.5mm 3mm;font-weight:bold;">${gEstrutura} Anos</span></td>
-                    <td style="padding:2.5mm 4mm;text-align:center;border-bottom:1px solid #e5e7eb;
-                      color:#9ca3af;">â€”</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:2.5mm 4mm;color:#374151;">InstalaÃ§Ã£o ElÃ©trica</td>
-                    <td style="padding:2.5mm 4mm;text-align:center;">
-                      <span style="background:#dcfce7;color:#166534;border-radius:4px;
-                        padding:0.5mm 3mm;font-weight:bold;">${gInstalacao} Ano(s)</span></td>
-                    <td style="padding:2.5mm 4mm;text-align:center;color:#9ca3af;">â€”</td>
-                  </tr>
-                </tbody>
+        <!-- PÁGINA 3: CLIENTE + EQUIPAMENTOS -->
+        <div class="page">
+          <div class="sidebar"></div>
+          <div class="top-bar"><span>MT SOLAR — DADOS DO PROJETO</span></div>
+          <div class="content-area">
+            <div class="section-title">Dados do Cliente</div>
+            <div class="card">
+              <table>
+                <tr><td><strong>Nome:</strong></td><td>${formData.clientName}</td></tr>
+                <tr><td><strong>Telefone:</strong></td><td>${formData.clientPhone}</td></tr>
+                <tr><td><strong>E-mail:</strong></td><td>${formData.clientEmail}</td></tr>
+                <tr><td><strong>Cidade/UF:</strong></td><td>${formData.clientCity} - ${formData.clientState}</td></tr>
               </table>
             </div>
 
-            <!-- RODAPÃ‰ DA PÃGINA -->
-            <div style="border-top:3px solid #f59e0b;padding-top:4mm;margin-top:8mm;">
-              <div style="display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                  <div style="font-size:9pt;font-weight:bold;color:#1e3a5f;">
-                    MT SOLAR â€” ENERGIA RENOVÃVEL</div>
-                  <div style="font-size:8pt;color:#6b7280;">
-                    mtsolar.energia@gmail.com | @mtsolar_</div>
-                  <div style="font-size:8pt;color:#6b7280;">
-                    Rua Rossini Roosevelt de Albuquerque, nÂº10 - Piedade, JaboatÃ£o dos Guararapes - PE</div>
-                  <div style="font-size:8pt;color:#6b7280;">
-                    (81) 99700-3260 | (81) 99504-3980</div>
+            <div class="section-title" style="margin-top: 6mm;">Equipamentos Propostos</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6mm;">
+              <div class="card">
+                <div style="font-weight: bold; color: ${AZUL}; border-bottom: 1px solid ${AMARELO}; padding-bottom: 2mm; margin-bottom: 3mm;">Módulos Fotovoltaicos</div>
+                <div style="font-size: 9pt;">
+                  <p><strong>Fabricante:</strong> ${formData.moduleModel}</p>
+                  <p><strong>Potência Unitária:</strong> ${formData.modulePower} Wp</p>
+                  <p><strong>Quantidade:</strong> ${formData.moduleQty} unidades</p>
+                  <p><strong>Potência Total:</strong> ${formData.kitPower} kWp</p>
                 </div>
-                <div style="text-align:right;">
-                  <div style="color:#6b7280;font-size:8pt;">NÂº da Proposta</div>
-                  <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
-                    PROP-${Date.now().toString().slice(-6)}</div>
+              </div>
+              <div class="card">
+                <div style="font-weight: bold; color: ${AZUL}; border-bottom: 1px solid ${AMARELO}; padding-bottom: 2mm; margin-bottom: 3mm;">Inversor Solar</div>
+                <div style="font-size: 9pt;">
+                  <p><strong>Fabricante:</strong> ${formData.inverterBrand}</p>
+                  <p><strong>Modelo:</strong> ${formData.inverterModel}</p>
+                  <p><strong>Potência:</strong> ${formData.inverterPower} W</p>
+                  <p><strong>Quantidade:</strong> ${formData.inverterQty} unidade</p>
                 </div>
               </div>
             </div>
-
+            ${formData.kitSupplier ? `
+              <div class="card" style="border-left: 4px solid ${AMARELO};">
+                <strong>Fornecedor:</strong> ${formData.kitSupplier}
+              </div>
+            ` : ''}
           </div>
         </div>
 
-        <!-- PÃGINA 10: CONSIDERAÃ‡Ã•ES FINAIS E VALIDADE -->
-        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
-          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
-
-          <!-- FAIXA TOPO -->
-          <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
-            height:18mm;padding:0 14mm;display:flex;align-items:center;
-            justify-content:space-between;">
-            <span style="color:#fff;font-size:13pt;font-weight:900;">
-              ConsideraÃ§Ãµes Finais e Validade</span>
-            <span style="color:#f59e0b;font-size:9pt;font-weight:bold;">MT Solar</span>
-          </div>
-          <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24,#f59e0b);"></div>
-
-          <div style="padding:8mm 14mm;">
-
-            <!-- LISTA DE CONSIDERAÃ‡Ã•ES -->
-            ${[
-              'Os valores apresentados de geraÃ§Ã£o de energia sÃ£o estimativas baseadas em informaÃ§Ãµes consultadas no banco de dados do CRESESB, e representam mÃ©dias mensais e anuais, sendo que a geraÃ§Ã£o varia de acordo com os meses do ano, assim como de acordo com fatores meteorolÃ³gicos.',
-              'As estimativas de geraÃ§Ã£o de energia, custos e economia foram baseadas e projetadas de acordo com as informaÃ§Ãµes de consumo apresentadas pelo cliente, o estudo de irradiaÃ§Ã£o solar local e a anÃ¡lise da inflaÃ§Ã£o energÃ©tica nos Ãºltimos anos.',
-              'O sistema proposto foi projetado considerando-se o atual perfil de consumo do cliente, tal como de acordo com os requisitos apresentados pelo cliente.',
-              'Por nÃ£o possuir partes mÃ³veis, o sistema nÃ£o exige manutenÃ§Ã£o preventiva. Periodicamente (6 meses a 1 ano), Ã© recomendÃ¡vel a limpeza dos mÃ³dulos fotovoltaicos para otimizar a geraÃ§Ã£o de energia, especialmente em regiÃµes/estaÃ§Ãµes secas.'
-            ].map((texto, i) => `
-              <div style="display:flex;align-items:flex-start;gap:4mm;
-                padding:4mm 0;border-bottom:1px solid #f0f0f0;">
-                <div style="min-width:8mm;height:8mm;background:${i % 2 === 0 ? '#1e3a5f' : '#f59e0b'};
-                  border-radius:50%;display:flex;align-items:center;justify-content:center;
-                  color:${i % 2 === 0 ? '#f59e0b' : '#1e3a5f'};font-weight:900;
-                  font-size:9pt;flex-shrink:0;">${i + 1}</div>
-                <div style="font-size:10pt;color:#374151;line-height:1.6;
-                  text-align:justify;padding-top:0.5mm;">${texto}</div>
-              </div>
-            `).join('')}
-
-            <!-- VALIDADE -->
-            <div style="background:linear-gradient(135deg,#1e3a5f,#2d5a8e);
-              border-radius:10px;padding:5mm 8mm;margin-top:6mm;text-align:center;">
-              <div style="color:#f59e0b;font-size:8.5pt;font-weight:bold;
-                text-transform:uppercase;letter-spacing:2px;margin-bottom:2mm;">
-                Validade da Proposta</div>
-              <div style="color:#fff;font-size:11pt;line-height:1.8;">
-                Esta proposta foi gerada em
-                <strong style="color:#f59e0b;">${dataGerada}</strong>
-                e Ã© vÃ¡lida atÃ©
-                <strong style="color:#f59e0b;">${dataValidade}</strong>
-              </div>
-              <div style="color:rgba(255,255,255,0.6);font-size:8.5pt;margin-top:1mm;">
-                7 dias corridos a partir da data de geraÃ§Ã£o</div>
+        <!-- PÁGINA 4: INFORMAÇÕES DO SISTEMA -->
+        <div class="page">
+          <div class="sidebar"></div>
+          <div class="top-bar"><span>MT SOLAR — DESEMPENHO DO SISTEMA</span></div>
+          <div class="content-area">
+            <div class="section-title">Informações do Sistema</div>
+            <div class="card">
+              <table style="margin-bottom:0">
+                <tr><td>Potência do Sistema:</td><td class="highlight">${formData.kitPower} kWp</td></tr>
+                <tr><td>Geração Média Mensal:</td><td class="highlight">${(kitPowerVal * 30 * 4.5).toFixed(0)} kWh</td></tr>
+                <tr><td>Área Mínima Requerida:</td><td>${(Number(formData.moduleQty) * 1.87).toFixed(1)} m²</td></tr>
+                <tr><td>Peso Estimado no Telhado:</td><td>${(Number(formData.moduleQty) * 22).toFixed(0)} kg</td></tr>
+              </table>
             </div>
 
-            <!-- ASSINATURAS -->
-            <table style="width:100%;border-collapse:collapse;margin-top:12mm;">
-              <tr>
-                <td style="width:45%;text-align:center;padding:0 5mm;">
-                  <div style="border-top:2px solid #1e3a5f;padding-top:3mm;">
-                    <div style="font-size:10pt;font-weight:bold;color:#1e3a5f;">MT Solar</div>
-                    <div style="font-size:9pt;color:#6b7280;">ResponsÃ¡vel TÃ©cnico</div>
+            <div style="margin-top: 6mm;">
+              <div style="font-weight:bold; color:${AZUL}; margin-bottom:4mm; text-align:center;">Estimativa de Geração Mensal (kWh)</div>
+              <div style="height: 60mm; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 10mm; border-bottom: 2px solid ${AZUL};">
+                ${geracaoMes.map((val, i) => `
+                  <div style="flex: 1; margin: 0 1mm; display: flex; flex-direction: column; align-items: center;">
+                    <div style="width: 100%; background: ${AZUL}; height: ${(val / maxVal) * 50}mm; border-radius: 2px 2px 0 0;"></div>
+                    <div style="font-size: 7pt; color: ${CINZA}; margin-top: 2mm;">${meses[i]}</div>
                   </div>
-                </td>
-                <td style="width:10%;"></td>
-                <td style="width:45%;text-align:center;padding:0 5mm;">
-                  <div style="border-top:2px solid #1e3a5f;padding-top:3mm;">
-                    <div style="font-size:10pt;font-weight:bold;color:#1e3a5f;">
-                      ${formData.clientName || 'Cliente'}</div>
-                    <div style="font-size:9pt;color:#6b7280;">Contratante</div>
-                  </div>
-                </td>
-              </tr>
-            </table>
-
-            <!-- RODAPÃ‰ FINAL -->
-            <div style="border-top:3px solid #f59e0b;padding-top:4mm;margin-top:10mm;">
-              <div style="display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                  <div style="font-size:9pt;font-weight:bold;color:#1e3a5f;">
-                    MT SOLAR â€” ENERGIA RENOVÃVEL</div>
-                  <div style="font-size:8pt;color:#6b7280;">
-                    mtsolar.energia@gmail.com | @mtsolar_</div>
-                  <div style="font-size:8pt;color:#6b7280;">
-                    Rua Rossini Roosevelt de Albuquerque, nÂº10 - Piedade, JaboatÃ£o dos Guararapes - PE</div>
-                  <div style="font-size:8pt;color:#6b7280;">
-                    (81) 99700-3260 | (81) 99504-3980</div>
-                </div>
-                <div style="text-align:right;">
-                  <div style="color:#6b7280;font-size:8pt;">NÂº da Proposta</div>
-                  <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
-                    PROP-${Date.now().toString().slice(-6)}</div>
-                </div>
+                `).join('')}
               </div>
             </div>
 
+            <div class="card" style="margin-top: 10mm; background: ${AZUL_CLARO}33;">
+              <p style="font-size: 9pt; color: ${AZUL}; text-align: center; margin: 0;">
+                O sistema é dimensionado para suprir <strong>100%</strong> do consumo médio mensal de <strong>${consumoMensal} kWh</strong>.
+              </p>
+            </div>
           </div>
         </div>
 
-        <!-- PÃGINA 11: FOTOS DE VISTORIA (OPCIONAL) -->
+        <!-- PÁGINA 5: INDICADORES DE VIABILIDADE -->
+        <div class="page">
+          <div class="sidebar"></div>
+          <div class="top-bar"><span>MT SOLAR — ANÁLISE FINANCEIRA</span></div>
+          <div class="content-area">
+            <div class="section-title">Indicadores de Viabilidade</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4mm;">
+              <div class="card">
+                <div style="font-size: 8pt; color: ${CINZA};">Retorno do Investimento (Payback)</div>
+                <div style="font-size: 16pt; font-weight: bold; color: ${AZUL};">${paybackAnos} anos e ${paybackMesesRest} meses</div>
+              </div>
+              <div class="card">
+                <div style="font-size: 8pt; color: ${CINZA};">ROI (Retorno Sobre Investimento)</div>
+                <div style="font-size: 16pt; font-weight: bold; color: ${AZUL};">${roi}x</div>
+              </div>
+              <div class="card">
+                <div style="font-size: 8pt; color: ${CINZA};">Economia Estimada (25 anos)</div>
+                <div style="font-size: 16pt; font-weight: bold; color: #10b981;">R$ ${economiaTotal25.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</div>
+              </div>
+              <div class="card">
+                <div style="font-size: 8pt; color: ${CINZA};">Valor do Investimento</div>
+                <div style="font-size: 16pt; font-weight: bold; color: ${AZUL};">R$ ${saleP.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+              </div>
+            </div>
+
+            <div style="margin-top: 8mm;">
+              <div style="font-weight:bold; color:${AZUL}; margin-bottom:4mm; text-align:center;">Fluxo de Caixa Acumulado (25 Anos)</div>
+              <div style="height: 50mm; width: 100%; border-left: 2px solid ${CINZA}; border-bottom: 2px solid ${CINZA}; position: relative; margin-top: 10mm;">
+                <div style="position: absolute; left: 0; right: 0; bottom: ${(Math.abs(minFluxo) / rangeFluxo) * 100}%; height: 1px; background: #ccc; border-top: 1px dashed #999;"></div>
+                <div style="display: flex; align-items: flex-end; justify-content: space-between; height: 100%; padding: 0 2mm;">
+                  ${[1, 5, 10, 15, 20, 25].map(ano => {
+                    const val = fluxoCaixa[ano - 1];
+                    const heightPct = ((val - minFluxo) / rangeFluxo) * 100;
+                    return `
+                      <div style="flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end;">
+                        <div style="width: 8mm; background: ${val >= 0 ? '#10b981' : '#ef4444'}; height: ${heightPct}%; border-radius: 2px 2px 0 0;"></div>
+                        <div style="font-size: 7pt; color: ${CINZA}; margin-top: 2mm;">Ano ${ano}</div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+            </div>
+            
+            <div class="card" style="margin-top: 8mm; border-left: 4px solid #10b981;">
+              <p style="font-size: 9pt; margin: 0;">O custo da sua energia hoje é de <strong>R$ ${formData.energyRate}</strong>. Com o sistema solar, seu custo passará a ser de aproximadamente <strong>R$ ${custokWh}</strong> por kWh.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- PÁGINA 6: SERVIÇOS INCLUSOS -->
+        <div class="page">
+          <div class="sidebar"></div>
+          <div class="top-bar"><span>MT SOLAR — SERVIÇOS E GARANTIAS</span></div>
+          <div class="content-area">
+            <div class="section-title">Serviços Inclusos</div>
+            <div style="font-size: 10pt; line-height: 1.8;">
+              <div style="padding: 1mm 0; border-bottom: 1px solid #eee;">1. Vistoria técnica e projeto elétrico do sistema.</div>
+              <div style="padding: 1mm 0; border-bottom: 1px solid #eee;">2. Anotação da responsabilidade técnica (ART) do projeto e instalação.</div>
+              <div style="padding: 1mm 0; border-bottom: 1px solid #eee;">3. Obtenção das licenças junto à concessionária de energia local.</div>
+              <div style="padding: 1mm 0; border-bottom: 1px solid #eee;">4. Montagem dos módulos fotovoltaicos com estruturas apropriadas.</div>
+              <div style="padding: 1mm 0; border-bottom: 1px solid #eee;">5. Instalação e montagem elétrica do sistema (Inversor, String Box).</div>
+              <div style="padding: 1mm 0; border-bottom: 1px solid #eee;">6. Testes de funcionamento e comissionamento.</div>
+              <div style="padding: 1mm 0; border-bottom: 1px solid #eee;">7. Frete e logística de entrega dos equipamentos.</div>
+              <div style="padding: 1mm 0; border-bottom: 1px solid #eee;">8. Monitoramento do sistema via aplicativo.</div>
+            </div>
+
+            <div class="section-title" style="margin-top: 8mm;">Garantias do Sistema</div>
+            <div class="card">
+              <table style="margin-bottom:0">
+                <tr><th>Componente</th><th>Garantia</th></tr>
+                <tr><td>Módulos (Defeitos)</td><td>${gModuloDefeito} anos</td></tr>
+                <tr><td>Módulos (Eficiência 80%)</td><td>${gModuloEfic} anos</td></tr>
+                <tr><td>Inversor Solar</td><td>${gInversor} anos</td></tr>
+                <tr><td>Estrutura de Fixação</td><td>${gEstrutura} anos</td></tr>
+                <tr><td>Instalação Elétrica</td><td>${gInstalacao} anos</td></tr>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- PÁGINA 7: CONSIDERAÇÕES FINAIS -->
+        <div class="page">
+          <div class="sidebar"></div>
+          <div class="top-bar"><span>MT SOLAR — FINALIZAÇÃO</span></div>
+          <div class="content-area">
+            <div class="section-title">Considerações Finais</div>
+            <div style="font-size: 9pt; line-height: 1.6; text-align: justify; color: #555;">
+              <p>1. Esta proposta tem validade de <strong>7 dias</strong> a contar da data de sua emissão, estando sujeita a alterações caso haja reajuste nos preços dos fornecedores.</p>
+              <p>2. O prazo de instalação é de aproximadamente 15 a 30 dias após a entrega dos equipamentos e aprovação da concessionária.</p>
+              <p>3. Não estão inclusos: reformas no padrão de entrada, reforço de telhado ou obras de infraestrutura civil não previstas.</p>
+            </div>
+            
+            <div style="margin-top: 10mm; display: grid; grid-template-columns: 1fr 1fr; gap: 10mm;">
+              <div style="text-align: center;">
+                <div style="height: 20mm; border-bottom: 1px solid ${AZUL}; margin-bottom: 2mm;"></div>
+                <div style="font-size: 8pt; font-weight: bold;">MT SOLAR</div>
+                <div style="font-size: 7pt; color: ${CINZA};">Energia Renovável</div>
+              </div>
+              <div style="text-align: center;">
+                <div style="height: 20mm; border-bottom: 1px solid ${AZUL}; margin-bottom: 2mm;"></div>
+                <div style="font-size: 8pt; font-weight: bold;">${formData.clientName}</div>
+                <div style="font-size: 7pt; color: ${CINZA};">Aceite da Proposta</div>
+              </div>
+            </div>
+
+            <div style="margin-top: 15mm; text-align: center;">
+              <div style="font-size: 14pt; font-weight: bold; color: ${AZUL};">Validade: ${dataValidade}</div>
+              <div style="font-size: 10pt; color: ${CINZA}; margin-top: 2mm;">Proposta Gerada em: ${dataGerada}</div>
+            </div>
+
+            <div style="flex-grow: 1; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 10mm;">
+              <div style="font-size: 24pt; font-weight: 900; color: ${AZUL_CLARO}; opacity: 0.5;">MT SOLAR</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PÁGINA 8: FOTOS DE VISTORIA -->
         ${formData.includePhotos && formData.photos.length > 0 ? `
-        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
-          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
-
-          <!-- FAIXA TOPO -->
-          <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
-            height:18mm;padding:0 14mm;display:flex;align-items:center;
-            justify-content:space-between;">
-            <span style="color:#fff;font-size:13pt;font-weight:900;">
-              Fotos de Vistoria</span>
-            <span style="color:#f59e0b;font-size:9pt;font-weight:bold;">MT Solar</span>
-          </div>
-          <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24,#f59e0b);"></div>
-
-          <div style="padding:10mm 14mm;">
-            <p style="font-size:10pt;color:#6b7280;margin-bottom:8mm;">
-              Registros fotogrÃ¡ficos realizados durante a vistoria tÃ©cnica no local da instalaÃ§Ã£o.
-            </p>
-
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6mm;">
-              ${formData.photos.map((url, i) => `
-                <div style="border:2px solid #f0f0f0;border-radius:8px;overflow:hidden;background:#f8fafc;">
-                  <img src="${url}" style="width:100%;height:65mm;object-fit:cover;display:block;" />
-                  <div style="padding:2mm;text-align:center;font-size:8pt;color:#1e3a5f;font-weight:bold;background:#fff;">
-                    FOTO 0${i + 1}
+          <div class="page">
+            <div class="sidebar"></div>
+            <div class="top-bar"><span>MT SOLAR — FOTOS DE VISTORIA</span></div>
+            <div class="content-area">
+              <div class="section-title">Fotos de Vistoria</div>
+              <p style="font-size: 10pt; color: ${CINZA}; margin-bottom: 6mm;">Registro fotográfico das condições técnicas identificadas em campo.</p>
+              
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4mm;">
+                ${formData.photos.map((url, i) => `
+                  <div style="border: 1px solid ${AZUL_CLARO}; border-radius: 8px; overflow: hidden; height: 75mm; display: flex; align-items: center; justify-content: center; background: #f8fafc; position: relative;">
+                    <img src="${url}" style="max-width: 100%; max-height: 100%; object-fit: cover;" />
+                    <div style="position: absolute; bottom: 2mm; right: 2mm; background: rgba(0,0,0,0.5); color: #fff; font-size: 7pt; padding: 1mm 2mm; border-radius: 4px;">Foto ${i+1}</div>
                   </div>
-                </div>
-              `).join('')}
-            </div>
-
-            <!-- RODAPÃ‰ DA PÃGINA -->
-            <div style="position:absolute;bottom:8mm;left:14mm;right:14mm;border-top:3px solid #f59e0b;padding-top:4mm;">
-              <div style="display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                  <div style="font-size:9pt;font-weight:bold;color:#1e3a5f;">
-                    MT SOLAR â€” ENERGIA RENOVÃVEL</div>
-                  <div style="font-size:8pt;color:#6b7280;">
-                    mtsolar.energia@gmail.com | @mtsolar_</div>
-                </div>
-                <div style="text-align:right;">
-                  <div style="color:#6b7280;font-size:8pt;">NÂº da Proposta</div>
-                  <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
-                    PROP-${Date.now().toString().slice(-6)}</div>
-                </div>
+                `).join('')}
               </div>
             </div>
           </div>
-        </div>
         ` : ''}
       </body>
       </html>
@@ -1421,29 +756,24 @@ export default function ProposalGenerator() {
     newWindow.document.write(htmlContent);
     newWindow.document.close();
     
-    // Aguarda carregar recursos (especialmente SVGs) antes de imprimir
+    // Pequeno delay para garantir que imagens (especialmente as fotos) carreguem antes do print
     setTimeout(() => {
       newWindow.print();
     }, 1500);
-
-    // Salvar no histÃ³rico automaticamente
-    saveToHistory();
   };
-
-
-
-
 
   const tabs = [
     { id: 'dados' as TabType, label: 'Dados do Cliente', icon: User },
     { id: 'kit' as TabType, label: 'Kit Solar', icon: Package },
-    { id: 'calculo' as TabType, label: 'CÃ¡lculo & Retorno', icon: Calculator },
+    { id: 'calculo' as TabType, label: 'Cálculo & Retorno', icon: Calculator },
     { id: 'financiamento' as TabType, label: 'Financiamento', icon: CreditCard },
-    { id: 'servicos' as TabType, label: 'Proposta de ServiÃ§os', icon: Wrench },
-    { id: 'historico' as TabType, label: 'HistÃ³rico', icon: History },
+    { id: 'servicos' as TabType, label: 'Proposta de Serviços', icon: Wrench },
+    { id: 'historico' as TabType, label: 'Histórico', icon: History },
   ];
 
   const currentStepIndex = tabs.findIndex(t => t.id === activeTab);
+
+  const inputStyle = "border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -1531,7 +861,7 @@ export default function ProposalGenerator() {
           <div className="space-y-6">
             <div className="flex items-center gap-2 mb-4">
               <User className="text-blue-900 w-6 h-6" />
-              <h2 className="text-xl font-bold text-gray-800">InformaÃ§Ãµes do Cliente</h2>
+              <h2 className="text-xl font-bold text-gray-800">Informações do Cliente</h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1569,13 +899,13 @@ export default function ProposalGenerator() {
               </div>
 
               <div className="space-y-1 md:col-span-2">
-                <label className="text-sm font-medium text-gray-700">EndereÃ§o</label>
+                <label className="text-sm font-medium text-gray-700">Endereço</label>
                 <input 
                   type="text" 
                   value={formData.clientAddress}
                   onChange={(e) => updateForm('clientAddress', e.target.value)}
                   className={inputStyle}
-                  placeholder="Rua, nÃºmero, bairro..."
+                  placeholder="Rua, número, bairro..."
                 />
               </div>
 
@@ -1586,7 +916,7 @@ export default function ProposalGenerator() {
                   value={formData.clientCity}
                   onChange={(e) => updateForm('clientCity', e.target.value)}
                   className={inputStyle}
-                  placeholder="Ex: CuiabÃ¡"
+                  placeholder="Ex: Cuiabá"
                 />
               </div>
 
@@ -1603,7 +933,7 @@ export default function ProposalGenerator() {
               </div>
             </div>
 
-            {/* SEÃ‡ÃƒO FOTOS DE VISTORIA */}
+            {/* SEÇÃO FOTOS DE VISTORIA */}
             <div className="mt-8 border-t pt-8">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -1615,7 +945,7 @@ export default function ProposalGenerator() {
                     type="checkbox" 
                     className="sr-only peer" 
                     checked={formData.includePhotos}
-                    onChange={(e) => updateForm('includePhotos', e.target.checked.toString())}
+                    onChange={(e) => updateForm('includePhotos', e.target.checked)}
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-900"></div>
                   <span className="ml-3 text-sm font-medium text-gray-700">Incluir fotos de vistoria na proposta</span>
@@ -1694,8 +1024,8 @@ export default function ProposalGenerator() {
                   <div className="mt-4 flex items-start gap-2 bg-amber-50 p-3 rounded-lg border border-amber-200">
                     <Info size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
                     <p className="text-[11px] text-amber-800 leading-relaxed">
-                      As fotos de vistoria ajudam o cliente a entender melhor a viabilidade tÃ©cnica da instalaÃ§Ã£o. 
-                      SerÃ¡ criada uma seÃ§Ã£o exclusiva no final da proposta com as imagens enviadas.
+                      As fotos de vistoria ajudam o cliente a entender melhor a viabilidade técnica da instalação. 
+                      Será criada uma seção exclusiva no final da proposta com as imagens enviadas.
                     </p>
                   </div>
                 </div>
@@ -1707,7 +1037,7 @@ export default function ProposalGenerator() {
                 onClick={() => setActiveTab('kit')}
                 className="bg-blue-900 text-white px-6 py-2 rounded-lg hover:bg-blue-800 transition-colors flex items-center gap-2 font-medium"
               >
-                PrÃ³ximo: Kit Solar â†’
+                Próximo: Kit Solar →
               </button>
             </div>
           </div>
@@ -1719,7 +1049,7 @@ export default function ProposalGenerator() {
               <div className="bg-blue-900 p-4 text-white">
                 <h3 className="font-bold flex items-center gap-2">
                   <Wrench size={18} className="text-amber-400" />
-                  ConfiguraÃ§Ã£o da Proposta de ServiÃ§os
+                  Configuração da Proposta de Serviços
                 </h3>
               </div>
               <div className="p-6 space-y-6">
@@ -1731,23 +1061,23 @@ export default function ProposalGenerator() {
                       value={serviceFormData.clientName}
                       onChange={(e) => setServiceFormData({...serviceFormData, clientName: e.target.value})}
                       className={inputStyle}
-                      placeholder="Nome completo ou RazÃ£o Social"
+                      placeholder="Nome completo ou Razão Social"
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700">ResponsÃ¡vel TÃ©cnico</label>
+                    <label className="text-sm font-medium text-gray-700">Responsável Técnico</label>
                     <input 
                       type="text" 
                       value={serviceFormData.responsible}
                       onChange={(e) => setServiceFormData({...serviceFormData, responsible: e.target.value})}
                       className={inputStyle}
-                      placeholder="Nome do engenheiro/tÃ©cnico"
+                      placeholder="Nome do engenheiro/técnico"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-3">
-                  <label className="text-sm font-bold text-gray-800 uppercase tracking-wider">ServiÃ§os DisponÃ­veis</label>
+                  <label className="text-sm font-bold text-gray-800 uppercase tracking-wider">Serviços Disponíveis</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {AVAILABLE_SERVICES.map(service => (
                       <div 
@@ -1787,13 +1117,13 @@ export default function ProposalGenerator() {
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700">Tempo de ExecuÃ§Ã£o</label>
+                    <label className="text-sm font-medium text-gray-700">Tempo de Execução</label>
                     <input 
                       type="text" 
                       value={serviceFormData.executionTime}
                       onChange={(e) => setServiceFormData({...serviceFormData, executionTime: e.target.value})}
                       className={inputStyle}
-                      placeholder="Ex: 15 dias Ãºteis"
+                      placeholder="Ex: 15 dias úteis"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1818,7 +1148,7 @@ export default function ProposalGenerator() {
                     }`}
                   >
                     <FileDown size={20} />
-                    Gerar Proposta de ServiÃ§os
+                    Gerar Proposta de Serviços
                   </button>
                 </div>
               </div>
@@ -1835,18 +1165,18 @@ export default function ProposalGenerator() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1 md:col-span-2">
-                <label className="text-sm font-medium text-gray-700">DescriÃ§Ã£o do Kit *</label>
+                <label className="text-sm font-medium text-gray-700">Descrição do Kit *</label>
                 <input 
                   type="text" 
                   value={formData.kitName}
                   onChange={(e) => updateForm('kitName', e.target.value)}
                   className={inputStyle}
-                  placeholder="Ex: Kit 5kWp â€” 10 MÃ³dulos 550W + Inversor Growatt 5kW"
+                  placeholder="Ex: Kit 5kWp — 10 Módulos 550W + Inversor Growatt 5kW"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">PotÃªncia do Sistema (kWp) *</label>
+                <label className="text-sm font-medium text-gray-700">Potência do Sistema (kWp) *</label>
                 <input 
                   type="number" 
                   min="0"
@@ -1884,7 +1214,7 @@ export default function ProposalGenerator() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">Conta de Luz MÃ©dia Mensal (R$) *</label>
+                <label className="text-sm font-medium text-gray-700">Conta de Luz Média Mensal (R$) *</label>
                 <input 
                   type="number" 
                   min="0"
@@ -1956,7 +1286,7 @@ export default function ProposalGenerator() {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-gray-700">Fabricante do MÃ³dulo</label>
+                  <label className="text-sm font-medium text-gray-700">Fabricante do Módulo</label>
                   <input 
                     type="text" 
                     value={formData.moduleModel}
@@ -1967,7 +1297,7 @@ export default function ProposalGenerator() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-gray-700">PotÃªncia do MÃ³dulo (Wp)</label>
+                  <label className="text-sm font-medium text-gray-700">Potência do Módulo (Wp)</label>
                   <input 
                     type="number" 
                     min="0"
@@ -1979,7 +1309,7 @@ export default function ProposalGenerator() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-gray-700">Quantidade de MÃ³dulos</label>
+                  <label className="text-sm font-medium text-gray-700">Quantidade de Módulos</label>
                   <input 
                     type="number" 
                     min="0"
@@ -2013,7 +1343,7 @@ export default function ProposalGenerator() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-gray-700">PotÃªncia do Inversor (W)</label>
+                  <label className="text-sm font-medium text-gray-700">Potência do Inversor (W)</label>
                   <input 
                     type="number" 
                     min="0"
@@ -2043,74 +1373,74 @@ export default function ProposalGenerator() {
                   <ShieldCheck className="w-5 h-5" />
                   Garantias do Sistema
                 </h3>
-                <p className="text-sm text-gray-400 mb-6">Deixe em branco para usar os valores padrÃ£o de cada fabricante</p>
+                <p className="text-sm text-gray-400 mb-6">Deixe em branco para usar os valores padrão de cada fabricante</p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700">Garantia MÃ³dulo â€” Defeitos (anos)</label>
+                    <label className="text-sm font-medium text-gray-700">Garantia Módulo — Defeitos (anos)</label>
                     <input 
                       type="text" 
                       value={formData.garantiaModuloDefeito}
                       onChange={(e) => updateForm('garantiaModuloDefeito', e.target.value)}
                       className={inputStyle}
-                      placeholder="PadrÃ£o: 10"
+                      placeholder="Padrão: 10"
                     />
                     <p className="text-[10px] text-gray-400">Ex: Leapton = 10 anos</p>
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700">Garantia MÃ³dulo â€” EficiÃªncia (anos)</label>
+                    <label className="text-sm font-medium text-gray-700">Garantia Módulo — Eficiência (anos)</label>
                     <input 
                       type="text" 
                       value={formData.garantiaModuloEficiencia}
                       onChange={(e) => updateForm('garantiaModuloEficiencia', e.target.value)}
                       className={inputStyle}
-                      placeholder="PadrÃ£o: 25"
+                      placeholder="Padrão: 25"
                     />
                     <p className="text-[10px] text-gray-400">Ex: Leapton = 25 anos</p>
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700">Garantia Inversor â€” Defeitos (anos)</label>
+                    <label className="text-sm font-medium text-gray-700">Garantia Inversor — Defeitos (anos)</label>
                     <input 
                       type="text" 
                       value={formData.garantiaInversorDefeito}
                       onChange={(e) => updateForm('garantiaInversorDefeito', e.target.value)}
                       className={inputStyle}
-                      placeholder="PadrÃ£o: 10"
+                      placeholder="Padrão: 10"
                     />
                     <p className="text-[10px] text-gray-400">Ex: Goodwe = 10 anos | Growatt = 5 anos</p>
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700">Garantia Estrutura de FixaÃ§Ã£o (anos)</label>
+                    <label className="text-sm font-medium text-gray-700">Garantia Estrutura de Fixação (anos)</label>
                     <input 
                       type="text" 
                       value={formData.garantiaEstrutura}
                       onChange={(e) => updateForm('garantiaEstrutura', e.target.value)}
                       className={inputStyle}
-                      placeholder="PadrÃ£o: 5"
+                      placeholder="Padrão: 5"
                     />
-                    <p className="text-[10px] text-gray-400">Varia conforme material (alumÃ­nio, aÃ§o galvanizado)</p>
+                    <p className="text-[10px] text-gray-400">Varia conforme material (alumínio, aço galvanizado)</p>
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700">Garantia InstalaÃ§Ã£o ElÃ©trica (anos)</label>
+                    <label className="text-sm font-medium text-gray-700">Garantia Instalação Elétrica (anos)</label>
                     <input 
                       type="text" 
                       value={formData.garantiaInstalacao}
                       onChange={(e) => updateForm('garantiaInstalacao', e.target.value)}
                       className={inputStyle}
-                      placeholder="PadrÃ£o: 1"
+                      placeholder="Padrão: 1"
                     />
-                    <p className="text-[10px] text-gray-400">Garantia de mÃ£o de obra</p>
+                    <p className="text-[10px] text-gray-400">Garantia de mão de obra</p>
                   </div>
                 </div>
 
                 <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm flex items-start gap-2">
                   <Info className="text-blue-600 w-4 h-4 mt-0.5 flex-shrink-0" />
                   <p className="text-blue-800">
-                    Os valores preenchidos acima serÃ£o exibidos na proposta. Se um campo ficar vazio, o valor padrÃ£o serÃ¡ utilizado automaticamente.
+                    Os valores preenchidos acima serão exibidos na proposta. Se um campo ficar vazio, o valor padrão será utilizado automaticamente.
                   </p>
                 </div>
               </div>
@@ -2122,13 +1452,13 @@ export default function ProposalGenerator() {
                 onClick={() => setActiveTab('dados')}
                 className="border border-gray-300 text-gray-600 px-6 py-2 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2"
               >
-                â† Voltar
+                ←  Voltar
               </button>
               <button
                 onClick={() => setActiveTab('calculo')}
                 className="bg-blue-900 text-white px-6 py-2 rounded-lg hover:bg-blue-800 transition-colors font-medium flex items-center gap-2"
               >
-                Calcular Retorno â†’
+                Próximo: Retorno →
               </button>
             </div>
           </div>
@@ -2138,7 +1468,7 @@ export default function ProposalGenerator() {
           <div className="space-y-6">
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp className="text-blue-900 w-6 h-6" />
-              <h2 className="text-xl font-bold text-gray-800">AnÃ¡lise de Retorno do Investimento</h2>
+              <h2 className="text-xl font-bold text-gray-800">Análise de Retorno do Investimento</h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -2157,7 +1487,7 @@ export default function ProposalGenerator() {
                   <p className="text-xs uppercase font-bold opacity-80">Economia Anual Estimada</p>
                 </div>
                 <p className="text-2xl font-bold">R$ {results.annualSavings.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                <p className="text-[10px] mt-1 font-medium opacity-70">Baseado na conta de R$ {formData.monthlyBill}/mÃªs</p>
+                <p className="text-[10px] mt-1 font-medium opacity-70">Baseado na conta de R$ {formData.monthlyBill}/mês</p>
               </div>
 
               <div className="bg-green-600 text-white rounded-xl p-4 shadow-md">
@@ -2166,7 +1496,7 @@ export default function ProposalGenerator() {
                   <p className="text-xs uppercase font-medium opacity-80">Economia em 5 Anos</p>
                 </div>
                 <p className="text-2xl font-bold">R$ {results.fiveYearSavings.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                <p className="text-[10px] mt-1 opacity-70">ProjeÃ§Ã£o sem reajuste tarifÃ¡rio</p>
+                <p className="text-[10px] mt-1 opacity-70">Projeção sem reajuste tarifário</p>
               </div>
             </div>
 
@@ -2194,7 +1524,7 @@ export default function ProposalGenerator() {
                     const isPositive = saldo >= 0;
                     return (
                       <tr key={ano} className={isPositive ? 'bg-green-50' : 'bg-red-50'}>
-                        <td className="px-4 py-2 border-b font-bold text-gray-700">{ano}Âº Ano</td>
+                        <td className="px-4 py-2 border-b font-bold text-gray-700">{ano}º Ano</td>
                         <td className="px-4 py-2 border-b text-gray-600">R$ {economiaAcumulada.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                         <td className={`px-4 py-2 border-b font-bold ${isPositive ? 'text-green-700' : 'text-red-700'}`}>
                           R$ {saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -2211,13 +1541,13 @@ export default function ProposalGenerator() {
                 onClick={() => setActiveTab('kit')}
                 className="border border-gray-300 text-gray-600 px-6 py-2 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2"
               >
-                â† Voltar
+                ←  Voltar
               </button>
               <button
                 onClick={() => setActiveTab('financiamento')}
                 className="bg-blue-900 text-white px-6 py-2 rounded-lg hover:bg-blue-800 transition-colors font-medium flex items-center gap-2"
               >
-                Ver Financiamento â†’
+                Próximo: Financiamento →
               </button>
             </div>
           </div>
@@ -2227,7 +1557,7 @@ export default function ProposalGenerator() {
           <div className="space-y-6">
             <div className="flex items-center gap-2 mb-4">
               <CreditCard className="text-blue-900 w-6 h-6" />
-              <h2 className="text-xl font-bold text-gray-800">SimulaÃ§Ã£o de Financiamento</h2>
+              <h2 className="text-xl font-bold text-gray-800">Simulação de Financiamento</h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -2270,11 +1600,11 @@ export default function ProposalGenerator() {
                   onChange={(e) => updateForm('financeRate', e.target.value)}
                   className={inputStyle}
                 />
-                <p className="text-[10px] text-gray-500 mt-1 italic">Taxa mÃ©dia financeiras solares: 0,99% a 1,99% a.m.</p>
+                <p className="text-[10px] text-gray-500 mt-1 italic">Taxa média financeiras solares: 0,99% a 1,99% a.m.</p>
               </div>
 
               <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">CarÃªncia (meses)</label>
+                <label className="text-sm font-medium text-gray-700">Carência (meses)</label>
                 <input 
                   type="number" 
                   min="0"
@@ -2283,7 +1613,7 @@ export default function ProposalGenerator() {
                   onChange={(e) => updateForm('financeGracePeriod', e.target.value)}
                   className={inputStyle}
                 />
-                <p className="text-[10px] text-gray-400 mt-1">CarÃªncia para o primeiro pagamento (0-24 meses)</p>
+                <p className="text-[10px] text-gray-400 mt-1">Carência para o primeiro pagamento (0-24 meses)</p>
               </div>
             </div>
 
@@ -2340,12 +1670,12 @@ export default function ProposalGenerator() {
                   <div className="bg-green-500 text-white rounded-full p-0.5">
                     <Zap size={12} fill="currentColor" />
                   </div>
-                  âœ“ A parcela Ã© menor que sua conta atual!
+                  ✓ A parcela é menor que sua conta atual!
                 </div>
               ) : (
                 <div className="bg-blue-100 text-blue-800 p-3 rounded-lg flex items-center gap-2 text-sm font-bold border border-blue-200">
                   <TrendingUp size={16} />
-                  O cliente economiza a diferenÃ§a apÃ³s o payback
+                  O cliente economiza a diferença após o payback
                 </div>
               )}
             </div>
@@ -2355,14 +1685,84 @@ export default function ProposalGenerator() {
                 onClick={() => setActiveTab('calculo')}
                 className="border border-gray-300 text-gray-600 px-6 py-2 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2"
               >
-                â† Voltar
+                ←  Voltar
               </button>
             </div>
           </div>
         )}
 
+        {activeTab === 'historico' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <History className="text-blue-900 w-6 h-6" />
+                <h2 className="text-xl font-bold text-gray-800">Histórico de Propostas</h2>
+              </div>
+              <button 
+                onClick={fetchHistory}
+                className="text-sm bg-blue-50 text-blue-900 px-4 py-2 rounded-lg font-bold hover:bg-blue-100 transition-colors flex items-center gap-2"
+              >
+                <Clock size={16} />
+                Atualizar Lista
+              </button>
+            </div>
 
-
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 text-gray-600 uppercase text-[10px] font-bold tracking-wider">
+                      <th className="px-6 py-4 border-b">Data</th>
+                      <th className="px-6 py-4 border-b">Cliente</th>
+                      <th className="px-6 py-4 border-b text-center">Margem</th>
+                      <th className="px-6 py-4 border-b text-right">Valor do Kit</th>
+                      <th className="px-6 py-4 border-b">Nº Proposta</th>
+                      <th className="px-6 py-4 border-b">Gerado por</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-sm divide-y divide-gray-100">
+                    {history.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-12 text-center text-gray-400 italic">
+                          Nenhuma proposta gerada no histórico ainda.
+                        </td>
+                      </tr>
+                    ) : (
+                      history.map((item) => (
+                        <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                            {new Date(item.created_at).toLocaleDateString('pt-BR')} 
+                            <span className="text-[10px] ml-2 opacity-50">{new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                          </td>
+                          <td className="px-6 py-4 font-bold text-gray-800">{item.client_name}</td>
+                          <td className="px-6 py-4 text-center">
+                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-md text-xs font-bold">
+                              {item.margin}%
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right font-black text-blue-900">
+                            R$ {Number(item.kit_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-6 py-4 text-gray-500 font-mono text-xs">{item.proposal_number || '—'}</td>
+                          <td className="px-6 py-4 text-gray-500">{item.created_by || '—'}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            <div className="flex justify-start mt-8 pt-4 border-t border-gray-100">
+              <button
+                onClick={() => setActiveTab('dados')}
+                className="border border-gray-300 text-gray-600 px-6 py-2 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2"
+              >
+                ←  Voltar ao Início
+              </button>
+            </div>
+          </div>
+        )}
 
       </div>
 
@@ -2374,7 +1774,7 @@ export default function ProposalGenerator() {
             if (!isReady) return;
             generatePDF();
           }}
-          title={!isReady ? "Preencha os dados obrigatÃ³rios" : ""}
+          title={!isReady ? "Preencha os dados obrigatórios" : ""}
           className={`flex items-center gap-2 px-8 py-4 font-bold rounded-lg shadow-lg transition-all ${
             isReady 
               ? 'bg-amber-400 text-blue-900 hover:bg-amber-500 hover:scale-105 active:scale-95' 
@@ -2389,4 +1789,3 @@ export default function ProposalGenerator() {
     </div>
   );
 }
-

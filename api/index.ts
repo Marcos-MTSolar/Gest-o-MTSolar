@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import { createServer } from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -657,20 +657,25 @@ app.get('/api/proposal-history', authenticateToken, async (req: any, res) => {
 });
 
 app.post('/api/proposal-history', authenticateToken, async (req: any, res) => {
-  const { client_name, margin, kit_value, proposal_id } = req.body;
+  const { client_name, margin, kit_value, proposal_number } = req.body;
+  const created_by = req.user?.name || req.user?.email || 'Desconhecido';
+  
   const { data, error } = await supabase
     .from('proposal_history')
-    .insert({
-      client_name,
-      margin,
-      kit_value,
-      proposal_id,
-      created_by: req.user.name
-    })
+    .insert([{ 
+      client_name, 
+      margin, 
+      kit_value, 
+      proposal_number, 
+      created_by 
+    }])
     .select()
     .single();
-
-  if (error) return res.status(400).json({ error: error.message });
+    
+  if (error) {
+    console.error('Erro ao salvar histórico:', error);
+    return res.status(500).json({ error: error.message });
+  }
   res.json(data);
 });
 
