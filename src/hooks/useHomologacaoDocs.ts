@@ -38,6 +38,32 @@ export async function uploadDocsHomologacao(
   return filePath;
 }
 
+export async function uploadIndividualDocs(
+  projectId: number,
+  userId: string,
+  files: { [docId: string]: File }
+): Promise<void> {
+  for (const [docId, file] of Object.entries(files)) {
+    const filename = `proj_${projectId}/${Date.now()}_${file.name}`;
+    const { data, error: uploadErr } = await supabase.storage
+      .from('homologacao-docs')
+      .upload(filename, file, { upsert: true });
+    
+    if (uploadErr) throw uploadErr;
+
+    const { data: { publicUrl } } = supabase.storage.from('homologacao-docs').getPublicUrl(filename);
+    const docLabel = [...DOCS_OBRIGATORIOS, ...DOCS_OPCIONAIS].find(d => d.id === docId)?.label || docId;
+
+    await supabase.from('documents').insert({
+      project_id: projectId,
+      title: docLabel,
+      url: publicUrl,
+      uploaded_by: userId,
+      type: docId
+    });
+  }
+}
+
 export async function deleteDocsHomologacao(filePath: string): Promise<void> {
   const { error } = await supabase.storage
     .from('homologacao-docs')

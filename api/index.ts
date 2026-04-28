@@ -44,7 +44,10 @@ app.use(express.urlencoded({ extended: true }));
 
 // File Upload Setup (Memory Storage for Vercel -> Supabase Storage)
 const storage = multer.memoryStorage();
-const upload = multer({ storage });
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB
+});
 
 // Broadcast Helper
 async function broadcast(event: string, payload: any) {
@@ -320,6 +323,10 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
     commercial_notes: project.commercial_data?.[0]?.notes,
     commercial_status: project.commercial_data?.[0]?.status,
     commercial_pendencies: project.commercial_data?.[0]?.pendencies,
+    include_inspection_photos: project.commercial_data?.[0]?.include_inspection_photos,
+    inspection_photos: project.commercial_data?.[0]?.inspection_photos,
+    kit_supplier: project.commercial_data?.[0]?.kit_supplier,
+    finance_grace_period: project.commercial_data?.[0]?.finance_grace_period,
 
     // Technical — spread tech fields then explicitly override structure_type to ensure it comes from technical_data
     entrance_pattern: techData.entrance_pattern,
@@ -363,10 +370,25 @@ app.delete('/api/projects/:id', authenticateToken, async (req: any, res) => {
 
 // Commercial Update
 app.put('/api/projects/:id/commercial', authenticateToken, async (req: any, res) => {
-  const { proposal_value, payment_method, notes, pendencies, status } = req.body;
-
+  const { 
+    proposal_value, payment_method, notes, pendencies, status, 
+    include_inspection_photos, inspection_photos,
+    kit_supplier, finance_grace_period
+  } = req.body;
+  
   await supabase.from('commercial_data')
-    .update({ proposal_value, payment_method, notes, pendencies, status, updated_at: new Date() })
+    .update({ 
+      proposal_value, 
+      payment_method, 
+      notes, 
+      pendencies, 
+      status, 
+      include_inspection_photos,
+      inspection_photos: Array.isArray(inspection_photos) ? JSON.stringify(inspection_photos) : inspection_photos,
+      kit_supplier,
+      finance_grace_period,
+      updated_at: new Date() 
+    })
     .eq('project_id', req.params.id);
 
   if (status === 'proposta_enviada') {
@@ -576,14 +598,14 @@ app.get('/api/documents', authenticateToken, async (req: any, res) => {
 });
 
 app.post('/api/documents', authenticateToken, upload.single('file'), async (req: any, res) => {
-  const { project_id, title } = req.body;
+  const { project_id, title, type } = req.body;
   const file = req.file;
   if (!file) return res.status(400).json({ error: 'No file uploaded' });
 
   const url = await uploadFile(file);
   if (!url) return res.status(500).json({ error: 'Upload failed' });
 
-  await supabase.from('documents').insert({ project_id, title, url, uploaded_by: req.user.id });
+  await supabase.from('documents').insert({ project_id, title, url, type: type || 'other', uploaded_by: req.user.id });
   res.json({ success: true });
 });
 
@@ -621,6 +643,66 @@ app.put('/api/events/:id/complete', authenticateToken, async (req: any, res) => 
   await supabase.from('events').update({ completed: !!completed }).eq('id', req.params.id);
   broadcast('EVENT_UPDATED', { id: req.params.id, completed });
   res.json({ success: true });
+});
+
+// Proposal History
+app.get('/api/proposal-history', authenticateToken, async (req: any, res) => {
+  const { data: history, error } = await supabase
+    .from('proposal_history')
+    .select('*')
+    .order('created_at', { ascending: false });
+  
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(history || []);
+});
+
+app.post('/api/proposal-history', authenticateToken, async (req: any, res) => {
+  const { client_name, margin, kit_value, proposal_id } = req.body;
+  const { data, error } = await supabase
+    .from('proposal_history')
+    .insert({
+      client_name,
+      margin,
+      kit_value,
+      proposal_id,
+      created_by: req.user.name
+    })
+    .select()
+    .single();
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+
+// Service Proposals
+app.get('/api/service-proposals', authenticateToken, async (req: any, res) => {
+  const { data, error } = await supabase
+    .from('service_proposals')
+    .select('*')
+    .order('created_at', { ascending: false });
+  
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
+});
+
+app.post('/api/service-proposals', authenticateToken, async (req: any, res) => {
+  const { client_name, services, total_value, execution_time, responsible, validity_date } = req.body;
+  const { data, error } = await supabase
+    .from('service_proposals')
+    .insert({
+      client_name,
+      services,
+      total_value,
+      execution_time,
+      responsible,
+      validity_date,
+      created_by: req.user.name
+    })
+    .select()
+    .single();
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
 });
 
 // Stats

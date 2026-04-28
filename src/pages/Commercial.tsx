@@ -3,7 +3,7 @@ import api from '../lib/api';
 import { Plus, Search, FileText, CheckCircle, Clock, Upload, FileCheck, AlertCircle, Camera } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { DOCS_OBRIGATORIOS, DOCS_OPCIONAIS, uploadDocsHomologacao } from '../hooks/useHomologacaoDocs';
+import { DOCS_OBRIGATORIOS, DOCS_OPCIONAIS, uploadIndividualDocs } from '../hooks/useHomologacaoDocs';
 import { Capacitor } from '@capacitor/core';
 import { capturarDocumento } from '../lib/documentCapture';
 
@@ -18,6 +18,9 @@ export default function Commercial() {
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [showEditClient, setShowEditClient] = useState(false);
   const [editClientData, setEditClientData] = useState<any>({});
+  const [includeInspectionPhotos, setIncludeInspectionPhotos] = useState(false);
+  const [inspectionPhotos, setInspectionPhotos] = useState<string[]>([]);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const submitAction = useRef('pending');
 
   useEffect(() => {
@@ -60,14 +63,13 @@ export default function Commercial() {
       const res = await api.post('/api/clients', newClient);
       const projectId = res.data?.project_id || res.data?.id;
 
-      // 2. Faz upload do ZIP no Supabase
-      const filePath = await uploadDocsHomologacao(projectId, newClient.name, docFiles);
+      // 2. Faz upload dos arquivos individualmente no Supabase
+      await uploadIndividualDocs(projectId, user?.id || '', docFiles);
 
-      // 3. Salva o caminho no projeto
+      // 3. Salva no projeto que os docs foram enviados (opcional agora que temos individual)
       await supabase
         .from('projects')
         .update({
-          homologacao_docs_path: filePath,
           homologacao_docs_uploaded_at: new Date().toISOString()
         })
         .eq('id', projectId);
@@ -100,13 +102,19 @@ export default function Commercial() {
     }
 
     try {
-      await api.put(`/api/projects/${selectedProject.id}/commercial`, {
+      const commercialData = {
         proposal_value,
         payment_method,
         notes: formData.get('notes'),
         pendencies: formData.get('pendencies'),
-        status: action
-      });
+        status: action,
+        include_inspection_photos: includeInspectionPhotos,
+        inspection_photos: inspectionPhotos,
+        kit_supplier: formData.get('kit_supplier'),
+        finance_grace_period: parseInt(formData.get('finance_grace_period') as string) || 0
+      };
+
+      await api.put(`/api/projects/${selectedProject.id}/commercial`, commercialData);
       alert(action === 'proposta_enviada' ? "Proposta Comercial Aprovada!" : "Dados comerciais salvos como pendente.");
       await fetchProjects();
       setSelectedProject(null);
@@ -248,7 +256,7 @@ export default function Commercial() {
                             </span>
                             <input
                               type="file"
-                              accept=".pdf,.jpg,.jpeg,.png"
+                              accept="*"
                               className="hidden"
                               onChange={e => {
                                 const file = e.target.files?.[0];
@@ -309,7 +317,7 @@ export default function Commercial() {
                             </span>
                             <input
                               type="file"
-                              accept=".pdf,.jpg,.jpeg,.png"
+                              accept="*"
                               className="hidden"
                               onChange={e => {
                                 const file = e.target.files?.[0];
@@ -359,7 +367,21 @@ export default function Commercial() {
                 <button
                   onClick={async () => {
                     const res = await api.get(`/api/projects/${p.id}`);
-                    setSelectedProject(res.data);
+                    const data = res.data;
+                    setSelectedProject(data);
+                    setIncludeInspectionPhotos(!!data.include_inspection_photos);
+                    
+                    let photos = [];
+                    if (data.inspection_photos) {
+                      try {
+                        photos = typeof data.inspection_photos === 'string' 
+                          ? JSON.parse(data.inspection_photos) 
+                          : data.inspection_photos;
+                      } catch (e) {
+                        photos = [];
+                      }
+                    }
+                    setInspectionPhotos(Array.isArray(photos) ? photos : []);
                   }}
                   className={`px-4 py-2 rounded text-white ${['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-900 hover:bg-blue-800'}`}
                 >
@@ -430,6 +452,30 @@ export default function Commercial() {
                     <option value="card">Cartão de Crédito</option>
                   </select>
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Fornecedor do Kit</label>
+                  <input 
+                    name="kit_supplier" 
+                    defaultValue={selectedProject.kit_supplier} 
+                    className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                    placeholder="Ex: Aldo Solar, WEG, etc."
+                  />
+                </div>
+
+                {selectedProject.payment_method === 'financing' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Carência do Financiamento (meses)</label>
+                    <input 
+                      name="finance_grace_period" 
+                      type="number"
+                      min="0"
+                      max="24"
+                      defaultValue={selectedProject.finance_grace_period || 0} 
+                      className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                    />
+                  </div>
+                )}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Pendências (Restrições para fechar a venda)</label>
                   <input name="pendencies" defaultValue={selectedProject.commercial_pendencies} placeholder="Ex: Cliente aguardando aprovação de crédito num banco" className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none border-amber-200 bg-amber-50" />
@@ -437,6 +483,94 @@ export default function Commercial() {
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Observações Comerciais</label>
                   <textarea name="notes" defaultValue={selectedProject.commercial_notes} className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" rows={4}></textarea>
+                </div>
+
+                {/* SEÇÃO FOTOS DE VISTORIA */}
+                <div className="md:col-span-2 border-t pt-6 mt-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Camera size={20} className="text-blue-900" />
+                      <h3 className="font-bold text-gray-800">Fotos de Vistoria na Proposta</h3>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={includeInspectionPhotos}
+                        onChange={(e) => setIncludeInspectionPhotos(e.target.checked)}
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-900"></div>
+                      <span className="ml-3 text-sm font-medium text-gray-700">Incluir fotos na proposta gerada</span>
+                    </label>
+                  </div>
+
+                  {includeInspectionPhotos && (
+                    <div className="bg-gray-50 p-6 rounded-xl border border-dashed border-gray-300">
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
+                        {inspectionPhotos.map((url, index) => (
+                          <div key={index} className="relative group aspect-square rounded-lg overflow-hidden border bg-white shadow-sm">
+                            <img src={url} alt={`Vistoria ${index + 1}`} className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => setInspectionPhotos(prev => prev.filter((_, i) => i !== index))}
+                              className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <Plus size={14} className="rotate-45" />
+                            </button>
+                          </div>
+                        ))}
+                        
+                        {inspectionPhotos.length < 5 && (
+                          <label className={`aspect-square flex flex-col items-center justify-center border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
+                            isUploadingPhoto ? 'bg-gray-100 border-gray-300' : 'bg-white border-blue-300 hover:bg-blue-50 hover:border-blue-400'
+                          }`}>
+                            {isUploadingPhoto ? (
+                              <span className="animate-spin text-blue-900">⏳</span>
+                            ) : (
+                              <>
+                                <Plus size={24} className="text-blue-500 mb-1" />
+                                <span className="text-[10px] font-bold text-blue-600 uppercase tracking-tight">Adicionar Foto</span>
+                                <span className="text-[9px] text-gray-400 mt-1">{inspectionPhotos.length}/5 fotos</span>
+                              </>
+                            )}
+                            <input 
+                              type="file" 
+                              className="hidden" 
+                              accept="image/*"
+                              disabled={isUploadingPhoto}
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                
+                                setIsUploadingPhoto(true);
+                                try {
+                                  const filename = `${Date.now()}-${file.name}`;
+                                  const { data, error } = await supabase.storage
+                                    .from('uploads')
+                                    .upload(filename, file);
+                                    
+                                  if (error) throw error;
+                                  
+                                  const { data: { publicUrl } } = supabase.storage
+                                    .from('uploads')
+                                    .getPublicUrl(filename);
+                                    
+                                  setInspectionPhotos(prev => [...prev, publicUrl]);
+                                } catch (err) {
+                                  alert('Erro ao enviar foto: ' + (err as any).message);
+                                } finally {
+                                  setIsUploadingPhoto(false);
+                                }
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 italic">
+                        Tipos permitidos: JPG, PNG, WEBP. Máximo de 5 fotos.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 

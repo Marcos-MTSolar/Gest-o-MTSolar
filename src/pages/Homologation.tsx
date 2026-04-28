@@ -286,7 +286,7 @@ export default function Homologation() {
                   }}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 text-sm"
                 >
-                  <FileText size={16} /> Baixar Documentos (ZIP)
+                  <FileText size={16} /> Baixar/Ver Documentos
                 </button>
               )}
               <button onClick={() => { setSelectedProject(null); fetchProjects(); }} className="text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow font-medium px-4 py-2 rounded-lg transition-all border border-gray-300 shadow-sm bg-gray-50">Voltar para Lista</button>

@@ -13,11 +13,17 @@ import {
   Settings,
   Wrench,
   ShieldCheck,
-  Info
+  Info,
+  Plus,
+  Camera,
+  History,
+  Clock
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
+import api from '../lib/api';
 
-type TabType = 'dados' | 'kit' | 'calculo' | 'financiamento';
+type TabType = 'dados' | 'kit' | 'calculo' | 'financiamento' | 'servicos' | 'historico';
 
 interface FormData {
   clientName: string;
@@ -47,6 +53,10 @@ interface FormData {
   garantiaInversorDefeito: string;
   garantiaEstrutura: string;
   garantiaInstalacao: string;
+  includePhotos: boolean;
+  photos: string[];
+  kitSupplier: string;
+  financeGracePeriod: string;
 }
 
 interface Results {
@@ -56,6 +66,51 @@ interface Results {
   paybackMonths: number;
   monthlyInstallment: number;
 }
+
+const AVAILABLE_SERVICES = [
+  {
+    id: 'limpeza',
+    name: 'Limpeza de Módulos',
+    description: 'Limpeza técnica dos módulos fotovoltaicos com produtos adequados, removendo sujeira, pó e resíduos que reduzem a eficiência do sistema.',
+    norms: 'NBR 16274, recomendações do fabricante dos módulos.'
+  },
+  {
+    id: 'instalacao',
+    name: 'Instalação dos Módulos Fotovoltaicos',
+    description: 'Instalação completa dos módulos fotovoltaicos, incluindo fixação estrutural, cabeamento CC, conexão ao inversor e testes de funcionamento.',
+    norms: 'NBR 16690, NBR 5410, Resolução Normativa ANEEL 482/2012 e atualizações.'
+  },
+  {
+    id: 'terreno',
+    name: 'Limpeza de Terreno',
+    description: 'Limpeza e preparação do terreno para instalação de usinas fotovoltaicas, incluindo remoção de vegetação e nivelamento básico.',
+    norms: 'Legislação ambiental municipal e estadual aplicável.'
+  },
+  {
+    id: 'comissionamento',
+    name: 'Comissionamento Fotovoltaico',
+    description: 'Verificação e testes completos do sistema instalado, incluindo medição de parâmetros elétricos, verificação de string, análise de inversores e emissão de laudo técnico.',
+    norms: 'NBR 16274, IEC 62446-1.'
+  },
+  {
+    id: 'projeto_subestacao',
+    name: 'Projeto de Subestação',
+    description: 'Elaboração de projeto elétrico de subestação conforme requisitos da concessionária local, incluindo memorial descritivo, diagramas unifilares e especificação de equipamentos.',
+    norms: 'NBR 14039, NBR 5460, normas da concessionária local.'
+  },
+  {
+    id: 'projeto_usina',
+    name: 'Projeto de Usina Fotovoltaica',
+    description: 'Elaboração de projeto completo de usina fotovoltaica, incluindo dimensionamento do sistema, memorial de cálculo, diagramas elétricos, layout e documentação para homologação.',
+    norms: 'NBR 16690, NBR 5410, NBR 16274, Resolução Normativa ANEEL 482/2012.'
+  },
+  {
+    id: 'homologacao',
+    name: 'Homologação',
+    description: 'Acompanhamento e execução de todo o processo de homologação junto à concessionária de energia, incluindo protocolo de documentos, acompanhamento do processo e vistoria técnica.',
+    norms: 'Resolução Normativa ANEEL 482/2012, Resolução Normativa ANEEL 687/2015 e normativas da concessionária local.'
+  }
+];
 
 export default function ProposalGenerator() {
   const { user } = useAuth();
@@ -88,7 +143,11 @@ export default function ProposalGenerator() {
     garantiaModuloEficiencia: '25',
     garantiaInversorDefeito: '10',
     garantiaEstrutura: '5',
-    garantiaInstalacao: '1'
+    garantiaInstalacao: '1',
+    includePhotos: false,
+    photos: [],
+    kitSupplier: '',
+    financeGracePeriod: '0'
   });
 
   const [results, setResults] = useState<Results>({
@@ -98,6 +157,175 @@ export default function ProposalGenerator() {
     paybackMonths: 0,
     monthlyInstallment: 0
   });
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
+
+  const fetchHistory = async () => {
+    try {
+      const res = await api.get('/api/proposal-history');
+      setHistory(res.data);
+    } catch (error) {
+      console.error('Erro ao buscar histórico:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'historico') {
+      fetchHistory();
+    }
+  }, [activeTab]);
+
+  const saveToHistory = async () => {
+    try {
+      await api.post('/api/proposal-history', {
+        client_name: formData.clientName || 'Cliente sem nome',
+        margin: parseFloat(formData.marginPercent) || 0,
+        kit_value: parseFloat(formData.kitCost) || 0,
+        proposal_id: `PROP-${Date.now().toString().slice(-6)}`
+      });
+      fetchHistory();
+    } catch (error) {
+      console.error('Erro ao salvar no histórico:', error);
+    }
+  };
+
+  const [serviceFormData, setServiceFormData] = useState({
+    clientName: '',
+    selectedServices: [] as string[],
+    totalValue: '',
+    executionTime: '15 dias úteis',
+    responsible: '',
+    validityDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  });
+
+  const toggleService = (serviceId: string) => {
+    setServiceFormData(prev => ({
+      ...prev,
+      selectedServices: prev.selectedServices.includes(serviceId)
+        ? prev.selectedServices.filter(id => id !== serviceId)
+        : [...prev.selectedServices, serviceId]
+    }));
+  };
+
+  const generateServicePDF = async () => {
+    const dataGerada = new Date().toLocaleDateString('pt-BR');
+    const validityDateFormatted = new Date(serviceFormData.validityDate).toLocaleDateString('pt-BR');
+    
+    const servicesList = AVAILABLE_SERVICES.filter(s => serviceFormData.selectedServices.includes(s.id));
+
+    const htmlContent = `
+      <html>
+      <head>
+        <style>
+          @page { margin: 0; }
+          body { font-family: Arial, sans-serif; color: #333; margin: 0; padding: 0; }
+          .page { width: 210mm; min-height: 297mm; padding: 15mm; margin: 0 auto; box-sizing: border-box; background: #fff; position: relative; }
+          .header { background: linear-gradient(135deg, #1e3a5f 0%, #2d5a8e 100%); height: 25mm; padding: 0 15mm; display: flex; align-items: center; justify-content: space-between; margin: -15mm -15mm 10mm -15mm; }
+          .header h1 { color: #fff; margin: 0; font-size: 18pt; }
+          .header .logo-text { color: #f59e0b; font-size: 10pt; font-weight: bold; }
+          .section-title { font-size: 14pt; font-weight: bold; color: #1e3a5f; border-bottom: 2px solid #f59e0b; padding-bottom: 2mm; margin-bottom: 5mm; text-transform: uppercase; }
+          .data-table { width: 100%; border-collapse: collapse; margin-bottom: 10mm; }
+          .data-table td { padding: 2mm 0; border-bottom: 1px solid #eee; }
+          .label { color: #666; font-size: 9pt; width: 30%; }
+          .value { font-weight: bold; color: #1e3a5f; }
+          .service-item { margin-bottom: 6mm; padding-bottom: 4mm; border-bottom: 1px dashed #ddd; }
+          .service-name { font-size: 12pt; font-weight: bold; color: #1e3a5f; margin-bottom: 1mm; }
+          .service-desc { font-size: 10pt; color: #444; line-height: 1.5; margin-bottom: 1mm; text-align: justify; }
+          .service-norms { font-size: 8.5pt; color: #166534; font-weight: bold; background: #f0fdf4; padding: 1mm 2mm; border-radius: 4px; display: inline-block; }
+          .conditions-card { background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 10px; padding: 6mm; margin-top: 10mm; }
+          .footer { border-top: 2px solid #f59e0b; padding-top: 4mm; margin-top: 15mm; font-size: 8pt; color: #666; }
+        </style>
+      </head>
+      <body>
+        <div class="page">
+          <div class="header">
+            <h1>Proposta de Serviços</h1>
+            <div style="text-align: right;">
+              <div class="logo-text">MT SOLAR</div>
+              <div style="color: #fff; font-size: 8pt;">ENERGIA RENOVÁVEL</div>
+            </div>
+          </div>
+
+          <div class="section-title">Dados do Cliente</div>
+          <table class="data-table">
+            <tr>
+              <td class="label">Cliente:</td>
+              <td class="value">${serviceFormData.clientName || '—'}</td>
+            </tr>
+            <tr>
+              <td class="label">Data de Emissão:</td>
+              <td class="value">${dataGerada}</td>
+            </tr>
+            <tr>
+              <td class="label">Responsável Técnico:</td>
+              <td class="value">${serviceFormData.responsible || '—'}</td>
+            </tr>
+          </table>
+
+          <div class="section-title">Serviços Contratados</div>
+          ${servicesList.map(s => `
+            <div class="service-item">
+              <div class="service-name">✓ ${s.name}</div>
+              <div class="service-desc">${s.description}</div>
+              <div class="service-norms">Normas: ${s.norms}</div>
+            </div>
+          `).join('')}
+
+          <div class="section-title">Condições Comerciais</div>
+          <div class="conditions-card">
+            <table style="width: 100%;">
+              <tr>
+                <td>
+                  <div style="font-size: 9pt; color: #64748b; text-transform: uppercase;">Valor Total dos Serviços</div>
+                  <div style="font-size: 18pt; font-weight: 900; color: #1e3a5f;">R$ ${parseFloat(serviceFormData.totalValue || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                </td>
+                <td style="text-align: right;">
+                  <div style="font-size: 9pt; color: #64748b; text-transform: uppercase;">Tempo de Execução</div>
+                  <div style="font-size: 14pt; font-weight: bold; color: #1e3a5f;">${serviceFormData.executionTime}</div>
+                </td>
+              </tr>
+            </table>
+            <div style="margin-top: 4mm; font-size: 9pt; color: #666;">
+              Validade da Proposta: <strong>${validityDateFormatted}</strong>
+            </div>
+          </div>
+
+          <div class="footer">
+            <div style="display: flex; justify-content: space-between;">
+              <div>
+                <strong>MT SOLAR — ENERGIA RENOVÁVEL</strong><br/>
+                mtsolar.energia@gmail.com | (81) 99700-3260
+              </div>
+              <div style="text-align: right;">
+                Nº da Proposta: <strong>SRV-${Date.now().toString().slice(-6)}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const newWindow = window.open('', '_blank');
+    if (!newWindow) return;
+    newWindow.document.write(htmlContent);
+    newWindow.document.close();
+    setTimeout(() => newWindow.print(), 1000);
+
+    // Save to backend
+    try {
+      await api.post('/api/service-proposals', {
+        client_name: serviceFormData.clientName,
+        services: servicesList,
+        total_value: parseFloat(serviceFormData.totalValue) || 0,
+        execution_time: serviceFormData.executionTime,
+        responsible: serviceFormData.responsible,
+        validity_date: serviceFormData.validityDate
+      });
+    } catch (err) {
+      console.error('Erro ao salvar proposta de serviço:', err);
+    }
+  };
 
   const updateForm = (field: string, value: string) => setFormData(prev => ({ ...prev, [field]: value }));
   const inputStyle = "border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
@@ -386,6 +614,12 @@ export default function ProposalGenerator() {
               <span style="font-size:12pt;font-weight:900;color:#1e3a5f;
                 text-transform:uppercase;letter-spacing:1px;">Equipamentos do Sistema</span>
             </div>
+
+            <!-- FORNECEDOR (OPCIONAL) -->
+            ${formData.kitSupplier ? `
+            <div style="font-size:9pt;color:#6b7280;margin-bottom:1.5mm;text-align:right;">
+              Fornecedor: <span style="font-weight:bold;color:#1e3a5f;">${formData.kitSupplier}</span>
+            </div>` : ''}
 
             <!-- KIT DESCRIPTION BADGE -->
             ${formData.kitName ? `
@@ -816,7 +1050,93 @@ export default function ProposalGenerator() {
           </div>
         </div>
 
-        <!-- PÁGINA 8: SERVIÇOS INCLUSOS -->
+        <!-- PÁGINA 8: SIMULAÇÃO DE FINANCIAMENTO (SE APLICÁVEL) -->
+        ${parseFloat(formData.financeValue || results.salePrice.toString()) > 0 ? `
+        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
+          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
+
+          <!-- FAIXA TOPO -->
+          <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
+            height:18mm;padding:0 14mm;display:flex;align-items:center;
+            justify-content:space-between;">
+            <span style="color:#fff;font-size:13pt;font-weight:900;">
+              Simulação de Financiamento</span>
+            <span style="color:#f59e0b;font-size:9pt;font-weight:bold;">MT Solar</span>
+          </div>
+          <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24,#f59e0b);"></div>
+
+          <div style="padding:10mm 14mm;">
+            <p style="font-size:10.5pt;color:#6b7280;text-align:center;margin-bottom:8mm;">
+              Abaixo apresentamos uma simulação de financiamento para o seu sistema fotovoltaico.
+            </p>
+
+            <div style="background:linear-gradient(135deg,#f8fafc,#f1f5f9);border-radius:12px;
+              border:2px solid #e2e8f0;padding:8mm;margin-bottom:8mm;">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8mm;">
+                <div>
+                  <div style="font-size:9pt;color:#64748b;text-transform:uppercase;font-weight:bold;margin-bottom:1mm;">
+                    Valor Financiado</div>
+                  <div style="font-size:18pt;font-weight:900;color:#1e3a5f;">
+                    R$ ${parseFloat(formData.financeValue || results.salePrice.toString()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                </div>
+                <div>
+                  <div style="font-size:9pt;color:#64748b;text-transform:uppercase;font-weight:bold;margin-bottom:1mm;">
+                    Prazo</div>
+                  <div style="font-size:18pt;font-weight:900;color:#1e3a5f;">
+                    ${formData.financeTerm} meses</div>
+                </div>
+                <div>
+                  <div style="font-size:9pt;color:#64748b;text-transform:uppercase;font-weight:bold;margin-bottom:1mm;">
+                    Valor da Parcela (Estimado)</div>
+                  <div style="font-size:22pt;font-weight:900;color:#f59e0b;">
+                    R$ ${results.monthlyInstallment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                </div>
+                <div>
+                  <div style="font-size:9pt;color:#64748b;text-transform:uppercase;font-weight:bold;margin-bottom:1mm;">
+                    Carência</div>
+                  <div style="font-size:18pt;font-weight:900;color:#1e3a5f;">
+                    ${formData.financeGracePeriod || '0'} meses</div>
+                </div>
+              </div>
+
+              <div style="margin-top:8mm;padding-top:6mm;border-top:1px solid #cbd5e1;font-size:9.5pt;color:#475569;line-height:1.6;">
+                * Simulação baseada na taxa de <strong>${formData.financeRate}% a.m.</strong><br/>
+                * Sujeito a análise de crédito e alteração de taxa pelo banco parceiro.<br/>
+                * Carência: <strong>${formData.financeGracePeriod || '0'} meses</strong> para o primeiro pagamento.
+              </div>
+            </div>
+
+            <div style="background:#fff8e7;border:1.5px solid #f59e0b;border-radius:8px;padding:5mm;margin-top:5mm;">
+              <div style="font-size:10pt;font-weight:bold;color:#92400e;margin-bottom:2mm;">
+                💡 Dica de Economia
+              </div>
+              <p style="font-size:9.5pt;color:#374151;margin:0;">
+                Em muitos casos, a parcela do financiamento é inferior ou equivalente à sua conta de luz atual. 
+                Dessa forma, o sistema se paga com a própria economia gerada!
+              </p>
+            </div>
+
+            <!-- RODAPÉ DA PÁGINA -->
+            <div style="position:absolute;bottom:10mm;left:14mm;right:14mm;border-top:3px solid #f59e0b;padding-top:4mm;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <div style="font-size:9pt;font-weight:bold;color:#1e3a5f;">
+                    MT SOLAR — ENERGIA RENOVÁVEL</div>
+                  <div style="font-size:8pt;color:#6b7280;">
+                    mtsolar.energia@gmail.com | @mtsolar_</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="color:#6b7280;font-size:8pt;">Nº da Proposta</div>
+                  <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
+                    PROP-${Date.now().toString().slice(-6)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        ` : ''}
+
+        <!-- PÁGINA 9: SERVIÇOS INCLUSOS -->
         <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
           box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
 
@@ -829,6 +1149,7 @@ export default function ProposalGenerator() {
             <span style="color:#f59e0b;font-size:9pt;font-weight:bold;">MT Solar</span>
           </div>
           <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24,#f59e0b);"></div>
+
 
           <div style="padding:8mm 14mm;">
 
@@ -949,7 +1270,7 @@ export default function ProposalGenerator() {
           </div>
         </div>
 
-        <!-- PÁGINA 9: CONSIDERAÇÕES FINAIS E VALIDADE -->
+        <!-- PÁGINA 10: CONSIDERAÇÕES FINAIS E VALIDADE -->
         <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
           box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
 
@@ -1042,6 +1363,57 @@ export default function ProposalGenerator() {
 
           </div>
         </div>
+
+        <!-- PÁGINA 11: FOTOS DE VISTORIA (OPCIONAL) -->
+        ${formData.includePhotos && formData.photos.length > 0 ? `
+        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
+          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
+
+          <!-- FAIXA TOPO -->
+          <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
+            height:18mm;padding:0 14mm;display:flex;align-items:center;
+            justify-content:space-between;">
+            <span style="color:#fff;font-size:13pt;font-weight:900;">
+              Fotos de Vistoria</span>
+            <span style="color:#f59e0b;font-size:9pt;font-weight:bold;">MT Solar</span>
+          </div>
+          <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24,#f59e0b);"></div>
+
+          <div style="padding:10mm 14mm;">
+            <p style="font-size:10pt;color:#6b7280;margin-bottom:8mm;">
+              Registros fotográficos realizados durante a vistoria técnica no local da instalação.
+            </p>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6mm;">
+              ${formData.photos.map((url, i) => `
+                <div style="border:2px solid #f0f0f0;border-radius:8px;overflow:hidden;background:#f8fafc;">
+                  <img src="${url}" style="width:100%;height:65mm;object-fit:cover;display:block;" />
+                  <div style="padding:2mm;text-align:center;font-size:8pt;color:#1e3a5f;font-weight:bold;background:#fff;">
+                    FOTO 0${i + 1}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+
+            <!-- RODAPÉ DA PÁGINA -->
+            <div style="position:absolute;bottom:8mm;left:14mm;right:14mm;border-top:3px solid #f59e0b;padding-top:4mm;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <div style="font-size:9pt;font-weight:bold;color:#1e3a5f;">
+                    MT SOLAR — ENERGIA RENOVÁVEL</div>
+                  <div style="font-size:8pt;color:#6b7280;">
+                    mtsolar.energia@gmail.com | @mtsolar_</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="color:#6b7280;font-size:8pt;">Nº da Proposta</div>
+                  <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
+                    PROP-${Date.now().toString().slice(-6)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        ` : ''}
       </body>
       </html>
     `;
@@ -1053,6 +1425,9 @@ export default function ProposalGenerator() {
     setTimeout(() => {
       newWindow.print();
     }, 1500);
+
+    // Salvar no histórico automaticamente
+    saveToHistory();
   };
 
 
@@ -1064,6 +1439,8 @@ export default function ProposalGenerator() {
     { id: 'kit' as TabType, label: 'Kit Solar', icon: Package },
     { id: 'calculo' as TabType, label: 'Cálculo & Retorno', icon: Calculator },
     { id: 'financiamento' as TabType, label: 'Financiamento', icon: CreditCard },
+    { id: 'servicos' as TabType, label: 'Proposta de Serviços', icon: Wrench },
+    { id: 'historico' as TabType, label: 'Histórico', icon: History },
   ];
 
   const currentStepIndex = tabs.findIndex(t => t.id === activeTab);
@@ -1225,6 +1602,105 @@ export default function ProposalGenerator() {
                 />
               </div>
             </div>
+1236: 
+1237:             {/* SEÇÃO FOTOS DE VISTORIA */}
+1238:             <div className="mt-8 border-t pt-8">
+1239:               <div className="flex items-center justify-between mb-4">
+1240:                 <div className="flex items-center gap-2">
+1241:                   <Camera className="text-blue-900 w-6 h-6" />
+1242:                   <h2 className="text-xl font-bold text-gray-800">Fotos de Vistoria</h2>
+1243:                 </div>
+1244:                 <label className="relative inline-flex items-center cursor-pointer">
+1245:                   <input 
+1246:                     type="checkbox" 
+1247:                     className="sr-only peer" 
+1248:                     checked={formData.includePhotos}
+1249:                     onChange={(e) => updateForm('includePhotos', e.target.checked.toString())}
+1250:                   />
+1251:                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-900"></div>
+1252:                   <span className="ml-3 text-sm font-medium text-gray-700">Incluir fotos de vistoria na proposta</span>
+1253:                 </label>
+1254:               </div>
+1255: 
+1256:               {formData.includePhotos && (
+1257:                 <div className="bg-gray-50 p-6 rounded-xl border-2 border-dashed border-gray-200">
+1258:                   <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+1259:                     {formData.photos.map((url, index) => (
+1260:                       <div key={index} className="relative group aspect-square rounded-lg overflow-hidden border bg-white shadow-sm">
+1261:                         <img src={url} alt={`Vistoria ${index + 1}`} className="w-full h-full object-cover" />
+1262:                         <button
+1263:                           type="button"
+1264:                           onClick={() => {
+1265:                             const newPhotos = [...formData.photos];
+1266:                             newPhotos.splice(index, 1);
+1267:                             setFormData(prev => ({ ...prev, photos: newPhotos }));
+1268:                           }}
+1269:                           className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+1270:                         >
+1271:                           <Plus size={14} className="rotate-45" />
+1272:                         </button>
+1273:                       </div>
+1274:                     ))}
+1275: 
+1276:                     {formData.photos.length < 5 && (
+1277:                       <label className={`aspect-square flex flex-col items-center justify-center border-2 border-dashed rounded-lg cursor-pointer transition-all ${
+1278:                         isUploadingPhoto ? 'bg-gray-100 border-gray-300' : 'bg-white border-blue-300 hover:bg-blue-50 hover:border-blue-400'
+1279:                       }`}>
+1280:                         {isUploadingPhoto ? (
+1281:                           <div className="flex flex-col items-center">
+1282:                             <div className="w-6 h-6 border-2 border-blue-900 border-t-transparent rounded-full animate-spin mb-2"></div>
+1283:                             <span className="text-[10px] font-bold text-blue-900 uppercase">Subindo...</span>
+1284:                           </div>
+1285:                         ) : (
+1286:                           <>
+1287:                             <Plus size={24} className="text-blue-500 mb-1" />
+1288:                             <span className="text-[10px] font-bold text-blue-600 uppercase tracking-tight">Adicionar Foto</span>
+1289:                             <span className="text-[9px] text-gray-400 mt-1">{formData.photos.length}/5 fotos</span>
+1290:                           </>
+1291:                         )}
+1292:                         <input 
+1293:                           type="file" 
+1294:                           className="hidden" 
+1295:                           accept="image/*"
+1296:                           disabled={isUploadingPhoto}
+1297:                           onChange={async (e) => {
+1298:                             const file = e.target.files?.[0];
+1299:                             if (!file) return;
+1300:                             
+1301:                             setIsUploadingPhoto(true);
+1302:                             try {
+1303:                               const filename = `proposals/${Date.now()}-${file.name}`;
+1304:                               const { data, error } = await supabase.storage
+1305:                                 .from('uploads')
+1306:                                 .upload(filename, file);
+1307:                                 
+1308:                               if (error) throw error;
+1309:                               
+1310:                               const { data: { publicUrl } } = supabase.storage
+1311:                                 .from('uploads')
+1312:                                 .getPublicUrl(filename);
+1313:                                 
+1314:                               setFormData(prev => ({ ...prev, photos: [...prev.photos, publicUrl] }));
+1315:                             } catch (err) {
+1316:                               alert('Erro ao enviar foto: ' + (err as any).message);
+1317:                             } finally {
+1318:                               setIsUploadingPhoto(false);
+1319:                             }
+1320:                           }}
+1321:                         />
+1322:                       </label>
+1323:                     )}
+1324:                   </div>
+1325:                   <div className="mt-4 flex items-start gap-2 bg-amber-50 p-3 rounded-lg border border-amber-200">
+1326:                     <Info size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
+1327:                     <p className="text-[11px] text-amber-800 leading-relaxed">
+1328:                       As fotos de vistoria ajudam o cliente a entender melhor a viabilidade técnica da instalação. 
+1329:                       Será criada uma seção exclusiva no final da proposta com as imagens enviadas.
+1330:                     </p>
+1331:                   </div>
+1332:                 </div>
+1333:               )}
+1334:             </div>
 
             <div className="flex justify-end mt-8 pt-4 border-t border-gray-100">
               <button
@@ -1233,6 +1709,119 @@ export default function ProposalGenerator() {
               >
                 Próximo: Kit Solar →
               </button>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'servicos' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="bg-blue-900 p-4 text-white">
+                <h3 className="font-bold flex items-center gap-2">
+                  <Wrench size={18} className="text-amber-400" />
+                  Configuração da Proposta de Serviços
+                </h3>
+              </div>
+              <div className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-gray-700">Nome do Cliente</label>
+                    <input 
+                      type="text" 
+                      value={serviceFormData.clientName}
+                      onChange={(e) => setServiceFormData({...serviceFormData, clientName: e.target.value})}
+                      className={inputStyle}
+                      placeholder="Nome completo ou Razão Social"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-gray-700">Responsável Técnico</label>
+                    <input 
+                      type="text" 
+                      value={serviceFormData.responsible}
+                      onChange={(e) => setServiceFormData({...serviceFormData, responsible: e.target.value})}
+                      className={inputStyle}
+                      placeholder="Nome do engenheiro/técnico"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-sm font-bold text-gray-800 uppercase tracking-wider">Serviços Disponíveis</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {AVAILABLE_SERVICES.map(service => (
+                      <div 
+                        key={service.id}
+                        onClick={() => toggleService(service.id)}
+                        className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex items-start gap-3 ${
+                          serviceFormData.selectedServices.includes(service.id)
+                            ? 'border-blue-600 bg-blue-50'
+                            : 'border-gray-100 bg-white hover:border-blue-200'
+                        }`}
+                      >
+                        <div className={`mt-1 w-5 h-5 rounded border flex items-center justify-center transition-colors ${
+                          serviceFormData.selectedServices.includes(service.id)
+                            ? 'bg-blue-600 border-blue-600'
+                            : 'bg-white border-gray-300'
+                        }`}>
+                          {serviceFormData.selectedServices.includes(service.id) && <Check size={12} className="text-white" />}
+                        </div>
+                        <div>
+                          <p className="font-bold text-sm text-gray-800">{service.name}</p>
+                          <p className="text-[11px] text-gray-500 mt-1 line-clamp-2">{service.description}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-gray-700">Valor Total (R$)</label>
+                    <input 
+                      type="number" 
+                      value={serviceFormData.totalValue}
+                      onChange={(e) => setServiceFormData({...serviceFormData, totalValue: e.target.value})}
+                      className={inputStyle}
+                      placeholder="0,00"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-gray-700">Tempo de Execução</label>
+                    <input 
+                      type="text" 
+                      value={serviceFormData.executionTime}
+                      onChange={(e) => setServiceFormData({...serviceFormData, executionTime: e.target.value})}
+                      className={inputStyle}
+                      placeholder="Ex: 15 dias úteis"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-gray-700">Validade</label>
+                    <input 
+                      type="date" 
+                      value={serviceFormData.validityDate}
+                      onChange={(e) => setServiceFormData({...serviceFormData, validityDate: e.target.value})}
+                      className={inputStyle}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-center pt-4">
+                  <button
+                    onClick={generateServicePDF}
+                    disabled={serviceFormData.selectedServices.length === 0 || !serviceFormData.clientName}
+                    className={`px-8 py-3 rounded-xl font-bold text-white shadow-lg transition-all flex items-center gap-2 ${
+                      serviceFormData.selectedServices.length === 0 || !serviceFormData.clientName
+                        ? 'bg-gray-400 cursor-not-allowed opacity-60'
+                        : 'bg-blue-900 hover:bg-blue-800 hover:scale-105 active:scale-95'
+                    }`}
+                  >
+                    <FileDown size={20} />
+                    Gerar Proposta de Serviços
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1316,6 +1905,18 @@ export default function ProposalGenerator() {
                   onChange={(e) => updateForm('energyRate', e.target.value)}
                   className={inputStyle}
                 />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">Fornecedor do Kit</label>
+                <input 
+                  type="text" 
+                  value={formData.kitSupplier}
+                  onChange={(e) => updateForm('kitSupplier', e.target.value)}
+                  className={inputStyle}
+                  placeholder="Ex: Aldo Solar, WEG, etc."
+                />
+                <p className="text-[10px] text-gray-400">Opcional - se preenchido, aparece na proposta</p>
               </div>
             </div>
 
@@ -1670,6 +2271,19 @@ export default function ProposalGenerator() {
                   className={inputStyle}
                 />
                 <p className="text-[10px] text-gray-500 mt-1 italic">Taxa média financeiras solares: 0,99% a 1,99% a.m.</p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">Carência (meses)</label>
+                <input 
+                  type="number" 
+                  min="0"
+                  max="24"
+                  value={formData.financeGracePeriod}
+                  onChange={(e) => updateForm('financeGracePeriod', e.target.value)}
+                  className={inputStyle}
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Carência para o primeiro pagamento (0-24 meses)</p>
               </div>
             </div>
 

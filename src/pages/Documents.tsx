@@ -1,7 +1,7 @@
 // Documents page
 import React, { useEffect, useState } from 'react';
 import api from '../lib/api';
-import { FileText, Trash2, Upload, Download, CheckCircle, AlertTriangle } from 'lucide-react';
+import { FileText, Trash2, Upload, Download, CheckCircle, AlertTriangle, File, Image, Archive } from 'lucide-react';
 
 export default function Documents() {
   const [documents, setDocuments] = useState<any[]>([]);
@@ -118,6 +118,16 @@ export default function Documents() {
   const missingDocs = requiredTypes.filter(type => !selectedProjectDocs.some(d => d.type === type));
   const isComplete = missingDocs.length === 0 && newDoc.project_id !== '';
 
+  const getFileIcon = (url: string) => {
+    if (!url) return <FileText size={18} />;
+    const ext = url.split('.').pop()?.toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext!)) return <Image className="text-purple-600" size={18} />;
+    if (ext === 'pdf') return <FileText className="text-red-600" size={18} />;
+    if (['doc', 'docx'].includes(ext!)) return <FileText className="text-blue-600" size={18} />;
+    if (['zip', 'rar', '7z'].includes(ext!)) return <Archive className="text-amber-600" size={18} />;
+    return <File className="text-gray-600" size={18} />;
+  };
+
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Documentação</h1>
@@ -216,7 +226,10 @@ export default function Documents() {
             )}
             {documents.map(doc => (
               <tr key={doc.id} className="border-b last:border-0 hover:bg-gray-50">
-                <td className="p-4 font-medium">{doc.project_title}</td>
+                <td className="p-4 font-medium flex items-center gap-2">
+                  {getFileIcon(doc.url)}
+                  {doc.project_title}
+                </td>
                 <td className="p-4">{doc.title}</td>
                 <td className="p-4 text-sm text-gray-500">{doc.uploader_name}</td>
                 <td className="p-4 text-sm text-gray-500">{new Date(doc.created_at).toLocaleDateString()}</td>
