@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import { CheckCircle, AlertTriangle, Camera, X, Trash2 } from 'lucide-react';
 
 const PHOTO_FIELDS = [
@@ -49,7 +49,7 @@ export default function Installation() {
 
   const fetchProjects = async () => {
     try {
-      const res = await axios.get('/api/projects');
+      const res = await api.get('/api/projects');
       if (Array.isArray(res.data)) {
         setProjects(res.data.filter((p: any) =>
           ['installation', 'homologation', 'conclusion', 'completed'].includes(p.current_stage)
@@ -63,7 +63,7 @@ export default function Installation() {
   };
 
   const openProject = async (p: any) => {
-    const res = await axios.get(`/api/projects/${p.id}`);
+    const res = await api.get(`/api/projects/${p.id}`);
     setSelectedProject(res.data);
     setActiveTab('photos');
     setPendencies(res.data.pendencies || '');
@@ -117,7 +117,7 @@ export default function Installation() {
     }
 
     try {
-      await axios.put(`/api/projects/${selectedProject.id}/installation`, formData, {
+      await api.put(`/api/projects/${selectedProject.id}/installation`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setSelectedProject(null);
@@ -191,7 +191,7 @@ export default function Installation() {
   const handleDelete = async (id: number, clientName: string) => {
     if (!window.confirm(`Tem certeza que deseja excluir o projeto de "${clientName}"? Esta ação não pode ser desfeita.`)) return;
     try {
-      await axios.delete(`/api/projects/${id}`);
+      await api.delete(`/api/projects/${id}`);
       fetchProjects();
     } catch (err) {
       alert('Erro ao excluir projeto. Tente novamente.');

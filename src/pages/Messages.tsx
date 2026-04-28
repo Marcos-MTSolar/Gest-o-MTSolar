@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
-import axios from 'axios';
+import api from '../lib/api';
 
 export default function Messages() {
   const { messages: socketMessages, sendMessage } = useSocket();
@@ -13,7 +13,7 @@ export default function Messages() {
   useEffect(() => {
     const fetchMessages = async () => {
       try {
-        const res = await axios.get('/api/messages');
+        const res = await api.get('/api/messages');
         if (Array.isArray(res.data)) {
           setHistory(res.data);
         } else {
@@ -47,7 +47,7 @@ export default function Messages() {
     };
 
     // Send via API (which triggers socket broadcast)
-    axios.post('/api/messages', { content: input });
+    api.post('/api/messages', { content: input });
     setInput('');
   };
 

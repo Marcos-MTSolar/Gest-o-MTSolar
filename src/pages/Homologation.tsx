@@ -1,5 +1,5 @@
 import React, { useEffect, useState, Component } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import { CheckSquare, AlertTriangle, CheckCircle, FileText, ListChecks, Save, Lock, Unlock, Calendar, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { deleteDocsHomologacao, getDownloadUrl } from '../hooks/useHomologacaoDocs';
@@ -31,7 +31,7 @@ export default function Homologation() {
 
   const fetchProjects = async () => {
     try {
-      const res = await axios.get('/api/projects');
+      const res = await api.get('/api/projects');
       if (Array.isArray(res.data)) {
         setProjects(res.data.filter((p: any) =>
           ['homologation', 'conclusion', 'completed'].includes(p.current_stage)
@@ -50,12 +50,12 @@ export default function Homologation() {
       if (reason) payload.rejection_reason = reason;
       if (expectedDate !== null) payload.homologation_expected_date = expectedDate;
 
-      await axios.put(`/api/projects/${id}/homologation`, payload);
+      await api.put(`/api/projects/${id}/homologation`, payload);
 
       if (status === 'connection_point_approved') {
         // Exclui documentos do Supabase Storage ao finalizar
         try {
-          const res = await axios.get(`/api/projects/${id}`);
+          const res = await api.get(`/api/projects/${id}`);
           if (res.data?.homologacao_docs_path) {
             await deleteDocsHomologacao(res.data.homologacao_docs_path);
             await supabase
@@ -82,7 +82,7 @@ export default function Homologation() {
       await fetchProjects();
 
       // Recarrega o projeto selecionado para atualizar UI
-      const updatedRes = await axios.get(`/api/projects/${id}`);
+      const updatedRes = await api.get(`/api/projects/${id}`);
       setSelectedProject(updatedRes.data);
     } catch (error) {
       console.error(error);
@@ -98,7 +98,7 @@ export default function Homologation() {
     try {
       // Faz a requisição PUT explicitamente com os dados atuais do state
       console.log('Enviando PUT request para salvar:', { observationsText, checklist });
-      await axios.put(`/api/projects/${selectedProject.id}/homologation`, {
+      await api.put(`/api/projects/${selectedProject.id}/homologation`, {
         homologation_observations: observationsText,
         homologation_checklist: checklist
       });
@@ -124,7 +124,7 @@ export default function Homologation() {
 
     // Auto-save no toggle para evitar perder por desatenção, enviamos diretamente a nova lista
     try {
-      await axios.put(`/api/projects/${selectedProject.id}/homologation`, {
+      await api.put(`/api/projects/${selectedProject.id}/homologation`, {
         homologation_observations: observationsText,
         homologation_checklist: newChecklist
       });
@@ -162,7 +162,7 @@ export default function Homologation() {
   const handleDelete = async (id: number, clientName: string) => {
     if (!window.confirm(`Tem certeza que deseja excluir o projeto de "${clientName}"? Esta ação não pode ser desfeita.`)) return;
     try {
-      await axios.delete(`/api/projects/${id}`);
+      await api.delete(`/api/projects/${id}`);
       fetchProjects();
     } catch (err) {
       alert('Erro ao excluir projeto. Tente novamente.');
@@ -211,7 +211,7 @@ export default function Homologation() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={async () => {
-                      const res = await axios.get(`/api/projects/${p.id}`);
+                      const res = await api.get(`/api/projects/${p.id}`);
                       setSelectedProject(res.data);
 
                       const savedObs = res.data.homologation_observations || '';

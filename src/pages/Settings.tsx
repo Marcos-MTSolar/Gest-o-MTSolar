@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import { Upload, Image as ImageIcon, Lock, Save, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -26,7 +26,7 @@ export default function Settings() {
 
   const fetchSettings = async () => {
     try {
-      const res = await axios.get('/api/settings');
+      const res = await api.get('/api/settings');
       if (res.data.logo_url) {
         setLogoUrl(res.data.logo_url);
       }
@@ -44,7 +44,7 @@ export default function Settings() {
 
     setUploading(true);
     try {
-      const res = await axios.post('/api/settings/logo', formData, {
+      const res = await api.post('/api/settings/logo', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setLogoUrl(res.data.url);
@@ -66,7 +66,7 @@ export default function Settings() {
     }
 
     try {
-      await axios.post('/api/auth/change-password', {
+      await api.post('/api/auth/change-password', {
         currentPassword: passwords.current,
         newPassword: passwords.new
       });

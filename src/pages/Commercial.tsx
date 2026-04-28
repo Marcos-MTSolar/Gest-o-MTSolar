@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
-import axios from 'axios';
-import { Plus, Search, FileText, CheckCircle, Clock, Upload, FileCheck, AlertCircle } from 'lucide-react';
+import api from '../lib/api';
+import { Plus, Search, FileText, CheckCircle, Clock, Upload, FileCheck, AlertCircle, Camera } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { DOCS_OBRIGATORIOS, DOCS_OPCIONAIS, uploadDocsHomologacao } from '../hooks/useHomologacaoDocs';
+import { Capacitor } from '@capacitor/core';
+import { capturarDocumento } from '../lib/documentCapture';
 
 export default function Commercial() {
   const [projects, setProjects] = useState<any[]>([]);
@@ -24,7 +26,7 @@ export default function Commercial() {
 
   const fetchProjects = async () => {
     try {
-      const res = await axios.get('/api/projects');
+      const res = await api.get('/api/projects');
       if (Array.isArray(res.data)) {
         // Show only projects that are still in the commercial stage (pending/not approved) 
         // AND have NOT advanced beyond the commercial stage (current_stage is still 'pending')
@@ -55,7 +57,7 @@ export default function Commercial() {
     setUploadingDocs(true);
     try {
       // 1. Cria o cliente
-      const res = await axios.post('/api/clients', newClient);
+      const res = await api.post('/api/clients', newClient);
       const projectId = res.data?.project_id || res.data?.id;
 
       // 2. Faz upload do ZIP no Supabase
@@ -98,7 +100,7 @@ export default function Commercial() {
     }
 
     try {
-      await axios.put(`/api/projects/${selectedProject.id}/commercial`, {
+      await api.put(`/api/projects/${selectedProject.id}/commercial`, {
         proposal_value,
         payment_method,
         notes: formData.get('notes'),
@@ -117,12 +119,12 @@ export default function Commercial() {
     e.preventDefault();
     try {
       if (!selectedProject) return;
-      await axios.put(`/api/clients/${selectedProject.client_id}`, editClientData);
+      await api.put(`/api/clients/${selectedProject.client_id}`, editClientData);
       setShowEditClient(false);
       alert('Cadastro de cliente atualizado com sucesso!');
       await fetchProjects();
       // Refetch current project to update headers
-      const res = await axios.get(`/api/projects/${selectedProject.id}`);
+      const res = await api.get(`/api/projects/${selectedProject.id}`);
       setSelectedProject(res.data);
     } catch (error) {
       alert('Erro ao atualizar cadastro do cliente');
@@ -135,7 +137,7 @@ export default function Commercial() {
     if (!confirmDelete) return;
 
     try {
-      await axios.delete(`/api/projects/${selectedProject.id}`);
+      await api.delete(`/api/projects/${selectedProject.id}`);
       alert('Projeto removido com sucesso.');
       setSelectedProject(null);
       await fetchProjects();
@@ -225,6 +227,18 @@ export default function Commercial() {
                             </div>
                           </div>
                           <label className="cursor-pointer">
+                            {Capacitor.isNativePlatform() && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const file = await capturarDocumento();
+                                  if (file) setDocFiles(prev => ({ ...prev, [doc.id]: file }));
+                                }}
+                                className="mr-2 text-xs px-3 py-1.5 rounded-lg font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 flex items-center gap-1"
+                              >
+                                <Camera size={14} /> Câmera
+                              </button>
+                            )}
                             <span className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
                               docFiles[doc.id]
                                 ? 'bg-green-100 text-green-700 hover:bg-green-200'
@@ -274,6 +288,18 @@ export default function Commercial() {
                             </div>
                           </div>
                           <label className="cursor-pointer">
+                            {Capacitor.isNativePlatform() && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const file = await capturarDocumento();
+                                  if (file) setDocFiles(prev => ({ ...prev, [doc.id]: file }));
+                                }}
+                                className="mr-2 text-xs px-3 py-1.5 rounded-lg font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 flex items-center gap-1"
+                              >
+                                <Camera size={14} /> Câmera
+                              </button>
+                            )}
                             <span className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
                               docFiles[doc.id]
                                 ? 'bg-green-100 text-green-700 hover:bg-green-200'
@@ -332,7 +358,7 @@ export default function Commercial() {
                 </div>
                 <button
                   onClick={async () => {
-                    const res = await axios.get(`/api/projects/${p.id}`);
+                    const res = await api.get(`/api/projects/${p.id}`);
                     setSelectedProject(res.data);
                   }}
                   className={`px-4 py-2 rounded text-white ${['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-900 hover:bg-blue-800'}`}

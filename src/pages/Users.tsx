@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Pencil, Trash2, X, Check } from 'lucide-react';
 
@@ -15,7 +15,7 @@ export default function Users() {
 
   const fetchUsers = async () => {
     try {
-      const res = await axios.get('/api/users');
+      const res = await api.get('/api/users');
       setUsers(Array.isArray(res.data) ? res.data : []);
     } catch {
       setUsers([]);
@@ -25,7 +25,7 @@ export default function Users() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await axios.post('/api/users', newUser);
+      await api.post('/api/users', newUser);
       fetchUsers();
       setNewUser({ name: '', email: '', password: '', role: 'COMMERCIAL' });
     } catch (error) {
@@ -36,7 +36,7 @@ export default function Users() {
   const handleDelete = async (id: number) => {
     if (confirm('Tem certeza?')) {
       try {
-        await axios.delete(`/api/users/${id}`);
+        await api.delete(`/api/users/${id}`);
         fetchUsers();
       } catch (error: any) {
         alert(error.response?.data?.error || 'Erro ao excluir usuário');
@@ -48,7 +48,7 @@ export default function Users() {
     e.preventDefault();
     if (!editingUser) return;
     try {
-      await axios.put(`/api/users/${editingUser.id}`, editingUser);
+      await api.put(`/api/users/${editingUser.id}`, editingUser);
       setEditingUser(null);
       fetchUsers();
     } catch (error) {

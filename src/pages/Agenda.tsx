@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import {
   format,
   startOfMonth,
@@ -46,7 +46,7 @@ export default function Agenda() {
 
   const fetchEvents = async () => {
     try {
-      const res = await axios.get('/api/events');
+      const res = await api.get('/api/events');
       setEvents(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
       console.error('Error fetching events:', error);
@@ -101,13 +101,13 @@ export default function Agenda() {
 
     try {
       if (editingEvent) {
-        await axios.put(`/api/events/${editingEvent.id}`, payload);
+        await api.put(`/api/events/${editingEvent.id}`, payload);
         // Update completed status separately if changed
         if (formData.completed !== !!editingEvent.completed) {
-          await axios.put(`/api/events/${editingEvent.id}/complete`, { completed: formData.completed });
+          await api.put(`/api/events/${editingEvent.id}/complete`, { completed: formData.completed });
         }
       } else {
-        await axios.post('/api/events', payload);
+        await api.post('/api/events', payload);
       }
       fetchEvents();
       setShowModal(false);
@@ -120,7 +120,7 @@ export default function Agenda() {
     if (!editingEvent) return;
     if (confirm('Tem certeza que deseja excluir este evento?')) {
       try {
-        await axios.delete(`/api/events/${editingEvent.id}`);
+        await api.delete(`/api/events/${editingEvent.id}`);
         fetchEvents();
         setShowModal(false);
       } catch (error) {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import { CheckCircle, AlertTriangle, Camera, Video, X, Trash2 } from 'lucide-react';
 
 export default function Technical() {
@@ -17,7 +17,7 @@ export default function Technical() {
 
   const fetchProjects = async () => {
     try {
-      const res = await axios.get('/api/projects');
+      const res = await api.get('/api/projects');
       if (Array.isArray(res.data)) {
         // Show projects that:
         // 1. Are in inspection or installation stage (have passed commercial approval)
@@ -90,7 +90,7 @@ export default function Technical() {
     formData.set('status', action);
 
     try {
-      await axios.put(`/api/projects/${selectedProject.id}/technical`, formData, {
+      await api.put(`/api/projects/${selectedProject.id}/technical`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
@@ -109,7 +109,7 @@ export default function Technical() {
   const handleIniciarVistoria = async (p: any) => {
     try {
       // Fetch full project detail so form fields have all previously saved values
-      const res = await axios.get(`/api/projects/${p.id}`);
+      const res = await api.get(`/api/projects/${p.id}`);
       const full = res.data;
       // Merge list-level data with full detail
       setSelectedProject({ ...p, ...full });
@@ -125,7 +125,7 @@ export default function Technical() {
   const handleDelete = async (id: number, clientName: string) => {
     if (!window.confirm(`Tem certeza que deseja excluir o projeto de "${clientName}"? Esta ação não pode ser desfeita.`)) return;
     try {
-      await axios.delete(`/api/projects/${id}`);
+      await api.delete(`/api/projects/${id}`);
       fetchProjects();
     } catch (err) {
       alert('Erro ao excluir projeto. Tente novamente.');
@@ -327,7 +327,7 @@ export default function Technical() {
                 <button
                   onClick={async () => {
                     // Fetch full details before editing
-                    const res = await axios.get(`/api/projects/${p.id}`);
+                    const res = await api.get(`/api/projects/${p.id}`);
                     setSelectedProject(res.data);
                     setIsReinforcementNeeded(res.data.reinforcement_needed === 1 || res.data.reinforcement_needed === true);
                   }}

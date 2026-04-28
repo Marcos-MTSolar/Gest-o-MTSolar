@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../lib/api';
 import { motion } from 'motion/react';
 import { Sun, Eye, EyeOff } from 'lucide-react';
 
@@ -19,7 +19,7 @@ export default function Login() {
   const [newPassword, setNewPassword] = useState('');
 
   useEffect(() => {
-    axios.get('/api/settings').then(res => {
+    api.get('/api/settings').then(res => {
       if (res.data.logo_url) setLogoUrl(res.data.logo_url);
     }).catch(() => {});
   }, []);
@@ -28,7 +28,7 @@ export default function Login() {
     e.preventDefault();
     setError('');
     try {
-      const res = await axios.post('/api/auth/login', { email, password });
+      const res = await api.post('/api/auth/login', { email, password });
       login(res.data.token, res.data.user);
       navigate('/');
     } catch (err: any) {
@@ -44,7 +44,7 @@ export default function Login() {
     e.preventDefault();
     setError('');
     try {
-      const res = await axios.post('/api/auth/forgot-password', { email });
+      const res = await api.post('/api/auth/forgot-password', { email });
       alert(`${res.data.message}\n\n(Simulação de Email: Seu token é: ${res.data.token})`);
       if (res.data.token) {
         setResetToken(res.data.token);
@@ -59,7 +59,7 @@ export default function Login() {
     e.preventDefault();
     setError('');
     try {
-      await axios.post('/api/auth/reset-password', { email, token: resetToken, newPassword });
+      await api.post('/api/auth/reset-password', { email, token: resetToken, newPassword });
       alert('Senha redefinida com sucesso! Faça login com sua nova senha.');
       setView('login');
       setPassword('');

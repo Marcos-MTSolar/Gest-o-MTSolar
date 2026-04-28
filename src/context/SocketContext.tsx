@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import axios from 'axios';
+import api from '../lib/api';
 
 interface SocketContextType {
   messages: any[];
@@ -32,7 +32,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
   const sendMessage = async (content: string) => {
     try {
-      await axios.post('/api/messages', { content });
+      await api.post('/api/messages', { content });
     } catch (error) {
       console.error('Failed to send message:', error);
     }

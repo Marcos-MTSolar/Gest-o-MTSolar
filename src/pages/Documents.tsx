@@ -1,6 +1,6 @@
 // Documents page
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import { FileText, Trash2, Upload, Download, CheckCircle, AlertTriangle } from 'lucide-react';
 
 export default function Documents() {
@@ -15,14 +15,14 @@ export default function Documents() {
 
   const fetchDocumentsAndProjects = async () => {
     try {
-      const res = await axios.get('/api/documents');
+      const res = await api.get('/api/documents');
       setDocuments(Array.isArray(res.data) ? res.data : []);
     } catch {
       setDocuments([]);
     }
 
     try {
-      const res = await axios.get('/api/projects');
+      const res = await api.get('/api/projects');
       setProjects(Array.isArray(res.data) ? res.data : []);
     } catch {
       setProjects([]);
@@ -33,7 +33,7 @@ export default function Documents() {
   // We will keep the original names for clarity if they are called elsewhere, but update their implementation
   const fetchDocuments = async () => {
     try {
-      const res = await axios.get('/api/documents');
+      const res = await api.get('/api/documents');
       setDocuments(Array.isArray(res.data) ? res.data : []);
     } catch {
       setDocuments([]);
@@ -42,7 +42,7 @@ export default function Documents() {
 
   const fetchProjects = async () => {
     try {
-      const res = await axios.get('/api/projects');
+      const res = await api.get('/api/projects');
       setProjects(Array.isArray(res.data) ? res.data : []);
     } catch {
       setProjects([]);
@@ -72,7 +72,7 @@ export default function Documents() {
     formData.append('file', file);
 
     try {
-      await axios.post('/api/documents', formData);
+      await api.post('/api/documents', formData);
 
       alert('Documento enviado com sucesso!');
 
@@ -88,7 +88,7 @@ export default function Documents() {
   const handleDelete = async (id: number) => {
     if (confirm('Tem certeza?')) {
       try {
-        await axios.delete(`/api/documents/${id}`);
+        await api.delete(`/api/documents/${id}`);
         fetchDocuments();
       } catch (error: any) {
         alert(error.response?.data?.error || 'Erro ao excluir documento');
@@ -99,7 +99,7 @@ export default function Documents() {
   const handleConfirmDocs = async () => {
     if (!newDoc.project_id) return;
     try {
-      await axios.put(`/api/projects/${newDoc.project_id}/homologation`, {
+      await api.put(`/api/projects/${newDoc.project_id}/homologation`, {
         homologation_status: 'technical_analysis'
       });
       alert('Documentação confirmada! Homologação ativada.');

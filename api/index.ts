@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import multer from 'multer';
+import cors from 'cors';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -36,6 +37,7 @@ const supabase = createClient(
 
 // Middleware
 app.use(express.json());
+app.use(cors({ origin: true, credentials: true }));
 app.use(cookieParser());
 app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: true }));

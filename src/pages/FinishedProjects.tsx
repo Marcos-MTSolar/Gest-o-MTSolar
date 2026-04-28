@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import { Archive, CheckCircle, Search } from 'lucide-react';
 
 export default function FinishedProjects() {
@@ -12,7 +12,7 @@ export default function FinishedProjects() {
 
   const fetchProjects = async () => {
     try {
-      const res = await axios.get('/api/projects');
+      const res = await api.get('/api/projects');
       if (Array.isArray(res.data)) {
         setProjects(res.data.filter((p: any) => p.current_stage === 'completed'));
       } else {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import { addDays, isSameDay, parseISO, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar as CalendarIcon, Bell, CheckCircle2, RotateCcw, CheckSquare, XCircle, Clock3, Loader2 } from 'lucide-react';
@@ -16,7 +16,7 @@ export default function Dashboard() {
 
   const fetchEvents = useCallback(async () => {
     try {
-      const res = await axios.get('/api/events');
+      const res = await api.get('/api/events');
       if (Array.isArray(res.data)) {
         const all = res.data;
         setAllEvents(all);
@@ -35,11 +35,11 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    axios.get('/api/stats').then(res => setStats(res.data));
+    api.get('/api/stats').then(res => setStats(res.data));
     fetchEvents();
     
     // Fetch homologações
-    axios.get('/api/projects').then(res => {
+    api.get('/api/projects').then(res => {
       if (Array.isArray(res.data)) {
         setHomologacoes(res.data.filter((p: any) =>
           ['homologation', 'conclusion', 'completed'].includes(p.current_stage)
@@ -50,7 +50,7 @@ export default function Dashboard() {
 
   const toggleComplete = async (ev: any) => {
     try {
-      await axios.put(`/api/events/${ev.id}/complete`, { completed: !ev.completed });
+      await api.put(`/api/events/${ev.id}/complete`, { completed: !ev.completed });
       fetchEvents();
     } catch (err) {
       console.error('Erro ao atualizar compromisso:', err);

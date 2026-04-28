@@ -1,6 +1,5 @@
 // Página criada para MT Solar — Gerador de Propostas Solares
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { 
   User, 
   Zap, 

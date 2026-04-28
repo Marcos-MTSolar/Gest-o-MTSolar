@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
-import axios from 'axios';
+import api from '../lib/api';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
@@ -36,7 +36,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const prevMessagesLength = useRef(0);
 
   useEffect(() => {
-    axios.get('/api/settings').then(res => {
+    api.get('/api/settings').then(res => {
       if (res.data.logo_url) setLogoUrl(res.data.logo_url);
     }).catch(() => { });
 
@@ -44,7 +44,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     checkUnreadMessages();
 
     // Check if any project has completed inspection (to unlock Homologação)
-    axios.get('/api/projects').then(res => {
+    api.get('/api/projects').then(res => {
       if (Array.isArray(res.data)) {
         const hasInspection = res.data.some((p: any) =>
           p.technical_status === 'vistoria_concluida' ||
@@ -58,7 +58,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const checkUnreadMessages = async () => {
     try {
-      const res = await axios.get('/api/messages');
+      const res = await api.get('/api/messages');
       if (res.data.length > 0) {
         const latestMsg = res.data[res.data.length - 1]; // Last message in the list (which is reversed in API? No, API returns reverse, so [0] is latest? Let's check API)
         // API: ORDER BY m.created_at DESC LIMIT 50. Then res.json(messages.reverse()). 
@@ -77,7 +77,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     if (location.pathname === '/messages') {
       setUnreadCount(0);
       // Update last read message ID
-      axios.get('/api/messages').then(res => {
+      api.get('/api/messages').then(res => {
         if (res.data.length > 0) {
           const latestMsg = res.data[res.data.length - 1];
           localStorage.setItem('lastReadMessageId', latestMsg.id.toString());
@@ -87,7 +87,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
     // Re-check inspection status on every navigation change
     // so Homologação menu appears right after a vistoria is finalized
-    axios.get('/api/projects').then(res => {
+    api.get('/api/projects').then(res => {
       if (Array.isArray(res.data)) {
         const hasInspection = res.data.some((p: any) =>
           p.technical_status === 'vistoria_concluida' ||
@@ -137,7 +137,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 bg-blue-900 text-white transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0",
+          "fixed inset-y-0 left-0 z-50 w-64 bg-blue-900 text-white transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:inset-0",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -146,7 +146,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <img src={logoUrl} alt="MT Solar" className="h-10 w-auto object-contain bg-white rounded p-1" />
           )}
           <span className="text-xl font-bold text-amber-400">MT Solar</span>
-          <button onClick={toggleSidebar} className="lg:hidden absolute right-4 text-white">
+          <button onClick={toggleSidebar} className="md:hidden absolute right-4 text-white">
             <X size={24} />
           </button>
         </div>
@@ -198,20 +198,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="flex items-center justify-between h-16 px-6 bg-white border-b border-gray-200">
-          <div className="flex items-center lg:hidden">
-            <button onClick={toggleSidebar} className="text-gray-500 focus:outline-none mr-4">
+        <header className="flex items-center justify-between h-16 px-4 md:px-6 bg-white border-b border-gray-200">
+          <div className="flex items-center md:hidden">
+            <button onClick={toggleSidebar} className="text-gray-500 focus:outline-none mr-3">
               <Menu size={24} />
             </button>
             <div className="flex items-center gap-2">
-              {logoUrl && <img src={logoUrl} alt="MT Solar" className="h-8 w-auto object-contain bg-white rounded p-1 shadow-sm border border-gray-100" />}
-              <span className="text-lg font-semibold text-blue-900">MT Solar</span>
+              {logoUrl && <img src={logoUrl} alt="MT Solar" className="h-7 w-auto object-contain bg-white rounded p-1 shadow-sm border border-gray-100" />}
+              <span className="text-base font-bold text-blue-900">MT Solar</span>
             </div>
           </div>
 
           <div className="flex items-center justify-end w-full gap-4">
             {/* Desktop Logo & User */}
-            <div className="hidden lg:flex items-center gap-3 mr-4 border-r pr-4">
+            <div className="hidden md:flex items-center gap-3 mr-4 border-r pr-4">
               <div className="text-right">
                 <p className="text-sm font-bold text-gray-800">{user?.name}</p>
                 <p className="text-xs text-gray-500">{user?.role}</p>
@@ -242,7 +242,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-3 md:p-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -271,7 +271,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Overlay for mobile sidebar */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
+          className="fixed inset-0 z-40 bg-black bg-opacity-50 md:hidden"
           onClick={toggleSidebar}
         ></div>
       )}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import { ShoppingCart, Check, X, Trash2 } from 'lucide-react';
 
 export default function KitPurchase() {
@@ -12,7 +12,7 @@ export default function KitPurchase() {
 
   const fetchProjects = async () => {
     try {
-      const res = await axios.get('/api/projects');
+      const res = await api.get('/api/projects');
       if (Array.isArray(res.data)) {
         // Show projects that are commercially approved OR have advanced past commercial stage
         const KIT_STAGES = ['inspection', 'installation', 'homologation', 'conclusion', 'completed'];
@@ -52,9 +52,9 @@ export default function KitPurchase() {
     };
 
     try {
-      await axios.put(`/api/projects/${selectedProject.id}/kit`, data);
+      await api.put(`/api/projects/${selectedProject.id}/kit`, data);
       // Refresh both the project detail and the list
-      const updatedRes = await axios.get(`/api/projects/${selectedProject.id}`);
+      const updatedRes = await api.get(`/api/projects/${selectedProject.id}`);
       setSelectedProject(updatedRes.data);
       fetchProjects();
     } catch (error) {
@@ -65,7 +65,7 @@ export default function KitPurchase() {
   const handleDelete = async (id: number, clientName: string) => {
     if (!window.confirm(`Tem certeza que deseja excluir o projeto de "${clientName}"? Esta ação não pode ser desfeita.`)) return;
     try {
-      await axios.delete(`/api/projects/${id}`);
+      await api.delete(`/api/projects/${id}`);
       fetchProjects();
     } catch (err) {
       alert('Erro ao excluir projeto. Tente novamente.');
@@ -96,7 +96,7 @@ export default function KitPurchase() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={async () => {
-                      const res = await axios.get(`/api/projects/${p.id}`);
+                      const res = await api.get(`/api/projects/${p.id}`);
                       setSelectedProject(res.data);
                     }}
                     className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-800"
