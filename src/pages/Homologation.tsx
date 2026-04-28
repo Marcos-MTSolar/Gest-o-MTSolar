@@ -1,6 +1,8 @@
 import React, { useEffect, useState, Component } from 'react';
 import axios from 'axios';
 import { CheckSquare, AlertTriangle, CheckCircle, FileText, ListChecks, Save, Lock, Unlock, Calendar, Trash2 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { deleteDocsHomologacao, getDownloadUrl } from '../hooks/useHomologacaoDocs';
 
 export default function Homologation() {
   const [projects, setProjects] = useState<any[]>([]);
@@ -51,6 +53,20 @@ export default function Homologation() {
       await axios.put(`/api/projects/${id}/homologation`, payload);
 
       if (status === 'connection_point_approved') {
+        // Exclui documentos do Supabase Storage ao finalizar
+        try {
+          const res = await axios.get(`/api/projects/${id}`);
+          if (res.data?.homologacao_docs_path) {
+            await deleteDocsHomologacao(res.data.homologacao_docs_path);
+            await supabase
+              .from('projects')
+              .update({ homologacao_docs_path: null, homologacao_docs_uploaded_at: null })
+              .eq('id', id);
+          }
+        } catch (e) {
+          console.warn('Não foi possível excluir documentos:', e);
+        }
+
         alert('Ponto de conexão aprovado! Projeto finalizado com sucesso.');
         setStatusModal({ projectId: 0, status: '', isOpen: false });
         setStatusNote('');
@@ -257,7 +273,24 @@ export default function Homologation() {
               <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">Homologação: {selectedProject.client_name}</h2>
               <p className="text-sm text-gray-500">{selectedProject.title}</p>
             </div>
-            <button onClick={() => { setSelectedProject(null); fetchProjects(); }} className="text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow font-medium px-4 py-2 rounded-lg transition-all border border-gray-300 shadow-sm bg-gray-50">Voltar para Lista</button>
+            <div className="flex gap-2">
+              {selectedProject?.homologacao_docs_path && (
+                <button
+                  onClick={async () => {
+                    try {
+                      const url = await getDownloadUrl(selectedProject.homologacao_docs_path);
+                      window.open(url, '_blank');
+                    } catch {
+                      alert('Erro ao gerar link de download');
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 text-sm"
+                >
+                  <FileText size={16} /> Baixar Documentos (ZIP)
+                </button>
+              )}
+              <button onClick={() => { setSelectedProject(null); fetchProjects(); }} className="text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow font-medium px-4 py-2 rounded-lg transition-all border border-gray-300 shadow-sm bg-gray-50">Voltar para Lista</button>
+            </div>
           </div>
 
           <div className="flex border-b bg-white overflow-x-auto select-none">

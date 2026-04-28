@@ -1,13 +1,17 @@
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
-import { Plus, Search, FileText, CheckCircle, Clock } from 'lucide-react';
+import { Plus, Search, FileText, CheckCircle, Clock, Upload, FileCheck, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
+import { DOCS_OBRIGATORIOS, uploadDocsHomologacao } from '../hooks/useHomologacaoDocs';
 
 export default function Commercial() {
   const [projects, setProjects] = useState<any[]>([]);
   const [showNewClient, setShowNewClient] = useState(false);
   const [newClient, setNewClient] = useState({ name: '', phone: '', email: '', address: '', city: '', state: '', cpf_cnpj: '' });
   const { user } = useAuth();
+  const [docFiles, setDocFiles] = useState<{ [docId: string]: File }>({});
+  const [uploadingDocs, setUploadingDocs] = useState(false);
 
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [showEditClient, setShowEditClient] = useState(false);
@@ -40,13 +44,41 @@ export default function Commercial() {
 
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Valida documentos obrigatórios
+    const docsAusentes = DOCS_OBRIGATORIOS.filter(d => !docFiles[d.id]);
+    if (docsAusentes.length > 0) {
+      alert(`Documentos obrigatórios ausentes:\n${docsAusentes.map(d => `• ${d.label}`).join('\n')}`);
+      return;
+    }
+
+    setUploadingDocs(true);
     try {
-      await axios.post('/api/clients', newClient);
+      // 1. Cria o cliente
+      const res = await axios.post('/api/clients', newClient);
+      const projectId = res.data?.project_id || res.data?.id;
+
+      // 2. Faz upload do ZIP no Supabase
+      const filePath = await uploadDocsHomologacao(projectId, newClient.name, docFiles);
+
+      // 3. Salva o caminho no projeto
+      await supabase
+        .from('projects')
+        .update({
+          homologacao_docs_path: filePath,
+          homologacao_docs_uploaded_at: new Date().toISOString()
+        })
+        .eq('id', projectId);
+
       setShowNewClient(false);
-      fetchProjects();
+      setDocFiles({});
       setNewClient({ name: '', phone: '', email: '', address: '', city: '', state: '', cpf_cnpj: '' });
-    } catch (error) {
-      alert('Erro ao criar cliente');
+      fetchProjects();
+      alert('Cliente cadastrado e documentos enviados com sucesso!');
+    } catch (error: any) {
+      alert('Erro ao cadastrar cliente: ' + error.message);
+    } finally {
+      setUploadingDocs(false);
     }
   };
 
@@ -160,9 +192,67 @@ export default function Commercial() {
                   <input placeholder="Cidade" className="border p-2 rounded" value={newClient.city} onChange={e => setNewClient({ ...newClient, city: e.target.value })} />
                   <input placeholder="Estado" className="border p-2 rounded" value={newClient.state} onChange={e => setNewClient({ ...newClient, state: e.target.value })} />
 
+                  {/* SEÇÃO DOCUMENTOS OBRIGATÓRIOS */}
+                  <div className="md:col-span-2 mt-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <FileCheck size={18} className="text-blue-900" />
+                      <h3 className="font-bold text-gray-800 text-sm">
+                        Documentação para Homologação <span className="text-red-500">*</span>
+                      </h3>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex items-start gap-2">
+                      <AlertCircle size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                      <p className="text-xs text-amber-700">
+                        Todos os documentos abaixo são obrigatórios para iniciar o processo de homologação.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-1">
+                      {DOCS_OBRIGATORIOS.map(doc => (
+                        <div key={doc.id} className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                          docFiles[doc.id] ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-200'
+                        }`}>
+                          <div className="flex items-center gap-2 flex-1">
+                            {docFiles[doc.id]
+                              ? <FileCheck size={16} className="text-green-600" />
+                              : <Upload size={16} className="text-gray-400" />
+                            }
+                            <div>
+                              <p className="text-sm font-medium text-gray-700">{doc.label}</p>
+                              {docFiles[doc.id] && (
+                                <p className="text-xs text-green-600">{docFiles[doc.id].name}</p>
+                              )}
+                            </div>
+                          </div>
+                          <label className="cursor-pointer">
+                            <span className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                              docFiles[doc.id]
+                                ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                : 'bg-blue-900 text-white hover:bg-blue-800'
+                            }`}>
+                              {docFiles[doc.id] ? 'Trocar' : 'Anexar'}
+                            </span>
+                            <input
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png"
+                              className="hidden"
+                              onChange={e => {
+                                const file = e.target.files?.[0];
+                                if (file) setDocFiles(prev => ({ ...prev, [doc.id]: file }));
+                              }}
+                            />
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="md:col-span-2 flex justify-end gap-2 mt-4">
                     <button type="button" onClick={() => setShowNewClient(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
-                    <button type="submit" className="px-4 py-2 bg-blue-900 text-white rounded hover:bg-blue-800">Salvar</button>
+                    <button type="submit" disabled={uploadingDocs} className="px-4 py-2 bg-blue-900 text-white rounded hover:bg-blue-800 disabled:opacity-50 flex items-center gap-2">
+                      {uploadingDocs ? (
+                        <><span className="animate-spin">⏳</span> Enviando...</>
+                      ) : 'Salvar e Enviar Documentos'}
+                    </button>
                   </div>
                 </form>
               </div>
