@@ -13,7 +13,7 @@
     "cap:sync": "npx cap sync",
     "cap:android": "npx cap open android",
     "cap:ios": "npx cap open ios",
-    "build:mobile": "vite build && npx cap sync"
+    "build:mobile": "dotenv -e .env.mobile -- vite build && npx cap sync"
   },
   "dependencies": {
     "@google/genai": "1.29.0",
@@ -55,6 +55,7 @@
     "@types/multer": "2.0.0",
     "@types/node": "22.14.0",
     "autoprefixer": "10.4.21",
+    "dotenv-cli": "^11.0.0",
     "tailwindcss": "4.1.14",
     "tsx": "4.21.0",
     "typescript": "5.8.2",
