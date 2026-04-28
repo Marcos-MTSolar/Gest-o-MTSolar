@@ -1,11 +1,14 @@
 import { supabase } from '../lib/supabase';
 import JSZip from 'jszip';
 
-// Lista obrigatória de documentos para homologação
+// Lista de documentos para homologação
 export const DOCS_OBRIGATORIOS = [
   { id: 'rg_cpf', label: 'RG/CPF ou CNH do titular' },
-  { id: 'conta_energia', label: 'Conta de energia (últimos 3 meses)' },
   { id: 'comprovante_endereco', label: 'Comprovante de endereço' },
+];
+
+export const DOCS_OPCIONAIS = [
+  { id: 'conta_energia', label: 'Conta de energia (últimos 3 meses)' },
   { id: 'iptu', label: 'IPTU ou escritura do imóvel' },
   { id: 'procuracao', label: 'Procuração (se aplicável)' },
 ];
@@ -19,7 +22,7 @@ export async function uploadDocsHomologacao(
   const pasta = `docs_${clientName.replace(/\s+/g, '_')}`;
 
   for (const [docId, file] of Object.entries(files)) {
-    const docLabel = DOCS_OBRIGATORIOS.find(d => d.id === docId)?.label || docId;
+    const docLabel = [...DOCS_OBRIGATORIOS, ...DOCS_OPCIONAIS].find(d => d.id === docId)?.label || docId;
     const ext = file.name.split('.').pop();
     zip.file(`${pasta}/${docLabel}.${ext}`, file);
   }

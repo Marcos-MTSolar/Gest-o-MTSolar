@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Plus, Search, FileText, CheckCircle, Clock, Upload, FileCheck, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { DOCS_OBRIGATORIOS, uploadDocsHomologacao } from '../hooks/useHomologacaoDocs';
+import { DOCS_OBRIGATORIOS, DOCS_OPCIONAIS, uploadDocsHomologacao } from '../hooks/useHomologacaoDocs';
 
 export default function Commercial() {
   const [projects, setProjects] = useState<any[]>([]);
@@ -192,22 +192,72 @@ export default function Commercial() {
                   <input placeholder="Cidade" className="border p-2 rounded" value={newClient.city} onChange={e => setNewClient({ ...newClient, city: e.target.value })} />
                   <input placeholder="Estado" className="border p-2 rounded" value={newClient.state} onChange={e => setNewClient({ ...newClient, state: e.target.value })} />
 
-                  {/* SEÇÃO DOCUMENTOS OBRIGATÓRIOS */}
+                  {/* SEÇÃO DOCUMENTOS */}
                   <div className="md:col-span-2 mt-4">
+                    {/* Grupo 1 - Obrigatórios */}
                     <div className="flex items-center gap-2 mb-3">
                       <FileCheck size={18} className="text-blue-900" />
                       <h3 className="font-bold text-gray-800 text-sm">
-                        Documentação para Homologação <span className="text-red-500">*</span>
+                        Documentos Obrigatórios <span className="text-red-500">*</span>
                       </h3>
                     </div>
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex items-start gap-2">
                       <AlertCircle size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
                       <p className="text-xs text-amber-700">
-                        Todos os documentos abaixo são obrigatórios para iniciar o processo de homologação.
+                        Estes documentos são obrigatórios para iniciar o processo de homologação.
                       </p>
                     </div>
-                    <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-1">
+                    <div className="grid grid-cols-1 gap-2 mb-6">
                       {DOCS_OBRIGATORIOS.map(doc => (
+                        <div key={doc.id} className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                          docFiles[doc.id] ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-200'
+                        }`}>
+                          <div className="flex items-center gap-2 flex-1">
+                            {docFiles[doc.id]
+                              ? <FileCheck size={16} className="text-green-600" />
+                              : <Upload size={16} className="text-gray-400" />
+                            }
+                            <div>
+                              <p className="text-sm font-medium text-gray-700">{doc.label}</p>
+                              {docFiles[doc.id] && (
+                                <p className="text-xs text-green-600">{docFiles[doc.id].name}</p>
+                              )}
+                            </div>
+                          </div>
+                          <label className="cursor-pointer">
+                            <span className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                              docFiles[doc.id]
+                                ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                : 'bg-blue-900 text-white hover:bg-blue-800'
+                            }`}>
+                              {docFiles[doc.id] ? 'Trocar' : 'Anexar'}
+                            </span>
+                            <input
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png"
+                              className="hidden"
+                              onChange={e => {
+                                const file = e.target.files?.[0];
+                                if (file) setDocFiles(prev => ({ ...prev, [doc.id]: file }));
+                              }}
+                            />
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Grupo 2 - Opcionais */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <FileText size={18} className="text-blue-900" />
+                      <h3 className="font-bold text-gray-800 text-sm">
+                        Documentos Opcionais
+                      </h3>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Envie se disponível. Podem ser adicionados posteriormente.
+                    </p>
+                    <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-1">
+                      {DOCS_OPCIONAIS.map(doc => (
                         <div key={doc.id} className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
                           docFiles[doc.id] ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-200'
                         }`}>
