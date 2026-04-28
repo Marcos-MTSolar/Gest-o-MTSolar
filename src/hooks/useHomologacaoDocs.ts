@@ -1,16 +1,16 @@
-import { supabase } from '../lib/supabase';
+﻿import { supabase } from '../lib/supabase';
 import JSZip from 'jszip';
 
-// Lista de documentos para homologação
+// Lista de documentos para homologaÃ§Ã£o
 export const DOCS_OBRIGATORIOS = [
   { id: 'rg_cpf', label: 'RG/CPF ou CNH do titular' },
-  { id: 'comprovante_endereco', label: 'Comprovante de endereço' },
+  { id: 'comprovante_endereco', label: 'Comprovante de endereÃ§o' },
 ];
 
 export const DOCS_OPCIONAIS = [
-  { id: 'conta_energia', label: 'Conta de energia (últimos 3 meses)' },
-  { id: 'iptu', label: 'IPTU ou escritura do imóvel' },
-  { id: 'procuracao', label: 'Procuração (se aplicável)' },
+  { id: 'conta_energia', label: 'Conta de energia (Ãºltimos 3 meses)' },
+  { id: 'iptu', label: 'IPTU ou escritura do imÃ³vel' },
+  { id: 'procuracao', label: 'ProcuraÃ§Ã£o (se aplicÃ¡vel)' },
 ];
 
 export async function uploadDocsHomologacao(
@@ -74,7 +74,7 @@ export async function deleteDocsHomologacao(filePath: string): Promise<void> {
 export async function getDownloadUrl(filePath: string): Promise<string> {
   const { data, error } = await supabase.storage
     .from('homologacao-docs')
-    .createSignedUrl(filePath, 3600); // válido por 1h
+    .createSignedUrl(filePath, 3600); // vÃ¡lido por 1h
   if (error || !data) throw new Error('Erro ao gerar URL de download');
   return data.signedUrl;
 }

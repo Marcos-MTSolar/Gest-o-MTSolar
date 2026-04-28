@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import { createServer } from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -150,7 +150,7 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', authenticateToken, async (req: any, res) => {
   const { data: user } = await supabase.from('users').select('id, name, email, role, avatar_url').eq('id', req.user.id).single();
-  // Always return a valid user object — either from DB or from token payload
+  // Always return a valid user object â€” either from DB or from token payload
   res.json(user || { id: req.user.id, name: req.user.name, role: req.user.role, email: req.user.email || 'ceo@mtsolar.com' });
 });
 
@@ -328,7 +328,7 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
     kit_supplier: project.commercial_data?.[0]?.kit_supplier,
     finance_grace_period: project.commercial_data?.[0]?.finance_grace_period,
 
-    // Technical — spread tech fields then explicitly override structure_type to ensure it comes from technical_data
+    // Technical â€” spread tech fields then explicitly override structure_type to ensure it comes from technical_data
     entrance_pattern: techData.entrance_pattern,
     grounding: techData.grounding,
     roof_structure: techData.roof_structure,
@@ -467,7 +467,7 @@ app.put('/api/projects/:id/technical', authenticateToken, upload.any(), async (r
     return res.status(500).json({ error: upsertError.message });
   }
 
-  // Update project stage when vistoria is finalized — goes directly to homologation
+  // Update project stage when vistoria is finalized â€” goes directly to homologation
   if (status === 'vistoria_concluida') {
     await supabase.from('projects').update({ current_stage: 'homologation', status: 'vistoria_concluida', updated_at: new Date() }).eq('id', req.params.id);
   }
@@ -517,7 +517,7 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
   if (homologation_checklist !== undefined) updates.homologation_checklist = homologation_checklist;
   if (homologation_expected_date !== undefined) updates.homologation_expected_date = homologation_expected_date;
 
-  console.log('Updates object que será enviado pro Supabase:', updates);
+  console.log('Updates object que serÃ¡ enviado pro Supabase:', updates);
 
   // Previous status check
   const { data: project } = await supabase.from('projects').select('homologation_status').eq('id', req.params.id).single();
@@ -533,10 +533,10 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
     await supabase.from('projects').update({ current_stage: 'completed', status: 'completed', updated_at: new Date() }).eq('id', req.params.id);
   } else if (homologation_status === 'technical_analysis' && project?.homologation_status !== 'technical_analysis') {
     // Log the automatic transition
-    await supabase.from('logs').insert({ user_id: req.user.id, action: 'HOMOLOGATION_STARTED', details: `Checklist concluído. Processo de homologação iniciado para o projeto ID ${req.params.id}` });
+    await supabase.from('logs').insert({ user_id: req.user.id, action: 'HOMOLOGATION_STARTED', details: `Checklist concluÃ­do. Processo de homologaÃ§Ã£o iniciado para o projeto ID ${req.params.id}` });
   } else if ((homologation_status === null || homologation_status === '') && project?.homologation_status === 'technical_analysis') {
     // Log the regression
-    await supabase.from('logs').insert({ user_id: req.user.id, action: 'HOMOLOGATION_SUSPENDED', details: `Checklist reaberto/pendente. Processo de homologação suspenso para o projeto ID ${req.params.id}` });
+    await supabase.from('logs').insert({ user_id: req.user.id, action: 'HOMOLOGATION_SUSPENDED', details: `Checklist reaberto/pendente. Processo de homologaÃ§Ã£o suspenso para o projeto ID ${req.params.id}` });
   }
 
   broadcast('PROJECT_UPDATED', { id: req.params.id, type: 'homologation' });

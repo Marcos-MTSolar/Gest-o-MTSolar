@@ -1,4 +1,4 @@
-// Documents page
+﻿// Documents page
 import React, { useEffect, useState } from 'react';
 import api from '../lib/api';
 import { FileText, Trash2, Upload, Download, CheckCircle, AlertTriangle, File, Image, Archive } from 'lucide-react';
@@ -53,7 +53,7 @@ export default function Documents() {
     'rg_cnh': 'RG ou CNH',
     'art': 'ART',
     'bill_generator': 'Conta Geradora',
-    'bill_beneficiary': 'Conta Beneficiária',
+    'bill_beneficiary': 'Conta BeneficiÃ¡ria',
     'other': 'Outros'
   };
 
@@ -102,10 +102,10 @@ export default function Documents() {
       await api.put(`/api/projects/${newDoc.project_id}/homologation`, {
         homologation_status: 'technical_analysis'
       });
-      alert('Documentação confirmada! Homologação ativada.');
+      alert('DocumentaÃ§Ã£o confirmada! HomologaÃ§Ã£o ativada.');
       fetchProjects(); // Refresh to update status if needed
     } catch (error) {
-      alert('Erro ao ativar homologação.');
+      alert('Erro ao ativar homologaÃ§Ã£o.');
     }
   };
 
@@ -130,7 +130,7 @@ export default function Documents() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Documentação</h1>
+      <h1 className="text-2xl font-bold text-gray-800 mb-6">DocumentaÃ§Ã£o</h1>
 
       <div className="bg-white p-6 rounded-xl shadow-sm mb-8">
         <h2 className="text-lg font-semibold mb-4">Adicionar Documento</h2>
@@ -161,7 +161,7 @@ export default function Documents() {
               <option value="rg_cnh">RG ou CNH</option>
               <option value="art">ART</option>
               <option value="bill_generator">Conta Geradora</option>
-              <option value="bill_beneficiary">Conta Beneficiária</option>
+              <option value="bill_beneficiary">Conta BeneficiÃ¡ria</option>
               <option value="other">Outros</option>
             </select>
           </div>
@@ -181,7 +181,7 @@ export default function Documents() {
 
         {newDoc.project_id && (
           <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <h3 className="text-sm font-bold text-gray-700 mb-3">Status da Documentação (Projeto Selecionado)</h3>
+            <h3 className="text-sm font-bold text-gray-700 mb-3">Status da DocumentaÃ§Ã£o (Projeto Selecionado)</h3>
             <div className="flex flex-wrap gap-4 mb-4">
               {requiredTypes.map(type => {
                 const isPresent = selectedProjectDocs.some(d => d.type === type);
@@ -200,7 +200,7 @@ export default function Documents() {
                 className="px-4 py-2 mt-4 rounded font-bold text-sm flex items-center gap-2 transition-colors bg-green-600 text-white hover:bg-green-700 shadow-sm"
               >
                 <CheckCircle size={18} />
-                Confirmar Envios e Ativar Homologação
+                Confirmar Envios e Ativar HomologaÃ§Ã£o
               </button>
             )}
           </div>
@@ -212,10 +212,10 @@ export default function Documents() {
           <thead className="bg-gray-50 text-gray-600 font-medium border-b">
             <tr>
               <th className="p-4">Projeto</th>
-              <th className="p-4">Título</th>
+              <th className="p-4">TÃ­tulo</th>
               <th className="p-4">Enviado Por</th>
               <th className="p-4">Data</th>
-              <th className="p-4">Ações</th>
+              <th className="p-4">AÃ§Ãµes</th>
             </tr>
           </thead>
           <tbody>

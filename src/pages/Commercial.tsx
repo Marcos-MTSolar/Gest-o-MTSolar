@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+﻿import React, { useEffect, useState, useRef } from 'react';
 import api from '../lib/api';
 import { Plus, Search, FileText, CheckCircle, Clock, Upload, FileCheck, AlertCircle, Camera } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -50,10 +50,10 @@ export default function Commercial() {
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Valida documentos obrigatórios
+    // Valida documentos obrigatÃ³rios
     const docsAusentes = DOCS_OBRIGATORIOS.filter(d => !docFiles[d.id]);
     if (docsAusentes.length > 0) {
-      alert(`Documentos obrigatórios ausentes:\n${docsAusentes.map(d => `• ${d.label}`).join('\n')}`);
+      alert(`Documentos obrigatÃ³rios ausentes:\n${docsAusentes.map(d => `â€¢ ${d.label}`).join('\n')}`);
       return;
     }
 
@@ -141,7 +141,7 @@ export default function Commercial() {
 
   const handleDeleteProject = async () => {
     if (!selectedProject) return;
-    const confirmDelete = window.confirm(`Tem certeza que deseja remover o projeto e cadastro comercial deste cliente? Esta ação é irreversível.`);
+    const confirmDelete = window.confirm(`Tem certeza que deseja remover o projeto e cadastro comercial deste cliente? Esta aÃ§Ã£o Ã© irreversÃ­vel.`);
     if (!confirmDelete) return;
 
     try {
@@ -158,8 +158,8 @@ export default function Commercial() {
     const stages: { [key: string]: string } = {
       'pending': 'Pendente',
       'inspection': 'Vistoria',
-      'homologation': 'Homologação',
-      'conclusion': 'Conclusão',
+      'homologation': 'HomologaÃ§Ã£o',
+      'conclusion': 'ConclusÃ£o',
       'completed': 'Finalizado'
     };
     return stages[stage] || stage;
@@ -172,7 +172,7 @@ export default function Commercial() {
       'rejected': 'Reprovada',
       'in_progress': 'Em Andamento'
     };
-    return statuses[status] || 'Não iniciada';
+    return statuses[status] || 'NÃ£o iniciada';
   };
 
   return (
@@ -180,7 +180,7 @@ export default function Commercial() {
       {!selectedProject ? (
         <>
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">Área Comercial</h1>
+            <h1 className="text-2xl font-bold text-gray-800">Ãrea Comercial</h1>
             <button
               onClick={() => setShowNewClient(true)}
               className="bg-blue-900 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-800"
@@ -198,23 +198,23 @@ export default function Commercial() {
                   <input placeholder="CPF/CNPJ" className="border p-2 rounded" value={newClient.cpf_cnpj} onChange={e => setNewClient({ ...newClient, cpf_cnpj: e.target.value })} />
                   <input placeholder="Telefone" className="border p-2 rounded" value={newClient.phone} onChange={e => setNewClient({ ...newClient, phone: e.target.value })} />
                   <input placeholder="Email" className="border p-2 rounded" value={newClient.email} onChange={e => setNewClient({ ...newClient, email: e.target.value })} />
-                  <input placeholder="Endereço" className="border p-2 rounded md:col-span-2" value={newClient.address} onChange={e => setNewClient({ ...newClient, address: e.target.value })} />
+                  <input placeholder="EndereÃ§o" className="border p-2 rounded md:col-span-2" value={newClient.address} onChange={e => setNewClient({ ...newClient, address: e.target.value })} />
                   <input placeholder="Cidade" className="border p-2 rounded" value={newClient.city} onChange={e => setNewClient({ ...newClient, city: e.target.value })} />
                   <input placeholder="Estado" className="border p-2 rounded" value={newClient.state} onChange={e => setNewClient({ ...newClient, state: e.target.value })} />
 
-                  {/* SEÇÃO DOCUMENTOS */}
+                  {/* SEÃ‡ÃƒO DOCUMENTOS */}
                   <div className="md:col-span-2 mt-4">
-                    {/* Grupo 1 - Obrigatórios */}
+                    {/* Grupo 1 - ObrigatÃ³rios */}
                     <div className="flex items-center gap-2 mb-3">
                       <FileCheck size={18} className="text-blue-900" />
                       <h3 className="font-bold text-gray-800 text-sm">
-                        Documentos Obrigatórios <span className="text-red-500">*</span>
+                        Documentos ObrigatÃ³rios <span className="text-red-500">*</span>
                       </h3>
                     </div>
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex items-start gap-2">
                       <AlertCircle size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
                       <p className="text-xs text-amber-700">
-                        Estes documentos são obrigatórios para iniciar o processo de homologação.
+                        Estes documentos sÃ£o obrigatÃ³rios para iniciar o processo de homologaÃ§Ã£o.
                       </p>
                     </div>
                     <div className="grid grid-cols-1 gap-2 mb-6">
@@ -244,7 +244,7 @@ export default function Commercial() {
                                 }}
                                 className="mr-2 text-xs px-3 py-1.5 rounded-lg font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 flex items-center gap-1"
                               >
-                                <Camera size={14} /> Câmera
+                                <Camera size={14} /> CÃ¢mera
                               </button>
                             )}
                             <span className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
@@ -276,7 +276,7 @@ export default function Commercial() {
                       </h3>
                     </div>
                     <p className="text-xs text-gray-500 mb-3">
-                      Envie se disponível. Podem ser adicionados posteriormente.
+                      Envie se disponÃ­vel. Podem ser adicionados posteriormente.
                     </p>
                     <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-1">
                       {DOCS_OPCIONAIS.map(doc => (
@@ -305,7 +305,7 @@ export default function Commercial() {
                                 }}
                                 className="mr-2 text-xs px-3 py-1.5 rounded-lg font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 flex items-center gap-1"
                               >
-                                <Camera size={14} /> Câmera
+                                <Camera size={14} /> CÃ¢mera
                               </button>
                             )}
                             <span className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
@@ -334,7 +334,7 @@ export default function Commercial() {
                     <button type="button" onClick={() => setShowNewClient(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
                     <button type="submit" disabled={uploadingDocs} className="px-4 py-2 bg-blue-900 text-white rounded hover:bg-blue-800 disabled:opacity-50 flex items-center gap-2">
                       {uploadingDocs ? (
-                        <><span className="animate-spin">⏳</span> Enviando...</>
+                        <><span className="animate-spin">â³</span> Enviando...</>
                       ) : 'Salvar e Enviar Documentos'}
                     </button>
                   </div>
@@ -352,7 +352,7 @@ export default function Commercial() {
 
                   {p.commercial_status === 'pending' && p.commercial_pendencies && (
                     <p className="text-xs text-amber-700 mt-1 bg-amber-50 p-1 rounded inline-block border border-amber-200">
-                      <strong>Pendência:</strong> {p.commercial_pendencies}
+                      <strong>PendÃªncia:</strong> {p.commercial_pendencies}
                     </p>
                   )}
 
@@ -420,7 +420,7 @@ export default function Commercial() {
                 onClick={handleDeleteProject}
                 className="text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded border border-transparent hover:bg-red-50"
               >
-                Remover Desistência
+                Remover DesistÃªncia
               </button>
               <button onClick={() => setSelectedProject(null)} className="ml-2 bg-gray-200 text-gray-700 px-3 py-1 rounded hover:bg-gray-300 font-medium">Voltar</button>
             </div>
@@ -433,7 +433,7 @@ export default function Commercial() {
                 <p className="text-lg font-semibold text-blue-900">{translateStage(selectedProject.current_stage)}</p>
               </div>
               <div className="bg-gray-50 p-4 rounded-lg border">
-                <p className="text-xs text-gray-500 uppercase font-bold">Vistoria Técnica</p>
+                <p className="text-xs text-gray-500 uppercase font-bold">Vistoria TÃ©cnica</p>
                 <p className="text-lg font-semibold">{translateTechnicalStatus(selectedProject.technical_status)}</p>
               </div>
             </div>
@@ -447,9 +447,9 @@ export default function Commercial() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Forma de Pagamento</label>
                   <select name="payment_method" defaultValue={selectedProject.payment_method} className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-                    <option value="cash">À Vista</option>
+                    <option value="cash">Ã€ Vista</option>
                     <option value="financing">Financiamento</option>
-                    <option value="card">Cartão de Crédito</option>
+                    <option value="card">CartÃ£o de CrÃ©dito</option>
                   </select>
                 </div>
 
@@ -465,7 +465,7 @@ export default function Commercial() {
 
                 {selectedProject.payment_method === 'financing' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Carência do Financiamento (meses)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">CarÃªncia do Financiamento (meses)</label>
                     <input 
                       name="finance_grace_period" 
                       type="number"
@@ -477,15 +477,15 @@ export default function Commercial() {
                   </div>
                 )}
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Pendências (Restrições para fechar a venda)</label>
-                  <input name="pendencies" defaultValue={selectedProject.commercial_pendencies} placeholder="Ex: Cliente aguardando aprovação de crédito num banco" className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none border-amber-200 bg-amber-50" />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">PendÃªncias (RestriÃ§Ãµes para fechar a venda)</label>
+                  <input name="pendencies" defaultValue={selectedProject.commercial_pendencies} placeholder="Ex: Cliente aguardando aprovaÃ§Ã£o de crÃ©dito num banco" className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none border-amber-200 bg-amber-50" />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Observações Comerciais</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">ObservaÃ§Ãµes Comerciais</label>
                   <textarea name="notes" defaultValue={selectedProject.commercial_notes} className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" rows={4}></textarea>
                 </div>
 
-                {/* SEÇÃO FOTOS DE VISTORIA */}
+                {/* SEÃ‡ÃƒO FOTOS DE VISTORIA */}
                 <div className="md:col-span-2 border-t pt-6 mt-4">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
@@ -525,7 +525,7 @@ export default function Commercial() {
                             isUploadingPhoto ? 'bg-gray-100 border-gray-300' : 'bg-white border-blue-300 hover:bg-blue-50 hover:border-blue-400'
                           }`}>
                             {isUploadingPhoto ? (
-                              <span className="animate-spin text-blue-900">⏳</span>
+                              <span className="animate-spin text-blue-900">â³</span>
                             ) : (
                               <>
                                 <Plus size={24} className="text-blue-500 mb-1" />
@@ -567,7 +567,7 @@ export default function Commercial() {
                         )}
                       </div>
                       <p className="text-xs text-gray-500 italic">
-                        Tipos permitidos: JPG, PNG, WEBP. Máximo de 5 fotos.
+                        Tipos permitidos: JPG, PNG, WEBP. MÃ¡ximo de 5 fotos.
                       </p>
                     </div>
                   )}
@@ -597,13 +597,13 @@ export default function Commercial() {
               <input placeholder="CPF/CNPJ" className="border p-2 rounded" value={editClientData.cpf_cnpj} onChange={e => setEditClientData({ ...editClientData, cpf_cnpj: e.target.value })} />
               <input placeholder="Telefone" className="border p-2 rounded" value={editClientData.phone} onChange={e => setEditClientData({ ...editClientData, phone: e.target.value })} />
               <input placeholder="Email" className="border p-2 rounded" value={editClientData.email} onChange={e => setEditClientData({ ...editClientData, email: e.target.value })} />
-              <input placeholder="Endereço" className="border p-2 rounded md:col-span-2" value={editClientData.address} onChange={e => setEditClientData({ ...editClientData, address: e.target.value })} />
+              <input placeholder="EndereÃ§o" className="border p-2 rounded md:col-span-2" value={editClientData.address} onChange={e => setEditClientData({ ...editClientData, address: e.target.value })} />
               <input placeholder="Cidade" className="border p-2 rounded" value={editClientData.city} onChange={e => setEditClientData({ ...editClientData, city: e.target.value })} />
               <input placeholder="Estado" className="border p-2 rounded" value={editClientData.state} onChange={e => setEditClientData({ ...editClientData, state: e.target.value })} />
 
               <div className="md:col-span-2 flex justify-end gap-2 mt-4">
                 <button type="button" onClick={() => setShowEditClient(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-blue-900 text-white rounded hover:bg-blue-800">Salvar Alterações</button>
+                <button type="submit" className="px-4 py-2 bg-blue-900 text-white rounded hover:bg-blue-800">Salvar AlteraÃ§Ãµes</button>
               </div>
             </form>
           </div>
