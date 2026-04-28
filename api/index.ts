@@ -641,6 +641,43 @@ app.get('/api/stats', authenticateToken, async (req: any, res) => {
   });
 });
 
+// Stock
+app.get('/api/stock', authenticateToken, async (req: any, res) => {
+  const { data: items } = await supabase.from('stock_items').select('*').order('category', { ascending: true });
+  res.json(items || []);
+});
+
+app.post('/api/stock/withdraw', authenticateToken, async (req: any, res) => {
+  const { stock_item_id, quantity, installation_id, installation_name, technician_name, notes } = req.body;
+  
+  const { data, error } = await supabase.from('stock_withdrawals').insert({
+    stock_item_id,
+    quantity,
+    installation_id,
+    installation_name,
+    technician_name,
+    notes,
+    created_by: req.user.id
+  }).select().single();
+
+  if (error) return res.status(400).json({ error: error.message });
+  
+  broadcast('STOCK_UPDATED', { stock_item_id });
+  res.json(data);
+});
+
+app.put('/api/stock/:id', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'CEO' && req.user.role !== 'ADMIN') return res.sendStatus(403);
+  const { current_quantity, ideal_quantity, low_stock_threshold } = req.body;
+  
+  await supabase.from('stock_items')
+    .update({ current_quantity, ideal_quantity, low_stock_threshold, updated_at: new Date() })
+    .eq('id', req.params.id);
+    
+  broadcast('STOCK_UPDATED', { stock_item_id: req.params.id });
+  res.json({ success: true });
+});
+
 // Settings - accessible to all authenticated users
 app.get('/api/settings', authenticateToken, async (req: any, res) => {
   try {

@@ -17,7 +17,9 @@ import {
   Archive,
   Bell,
   Hammer,
-  Calendar
+  Calendar,
+  Package,
+  FileSpreadsheet
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
@@ -116,9 +118,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: 'Dashboard', path: '/', icon: LayoutDashboard, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Agenda', path: '/agenda', icon: Calendar, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Comercial', path: '/commercial', icon: Briefcase, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
+    { name: 'Gerador de Proposta', path: '/proposal-generator', icon: FileSpreadsheet, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Técnica', path: '/technical', icon: Wrench, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
     { name: 'Obra Finalizada', path: '/installation', icon: Hammer, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
     { name: 'Kit Solar', path: '/kit-purchase', icon: ShoppingCart, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
+    { name: 'Estoque', path: '/estoque', icon: Package, roles: ['CEO', 'ADMIN'] },
     ...(hasCompletedInspection ? [{ name: 'Homologação', path: '/homologation', icon: CheckSquare, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] }] : []),
     { name: 'Finalizados', path: '/finished', icon: Archive, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Mensagens', path: '/messages', icon: MessageSquare, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
@@ -246,6 +250,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           >
             {children}
           </motion.div>
+
+          <footer className="mt-8 border-t-2 border-amber-400 pt-3 pb-4 px-2">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm font-bold text-blue-900">MT SOLAR — ENERGIA RENOVÁVEL</p>
+                <p className="text-xs text-gray-600">mtsolar.energia@gmail.com | @mtsolar_</p>
+                <p className="text-xs text-gray-600">Rua Rossini Roosevelt de Albuquerque, nº10 - Piedade, Jaboatão dos Guararapes - PE</p>
+                <p className="text-xs text-gray-600">(81) 99700-3260 | (81) 99504-3980</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-gray-500">Sistema de Gestão</p>
+                <p className="text-sm font-bold text-blue-900">MT Solar © {new Date().getFullYear()}</p>
+              </div>
+            </div>
+          </footer>
         </main>
       </div>
 

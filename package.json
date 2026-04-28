@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx --watch api/index.ts",
-    "start": "tsx --watch api/index.ts",
+    "dev": "tsx --watch --watch-path api api/index.ts",
+    "start": "tsx --watch --watch-path api api/index.ts",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",

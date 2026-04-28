@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Component } from 'react';
 import axios from 'axios';
 import { CheckSquare, AlertTriangle, CheckCircle, FileText, ListChecks, Save, Lock, Unlock, Calendar } from 'lucide-react';
 
@@ -159,7 +159,7 @@ export default function Homologation() {
                   <p className="text-sm text-gray-500">{p.title}</p>
 
                   {/* Snippet de Observações na View Externa */}
-                  {p.homologation_observations && p.homologation_observations.trim() !== '' && (
+                  {typeof p.homologation_observations === 'string' && p.homologation_observations.trim() !== '' && (
                     <div className="mt-2 text-sm text-gray-600 bg-amber-50/50 p-2.5 rounded-lg border border-amber-100/50 flex items-start gap-2 max-w-2xl">
                       <FileText size={16} className="text-amber-500 mt-0.5 shrink-0" />
                       <span className="line-clamp-2 italic">"{p.homologation_observations}"</span>
@@ -191,9 +191,29 @@ export default function Homologation() {
                     setObservationsText(savedObs);
 
                     const savedChecklist = res.data.homologation_checklist;
-                    // REGRA RIGOROSA DO USUÁRIO: Utilizar do DB se houver, ou fallback.
-                    console.log('Checklist do Banco para projeto', p.id, ':', savedChecklist);
-                    const loadedChecklist = (Array.isArray(savedChecklist) && savedChecklist.length > 0) ? savedChecklist : defaultChecklist;
+                    
+                    // Parse if the backend returns as a string, or use directly if array
+                    let parsedChecklist: any[] = defaultChecklist;
+                    if (Array.isArray(savedChecklist) && savedChecklist.length > 0) {
+                      parsedChecklist = savedChecklist;
+                    } else if (typeof savedChecklist === 'string') {
+                      try {
+                        const arr = JSON.parse(savedChecklist);
+                        if (Array.isArray(arr) && arr.length > 0) {
+                          parsedChecklist = arr;
+                        }
+                      } catch (e) {
+                        console.error('Failed to parse homologation_checklist string', e);
+                      }
+                    }
+
+                    // Merging DB state with default checklist to cover dynamic additions or missing values
+                    const loadedChecklist = defaultChecklist.map(defaultItem => {
+                      const found = parsedChecklist.find((i: any) => i.id === defaultItem.id);
+                      return found ? { ...defaultItem, completed: Boolean(found.completed && found.completed !== 'false') } : defaultItem;
+                    });
+
+                    console.log('Checklist merged from DB for project', p.id, ':', loadedChecklist);
                     setChecklist(loadedChecklist);
 
                     const isComplete = loadedChecklist.every((item: any) => item.completed);
@@ -337,7 +357,7 @@ export default function Homologation() {
                           if (['rejected', 'waiting_inspection', 'performing_inspection', 'technical_analysis'].includes(opt.value)) {
                             setStatusNote(selectedProject.rejection_reason || '');
                             // Set default date to today to help UI if empty
-                            setStatusDate(selectedProject.homologation_expected_date ? selectedProject.homologation_expected_date.split('T')[0] : new Date().toISOString().split('T')[0]);
+                            setStatusDate(typeof selectedProject.homologation_expected_date === 'string' ? selectedProject.homologation_expected_date.split('T')[0] : new Date().toISOString().split('T')[0]);
                             setStatusModal({ projectId: selectedProject.id, status: opt.value, isOpen: true });
                           } else {
                             handleUpdate(selectedProject.id, opt.value, '');

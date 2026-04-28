@@ -21,6 +21,9 @@ import Documents from './pages/Documents';
 import KitPurchase from './pages/KitPurchase';
 import Homologation from './pages/Homologation';
 import FinishedProjects from './pages/FinishedProjects';
+import Stock from './pages/Stock';
+import ProposalGenerator from './pages/ProposalGenerator';
+
 
 function PrivateRoute({ children, roles }: { children: React.ReactNode, roles?: string[] }) {
   const { user, loading } = useAuth();
@@ -62,6 +65,13 @@ export default function App() {
               </PrivateRoute>
             } />
             
+            <Route path="/proposal-generator" element={
+              <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
+                <ProposalGenerator />
+              </PrivateRoute>
+            } />
+
+            
             <Route path="/technical" element={
               <PrivateRoute roles={['CEO', 'ADMIN', 'TECHNICAL']}>
                 <Technical />
@@ -83,6 +93,12 @@ export default function App() {
             <Route path="/kit-purchase" element={
               <PrivateRoute roles={['CEO', 'ADMIN']}>
                 <KitPurchase />
+              </PrivateRoute>
+            } />
+
+            <Route path="/estoque" element={
+              <PrivateRoute roles={['CEO', 'ADMIN']}>
+                <Stock />
               </PrivateRoute>
             } />
 
