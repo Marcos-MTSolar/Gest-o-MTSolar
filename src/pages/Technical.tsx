@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
-import { CheckCircle, AlertTriangle, Camera, Video, X } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Camera, Video, X, Trash2 } from 'lucide-react';
 
 export default function Technical() {
   const [projects, setProjects] = useState<any[]>([]);
@@ -119,6 +119,16 @@ export default function Technical() {
       // Fallback: use list-level data
       setSelectedProject(p);
       setSaveError('');
+    }
+  };
+
+  const handleDelete = async (id: number, clientName: string) => {
+    if (!window.confirm(`Tem certeza que deseja excluir o projeto de "${clientName}"? Esta ação não pode ser desfeita.`)) return;
+    try {
+      await axios.delete(`/api/projects/${id}`);
+      fetchProjects();
+    } catch (err) {
+      alert('Erro ao excluir projeto. Tente novamente.');
     }
   };
 
@@ -313,17 +323,26 @@ export default function Technical() {
                   </span>
                 </div>
               </div>
-              <button
-                onClick={async () => {
-                  // Fetch full details before editing
-                  const res = await axios.get(`/api/projects/${p.id}`);
-                  setSelectedProject(res.data);
-                  setIsReinforcementNeeded(res.data.reinforcement_needed === 1 || res.data.reinforcement_needed === true);
-                }}
-                className={`px-4 py-2 rounded text-white ${['approved', 'vistoria_concluida'].includes(p.technical_status) ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-900 hover:bg-blue-800'}`}
-              >
-                {['approved', 'vistoria_concluida'].includes(p.technical_status) ? 'Ver Detalhes' : 'Iniciar Vistoria'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    // Fetch full details before editing
+                    const res = await axios.get(`/api/projects/${p.id}`);
+                    setSelectedProject(res.data);
+                    setIsReinforcementNeeded(res.data.reinforcement_needed === 1 || res.data.reinforcement_needed === true);
+                  }}
+                  className={`px-4 py-2 rounded text-white ${['approved', 'vistoria_concluida'].includes(p.technical_status) ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-900 hover:bg-blue-800'}`}
+                >
+                  {['approved', 'vistoria_concluida'].includes(p.technical_status) ? 'Ver Detalhes' : 'Iniciar Vistoria'}
+                </button>
+                <button
+                  onClick={() => handleDelete(p.id, p.client_name)}
+                  className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Excluir projeto"
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
             </div>
           ))}
         </div>

@@ -523,13 +523,23 @@ export default function ProposalGenerator() {
             </table>
 
             <!-- RODAPÉ DA PÁGINA -->
-            <div style="border-top:2px solid #1e3a5f;padding-top:3mm;
-              display:flex;justify-content:space-between;align-items:center;">
-              <div style="font-size:8pt;color:#1e3a5f;font-weight:bold;">
-                MT SOLAR — ENERGIA RENOVÁVEL
-              </div>
-              <div style="font-size:7.5pt;color:#6b7280;">
-                mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99504-3980
+            <div style="border-top:3px solid #f59e0b;padding-top:4mm;margin-top:8mm;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <div style="font-size:9pt;font-weight:bold;color:#1e3a5f;">
+                    MT SOLAR — ENERGIA RENOVÁVEL</div>
+                  <div style="font-size:8pt;color:#6b7280;">
+                    mtsolar.energia@gmail.com | @mtsolar_</div>
+                  <div style="font-size:8pt;color:#6b7280;">
+                    Rua Rossini Roosevelt de Albuquerque, nº10 - Piedade, Jaboatão dos Guararapes - PE</div>
+                  <div style="font-size:8pt;color:#6b7280;">
+                    (81) 99700-3260 | (81) 99504-3980</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="color:#6b7280;font-size:8pt;">Nº da Proposta</div>
+                  <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
+                    PROP-${Date.now().toString().slice(-6)}</div>
+                </div>
               </div>
             </div>
 
@@ -643,13 +653,25 @@ export default function ProposalGenerator() {
                 período (convencionalmente, período de um mês).</p>
             </div>
 
-            <!-- RODAPÉ -->
-            <div style="border-top:2px solid #1e3a5f;padding-top:3mm;margin-top:5mm;
-              display:flex;justify-content:space-between;align-items:center;">
-              <div style="font-size:8pt;color:#1e3a5f;font-weight:bold;">
-                MT SOLAR — ENERGIA RENOVÁVEL</div>
-              <div style="font-size:7.5pt;color:#6b7280;">
-                mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99504-3980</div>
+            <!-- RODAPÉ DA PÁGINA -->
+            <div style="border-top:3px solid #f59e0b;padding-top:4mm;margin-top:8mm;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <div style="font-size:9pt;font-weight:bold;color:#1e3a5f;">
+                    MT SOLAR — ENERGIA RENOVÁVEL</div>
+                  <div style="font-size:8pt;color:#6b7280;">
+                    mtsolar.energia@gmail.com | @mtsolar_</div>
+                  <div style="font-size:8pt;color:#6b7280;">
+                    Rua Rossini Roosevelt de Albuquerque, nº10 - Piedade, Jaboatão dos Guararapes - PE</div>
+                  <div style="font-size:8pt;color:#6b7280;">
+                    (81) 99700-3260 | (81) 99504-3980</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="color:#6b7280;font-size:8pt;">Nº da Proposta</div>
+                  <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
+                    PROP-${Date.now().toString().slice(-6)}</div>
+                </div>
+              </div>
             </div>
 
           </div>
@@ -771,13 +793,25 @@ export default function ProposalGenerator() {
               <span>■ <span style="color:#fca5a5;font-weight:bold;">Período de retorno</span></span>
             </div>
 
-            <!-- RODAPÉ -->
-            <div style="border-top:2px solid #1e3a5f;padding-top:3mm;margin-top:4mm;
-              display:flex;justify-content:space-between;align-items:center;">
-              <div style="font-size:8pt;color:#1e3a5f;font-weight:bold;">
-                MT SOLAR — ENERGIA RENOVÁVEL</div>
-              <div style="font-size:7.5pt;color:#6b7280;">
-                mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99504-3980</div>
+            <!-- RODAPÉ DA PÁGINA -->
+            <div style="border-top:3px solid #f59e0b;padding-top:4mm;margin-top:8mm;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <div style="font-size:9pt;font-weight:bold;color:#1e3a5f;">
+                    MT SOLAR — ENERGIA RENOVÁVEL</div>
+                  <div style="font-size:8pt;color:#6b7280;">
+                    mtsolar.energia@gmail.com | @mtsolar_</div>
+                  <div style="font-size:8pt;color:#6b7280;">
+                    Rua Rossini Roosevelt de Albuquerque, nº10 - Piedade, Jaboatão dos Guararapes - PE</div>
+                  <div style="font-size:8pt;color:#6b7280;">
+                    (81) 99700-3260 | (81) 99504-3980</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="color:#6b7280;font-size:8pt;">Nº da Proposta</div>
+                  <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
+                    PROP-${Date.now().toString().slice(-6)}</div>
+                </div>
+              </div>
             </div>
 
           </div>
@@ -892,13 +926,25 @@ export default function ProposalGenerator() {
               </table>
             </div>
 
-            <!-- RODAPÉ -->
-            <div style="border-top:2px solid #1e3a5f;padding-top:3mm;margin-top:5mm;
-              display:flex;justify-content:space-between;align-items:center;">
-              <div style="font-size:8pt;color:#1e3a5f;font-weight:bold;">
-                MT SOLAR — ENERGIA RENOVÁVEL</div>
-              <div style="font-size:7.5pt;color:#6b7280;">
-                mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99504-3980</div>
+            <!-- RODAPÉ DA PÁGINA -->
+            <div style="border-top:3px solid #f59e0b;padding-top:4mm;margin-top:8mm;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <div style="font-size:9pt;font-weight:bold;color:#1e3a5f;">
+                    MT SOLAR — ENERGIA RENOVÁVEL</div>
+                  <div style="font-size:8pt;color:#6b7280;">
+                    mtsolar.energia@gmail.com | @mtsolar_</div>
+                  <div style="font-size:8pt;color:#6b7280;">
+                    Rua Rossini Roosevelt de Albuquerque, nº10 - Piedade, Jaboatão dos Guararapes - PE</div>
+                  <div style="font-size:8pt;color:#6b7280;">
+                    (81) 99700-3260 | (81) 99504-3980</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="color:#6b7280;font-size:8pt;">Nº da Proposta</div>
+                  <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
+                    PROP-${Date.now().toString().slice(-6)}</div>
+                </div>
+              </div>
             </div>
 
           </div>
