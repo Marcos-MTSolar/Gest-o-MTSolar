@@ -58,8 +58,16 @@ interface FormData {
   photos: string[];
   kitSupplier: string;
   financeGracePeriod: string;
-  estruturaMateriais: string[];
-  estruturaOutro: string;
+  estruturaItem1: string;
+  garantiaEstruturaItem1: string;
+  estruturaItem2: string;
+  garantiaEstruturaItem2: string;
+  estruturaItem3: string;
+  garantiaEstruturaItem3: string;
+  estruturaItem4: string;
+  garantiaEstruturaItem4: string;
+  estruturaItem5: string;
+  garantiaEstruturaItem5: string;
 }
 
 interface Results {
@@ -115,20 +123,6 @@ const AVAILABLE_SERVICES = [
   }
 ];
 
-const materiaisEstrutura = [
-  'Trilho de Alumínio',
-  'Parafuso Inox',
-  'Gancho para Telha Cerâmica',
-  'Gancho para Telha Metálica',
-  'Gancho para Telha Fibrocimento',
-  'Estrutura em Aço Galvanizado',
-  'Clipe de Fixação Alumínio',
-  'Mini-trilho Alumínio',
-  'Estrutura para Solo',
-  'Perfil de Alumínio',
-  'Parafuso de Aço Inox M8',
-  'Conectores de Aterramento',
-];
 
 export default function ProposalGenerator() {
   const { user } = useAuth();
@@ -166,8 +160,16 @@ export default function ProposalGenerator() {
     photos: [],
     kitSupplier: '',
     financeGracePeriod: '0',
-    estruturaMateriais: [],
-    estruturaOutro: ''
+    estruturaItem1: '',
+    garantiaEstruturaItem1: '',
+    estruturaItem2: '',
+    garantiaEstruturaItem2: '',
+    estruturaItem3: '',
+    garantiaEstruturaItem3: '',
+    estruturaItem4: '',
+    garantiaEstruturaItem4: '',
+    estruturaItem5: '',
+    garantiaEstruturaItem5: ''
   });
 
   const [results, setResults] = useState<Results>({
@@ -180,14 +182,6 @@ export default function ProposalGenerator() {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
 
-  const toggleMaterial = (material: string) => {
-    setFormData(prev => ({
-      ...prev,
-      estruturaMateriais: prev.estruturaMateriais.includes(material)
-        ? prev.estruturaMateriais.filter(m => m !== material)
-        : [...prev.estruturaMateriais, material]
-    }));
-  };
 
   const fetchHistory = async () => {
     try {
@@ -406,7 +400,8 @@ export default function ProposalGenerator() {
     const AZUL_CLARO = '#d6e4f0';
     const AMARELO = '#f59e0b';
     const CINZA = '#6b7280';
-    const proposalNumber = `PROP-${Date.now().toString().slice(-6)}`;
+    const propNumber = Date.now().toString().slice(-6);
+    const proposalNumber = `PROP-${propNumber}`;
     const dataGerada = new Date().toLocaleDateString('pt-BR');
     const validade = new Date();
     validade.setDate(validade.getDate() + 7);
@@ -456,12 +451,33 @@ export default function ProposalGenerator() {
     const gEstrutura      = formData.garantiaEstrutura       || '5';
     const gInstalacao     = formData.garantiaInstalacao      || '1';
 
+    // Variáveis para o Gráfico da Página 6
+    const maxVal6 = maxVal;
+    const meses6 = meses;
+    const paddingLeft = 52;  // espaço para labels do eixo Y
+    const paddingBottom = 22;
+    const chartAreaH = 120;
+    const chartAreaW = 430;
+    const svgW = paddingLeft + chartAreaW;
+    const svgH = chartAreaH + paddingBottom;
+
     // Monta lista de materiais da estrutura
-    const todosMateriais = [
-      ...formData.estruturaMateriais,
-      ...(formData.estruturaOutro ? [formData.estruturaOutro] : [])
-    ];
-    const temMateriais = todosMateriais.length > 0;
+    const itensEstrutura = ([1,2,3,4,5] as const)
+      .map(n => ({
+        nome: formData[`estruturaItem${n}`]?.trim() || '',
+        garantia: formData[`garantiaEstruturaItem${n}`]?.trim() || ''
+      }))
+      .filter(item => item.nome !== '');
+
+    const temItensEstrutura = itensEstrutura.length > 0;
+
+    const gEstruturaFinal = formData.garantiaEstrutura ||
+      (temItensEstrutura
+        ? (itensEstrutura
+            .map(i => Number(i.garantia))
+            .filter(n => n > 0)
+            .sort((a, b) => a - b)[0]?.toString() || '5')
+        : '5');
 
     const newWindow = window.open('', '_blank');
     if (!newWindow) return;
@@ -719,7 +735,7 @@ export default function ProposalGenerator() {
             <div style="text-align:right;">
               <div style="color:rgba(255,255,255,0.7);font-size:8pt;">Proposta Nº</div>
               <div style="color:#f59e0b;font-size:13pt;font-weight:bold;">
-                PROP-${Date.now().toString().slice(-6)}</div>
+                PROP-${propNumber}</div>
               <div style="color:rgba(255,255,255,0.7);font-size:8pt;">
                 ${new Date().toLocaleDateString('pt-BR')}</div>
             </div>
@@ -874,39 +890,48 @@ export default function ProposalGenerator() {
             <!-- ESTRUTURA + ELÉTRICA (linha extra) -->
             <table style="width:100%;border-collapse:separate;border-spacing:4mm 0;margin-bottom:5mm;">
               <tr>
-                <!-- ESTRUTURA DE FIXAÇÃO -->
                 <td style="width:50%;background:#fff8e7;border:2px solid #f59e0b;
                   border-radius:8px;padding:3mm 5mm;">
-                  <div style="font-size:9.5pt;font-weight:bold;color:#1e3a5f;margin-bottom:2mm;">
-                    🔩 Estrutura de Fixação
-                  </div>
+                  <div style="font-size:9.5pt;font-weight:bold;color:#1e3a5f;
+                    margin-bottom:2mm;">🔩 Estrutura de Fixação</div>
 
-                  ${temMateriais ? `
-                    <!-- LISTA DE MATERIAIS SELECIONADOS -->
-                    <div style="font-size:8.5pt;color:#6b7280;margin-bottom:2mm;">
-                      Materiais inclusos:</div>
-                    <div style="display:flex;flex-wrap:wrap;gap:2mm;">
-                      ${todosMateriais.map(m => `
-                        <span style="background:#1e3a5f;color:#f59e0b;border-radius:20px;
-                          padding:0.5mm 3mm;font-size:8pt;font-weight:bold;">${m}</span>
+                  ${temItensEstrutura ? `
+                    <table style="width:100%;border-collapse:collapse;font-size:8.5pt;
+                      margin-bottom:2mm;">
+                      <tr style="background:#1e3a5f;">
+                        <th style="padding:1.5mm 2mm;text-align:left;color:#f59e0b;
+                          font-weight:bold;border-radius:3px 0 0 3px;width:70%;">
+                          Material</th>
+                        <th style="padding:1.5mm 2mm;text-align:center;color:#fff;
+                          border-radius:0 3px 3px 0;">Garantia</th>
+                      </tr>
+                      ${itensEstrutura.map((item, idx) => `
+                        <tr style="background:${idx % 2 === 0 ? '#fff' : '#fffbeb'};">
+                          <td style="padding:1.5mm 2mm;color:#374151;
+                            border-bottom:1px solid #fde68a;">${item.nome}</td>
+                          <td style="padding:1.5mm 2mm;text-align:center;
+                            border-bottom:1px solid #fde68a;">
+                            <span style="background:#dcfce7;color:#166534;
+                              border-radius:3px;padding:0.3mm 2mm;font-weight:bold;">
+                              ${item.garantia || gEstruturaFinal} Anos
+                            </span>
+                          </td>
+                        </tr>
                       `).join('')}
-                    </div>
+                    </table>
                   ` : `
-                    <!-- PADRÃO QUANDO NENHUM MATERIAL FOI INFORMADO -->
                     <div style="font-size:9pt;color:#374151;">
-                      Conforme tipo de telhado/solo do projeto
-                    </div>
-                    <div style="font-size:8.5pt;color:#6b7280;margin-top:1mm;">
-                      Inclui todos os materiais necessários para fixação adequada dos módulos.
-                    </div>
+                      Conforme tipo de telhado/solo do projeto</div>
+                    <div style="font-size:8pt;color:#6b7280;margin-top:1mm;">
+                      Inclui todos os materiais necessários para a fixação dos módulos.</div>
                   `}
 
-                  <div style="display:flex;justify-content:space-between;
-                    align-items:center;margin-top:2mm;">
-                    <span style="font-size:8.5pt;color:#6b7280;">Garantia da estrutura:</span>
+                  <div style="display:flex;justify-content:space-between;align-items:center;
+                    margin-top:2mm;padding-top:2mm;border-top:1px solid #f59e0b55;">
+                    <span style="font-size:8.5pt;color:#6b7280;">Garantia geral:</span>
                     <span style="background:#dcfce7;color:#166534;border-radius:4px;
                       padding:0.5mm 2mm;font-size:8.5pt;font-weight:bold;">
-                      ${gEstrutura} Anos</span>
+                      ${gEstruturaFinal} Anos</span>
                   </div>
                 </td>
                 <td style="width:50%;background:#fff8e7;border:2px solid #f59e0b;
@@ -1009,23 +1034,53 @@ export default function ProposalGenerator() {
 
             <!-- GRÁFICO SVG -->
             <div style="width:100%; height:180px; position:relative; margin-bottom: 10mm;">
-              <svg width="100%" height="160" viewBox="0 0 500 160" preserveAspectRatio="none">
-                <!-- Linhas de grade horizontais -->
-                <line x1="0" y1="20" x2="500" y2="20" stroke="#f1f5f9" stroke-width="0.5" stroke-dasharray="2,2" />
-                <line x1="0" y1="60" x2="500" y2="60" stroke="#f1f5f9" stroke-width="0.5" stroke-dasharray="2,2" />
-                <line x1="0" y1="100" x2="500" y2="100" stroke="#f1f5f9" stroke-width="0.5" stroke-dasharray="2,2" />
-                <line x1="0" y1="140" x2="500" y2="140" stroke="#1e3a5f" stroke-width="1" />
+              <svg width="${svgW}" height="${svgH}"
+                viewBox="0 0 ${svgW} ${svgH}"
+                style="width:100%;max-width:${svgW}px;display:block;margin:0 auto;"
+                xmlns="http://www.w3.org/2000/svg">
 
-                ${meses.map((mes, i) => {
-                  const xBase = i * 40 + 10;
-                  const hConsumo = (consumoMensal / maxVal) * 120;
-                  const hGeracao = (geracaoMes[i] / maxVal) * 120;
+                <!-- LINHAS DE GRADE E LABELS DO EIXO Y -->
+                ${Array.from({length: 6}, (_, step) => {
+                  const valor = Math.round((maxVal6 / 5) * step);
+                  const y = chartAreaH - Math.round((valor / maxVal6) * chartAreaH);
                   return `
-                    <rect x="${xBase}" y="${140 - hConsumo}" width="16" height="${hConsumo}" fill="#d6e4f0" rx="2" />
-                    <rect x="${xBase + 18}" y="${140 - hGeracao}" width="16" height="${hGeracao}" fill="#1e3a5f" rx="2" />
-                    <text x="${xBase + 17}" y="155" font-size="7" text-anchor="middle" fill="#6b7280">${mes}</text>
+                    <line x1="${paddingLeft}" y1="${y}" x2="${paddingLeft + chartAreaW}" y2="${y}"
+                      stroke="#e5e7eb" stroke-width="1" stroke-dasharray="${step === 0 ? 'none' : '3,2'}"/>
+                    <text x="${paddingLeft - 4}" y="${y + 3.5}"
+                      font-size="7.5" text-anchor="end" fill="#6b7280"
+                      font-family="Arial">${valor}</text>
                   `;
                 }).join('')}
+
+                <!-- LABEL DO EIXO Y -->
+                <text x="8" y="${chartAreaH / 2}"
+                  font-size="7" text-anchor="middle" fill="#6b7280"
+                  font-family="Arial" transform="rotate(-90, 8, ${chartAreaH / 2})">kWh</text>
+
+                <!-- BARRAS -->
+                ${meses6.map((mes, i) => {
+                  const xBase = paddingLeft + i * (chartAreaW / 12) + 2;
+                  const barW = Math.floor((chartAreaW / 12) - 6);
+                  const hConsumo = Math.round((consumoMensal / maxVal6) * chartAreaH);
+                  const hGeracao = Math.round((geracaoMes[i] / maxVal6) * chartAreaH);
+                  return `
+                    <rect x="${xBase}" y="${chartAreaH - hConsumo}"
+                      width="${Math.floor(barW / 2) - 1}" height="${hConsumo}"
+                      fill="#d6e4f0" rx="2"/>
+                    <rect x="${xBase + Math.floor(barW / 2) + 1}" y="${chartAreaH - hGeracao}"
+                      width="${Math.floor(barW / 2) - 1}" height="${hGeracao}"
+                      fill="#1e3a5f" rx="2"/>
+                    <text x="${xBase + Math.floor(barW / 2)}" y="${chartAreaH + 14}"
+                      font-size="7" text-anchor="middle"
+                      fill="#6b7280" font-family="Arial">${mes}</text>
+                  `;
+                }).join('')}
+
+                <!-- LINHA BASE DO EIXO X -->
+                <line x1="${paddingLeft}" y1="${chartAreaH}"
+                  x2="${paddingLeft + chartAreaW}" y2="${chartAreaH}"
+                  stroke="#1e3a5f" stroke-width="1.5"/>
+
               </svg>
             </div>
 
@@ -1292,19 +1347,25 @@ export default function ProposalGenerator() {
                       color:#9ca3af;">—</td>
                   </tr>
                   <tr style="background:#f8fafc;">
-                    <td style="padding:2.5mm 4mm;color:#374151;border-bottom:1px solid #e5e7eb;">
+                    <td style="padding:2.5mm 4mm;color:#374151;
+                      border-bottom:1px solid #e5e7eb;vertical-align:top;">
                       Estrutura de Fixação
-                      ${temMateriais ? `
-                        <div style="font-size:8pt;color:#6b7280;margin-top:1mm;">
-                          ${todosMateriais.slice(0,3).join(' · ')}
-                          ${todosMateriais.length > 3 ? ` · +${todosMateriais.length - 3} mais` : ''}
+                      ${temItensEstrutura ? `
+                        <div style="font-size:7.5pt;color:#6b7280;margin-top:1mm;
+                          line-height:1.6;">
+                          ${itensEstrutura.map(i =>
+                            `${i.nome}${i.garantia ? ' (' + i.garantia + ' anos)' : ''}`
+                          ).join('<br/>')}
                         </div>` : ''}
                     </td>
-                    <td style="padding:2.5mm 4mm;text-align:center;border-bottom:1px solid #e5e7eb;">
+                    <td style="padding:2.5mm 4mm;text-align:center;
+                      border-bottom:1px solid #e5e7eb;vertical-align:top;">
                       <span style="background:#dcfce7;color:#166534;border-radius:4px;
-                        padding:0.5mm 3mm;font-weight:bold;">${gEstrutura} Anos</span></td>
-                    <td style="padding:2.5mm 4mm;text-align:center;border-bottom:1px solid #e5e7eb;
-                      color:#9ca3af;">—</td>
+                        padding:0.5mm 3mm;font-weight:bold;">
+                        ${gEstruturaFinal} Anos</span>
+                    </td>
+                    <td style="padding:2.5mm 4mm;text-align:center;
+                      border-bottom:1px solid #e5e7eb;color:#9ca3af;">—</td>
                   </tr>
                   <tr>
                     <td style="padding:2.5mm 4mm;color:#374151;">Instalação Elétrica</td>
@@ -1406,16 +1467,12 @@ export default function ProposalGenerator() {
                 <div style="text-align:right;">
                   <div style="color:#6b7280;font-size:8pt;">Nº da Proposta</div>
                   <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
-                    PROP-${Date.now().toString().slice(-6)}</div>
+                    PROP-${propNumber}
+                  </div>
                 </div>
               </div>
             </div>
 
-          </div>
-        </div>
-ld; color:${AZUL}; font-size:9pt;">MT SOLAR - ENERGIA RENOVÁVEL</div>
-            <div style="font-size:8pt; color:${CINZA}; margin-top:1mm;">mtsolar.energia@gmail.com | @mtsolar_ | (81) 99700-3260 | (81) 99504-3980</div>
-            <div style="font-size:8pt; color:${CINZA}; margin-top:1mm;">Número da proposta: ${proposalNumber}</div>
           </div>
         </div>
       </body>
@@ -1424,7 +1481,7 @@ ld; color:${AZUL}; font-size:9pt;">MT SOLAR - ENERGIA RENOVÁVEL</div>
 
     newWindow.document.write(htmlContent);
     newWindow.document.close();
-    setTimeout(() => { newWindow.print(); }, 1500);
+    setTimeout(() => { newWindow.print(); }, 2000);
   };
 
   const tabs = [
@@ -2037,62 +2094,53 @@ ld; color:${AZUL}; font-size:9pt;">MT SOLAR - ENERGIA RENOVÁVEL</div>
                   <Layers className="w-5 h-5" />
                   Materiais da Estrutura de Fixação
                 </h3>
-                <p className="text-sm text-gray-400 mb-2">Selecione os materiais utilizados na estrutura. Se nenhum for marcado, a proposta exibirá apenas 'Estrutura de Fixação' como padrão.</p>
+                <p className="text-sm text-gray-400 mb-3">
+                  Digite os materiais utilizados conforme exigência bancária. Cada item pode ter sua própria garantia. Deixe em branco para exibir apenas 'Estrutura de Fixação' na proposta.
+                </p>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 my-4">
-                  {materiaisEstrutura.map(material => {
-                    const isSelected = formData.estruturaMateriais.includes(material);
-                    return (
-                      <label 
-                        key={material}
-                        className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${
-                          isSelected 
-                            ? 'border-blue-500 bg-blue-50 text-blue-900' 
-                            : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300'
-                        }`}
-                      >
+                <div className="space-y-3">
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <div key={n} className="flex gap-3 items-end mb-2">
+                      <div className="flex-1 space-y-1">
+                        <label className="text-xs text-gray-500">Material {n}</label>
                         <input 
-                          type="checkbox"
-                          className="hidden"
-                          checked={isSelected}
-                          onChange={() => toggleMaterial(material)}
+                          type="text" 
+                          value={formData[`estruturaItem${n}` as keyof FormData] as string}
+                          onChange={(e) => updateForm(`estruturaItem${n}` as keyof FormData, e.target.value)}
+                          className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                          placeholder="Ex: Trilho de Alumínio 40x40"
                         />
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${
-                          isSelected ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'
-                        }`}>
-                          {isSelected && <Check size={10} className="text-white" />}
-                        </div>
-                        <span className="text-xs font-medium">{material}</span>
-                      </label>
-                    );
-                  })}
+                      </div>
+                      <div className="w-32 space-y-1">
+                        <label className="text-xs text-gray-500">Garantia (anos)</label>
+                        <input 
+                          type="number" 
+                          min="0"
+                          max="50"
+                          value={formData[`garantiaEstruturaItem${n}` as keyof FormData] as string}
+                          onChange={(e) => updateForm(`garantiaEstruturaItem${n}` as keyof FormData, e.target.value)}
+                          className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                          placeholder="Ex: 10"
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
-                <div className="space-y-1 mt-4">
-                  <label className="text-sm font-medium text-gray-700">Outro material (opcional)</label>
-                  <input 
-                    type="text" 
-                    value={formData.estruturaOutro}
-                    onChange={(e) => updateForm('estruturaOutro', e.target.value)}
-                    className={inputStyle}
-                    placeholder="Ex: Perfil Z de aço carbono"
-                  />
-                </div>
-
-                {(formData.estruturaMateriais.length > 0 || formData.estruturaOutro) && (
+                {([1, 2, 3, 4, 5].some(n => formData[`estruturaItem${n}` as keyof FormData])) && (
                   <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
-                    <p className="text-sm font-bold text-blue-900 mb-2">Materiais selecionados:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {formData.estruturaMateriais.map(m => (
-                        <span key={m} className="bg-blue-900 text-white text-[10px] px-2 py-1 rounded-full uppercase font-bold">
-                          {m}
-                        </span>
-                      ))}
-                      {formData.estruturaOutro && (
-                        <span className="bg-amber-500 text-white text-[10px] px-2 py-1 rounded-full uppercase font-bold">
-                          {formData.estruturaOutro}
-                        </span>
-                      )}
+                    <p className="text-sm font-bold text-blue-900 mb-2">Materiais que aparecerão na proposta:</p>
+                    <div className="space-y-1">
+                      {[1, 2, 3, 4, 5].map(n => {
+                        const material = formData[`estruturaItem${n}` as keyof FormData] as string;
+                        const garantia = formData[`garantiaEstruturaItem${n}` as keyof FormData] as string;
+                        if (!material) return null;
+                        return (
+                          <div key={n} className="text-sm text-gray-700">
+                            • {material} — Garantia: {garantia || 'padrão'} {garantia ? 'anos' : ''}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
