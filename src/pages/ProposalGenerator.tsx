@@ -1381,8 +1381,17 @@ export default function ProposalGenerator() {
             <!-- RODAPÉ -->
             <div style="border-top:2px solid #1e3a5f;padding-top:3mm;margin-top:5mm;
               display:flex;justify-content:space-between;align-items:center;">
-            <!-- PÁGINA 9: CONSIDERAÇÕES FINAIS E VALIDADE -->
-        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
+              <div style="font-size:8pt;color:#1e3a5f;font-weight:bold;">
+                MT SOLAR — ENERGIA RENOVÁVEL</div>
+              <div style="font-size:7.5pt;color:#6b7280;">
+                mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99504-3980</div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- PÁGINA 9: CONSIDERAÇÕES FINAIS E VALIDADE -->
+        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:auto;
           box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
 
           <!-- FAIXA TOPO -->
