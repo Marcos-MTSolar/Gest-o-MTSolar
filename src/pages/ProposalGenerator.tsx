@@ -373,25 +373,17 @@ export default function ProposalGenerator() {
   };
 
   const generatePDF = async () => {
-    if (!formData.clientName || !formData.kitCost) {
-      alert('Preencha os dados do cliente e do kit antes de gerar a proposta.');
-      return;
-    }
-
-    const proposalNumber = `PROP-${Date.now().toString().slice(-6)}`;
-    
-    // Salvar no histórico antes de qualquer coisa
-    await saveToHistory(proposalNumber);
-
     const AZUL = '#1e3a5f';
     const AZUL_CLARO = '#d6e4f0';
     const AMARELO = '#f59e0b';
     const CINZA = '#6b7280';
+    const proposalNumber = `PROP-${Date.now().toString().slice(-6)}`;
+    const dataGerada = new Date().toLocaleDateString('pt-BR');
+    const validade = new Date();
+    validade.setDate(validade.getDate() + 7);
+    const dataValidade = validade.toLocaleDateString('pt-BR');
 
-    const newWindow = window.open('', '_blank');
-    if (!newWindow) return;
-
-    // Cálculos para o gráfico da Página 4
+    // Cálculos para a Página 4
     const monthlyBillVal = Number(formData.monthlyBill) || 450;
     const energyRateVal = Number(formData.energyRate) || 0.85;
     const consumoMensal = Math.round(monthlyBillVal / energyRateVal);
@@ -401,7 +393,7 @@ export default function ProposalGenerator() {
     const geracaoMes = fatorSazonalidade.map(f => Math.round(kitPowerVal * 30 * 4.5 * f));
     const maxVal = Math.max(consumoMensal, ...geracaoMes) + 100;
 
-    // Cálculos para Página 5: Indicadores de Viabilidade
+    // Cálculos para a Página 5
     const saleP = results.salePrice || (Number(formData.kitCost) * (1 + Number(formData.marginPercent)/100));
     const annualSav = results.annualSavings;
     const reajusteAnual = 0.10; // 10% ao ano
@@ -409,7 +401,8 @@ export default function ProposalGenerator() {
     const paybackAnos = Math.floor(paybackMeses / 12);
     const paybackMesesRest = Math.round(paybackMeses % 12);
     const roi = annualSav > 0 ? (annualSav * 25 / saleP).toFixed(2) : '0';
-
+    const tir = annualSav > 0 ? ((annualSav / saleP) * 100).toFixed(2) : '0';
+    
     let economiaTotal25 = 0;
     let fluxoCaixa = [];
     let acumulado = -saleP;
@@ -419,22 +412,16 @@ export default function ProposalGenerator() {
       acumulado += economiaAno;
       fluxoCaixa.push(acumulado);
     }
-
-    const gModuloDefeito  = formData.garantiaModuloDefeito  || '10';
-    const gModuloEfic     = formData.garantiaModuloEficiencia || '25';
-    const gInversor       = formData.garantiaInversorDefeito || '10';
-    const gEstrutura      = formData.garantiaEstrutura       || '5';
-    const gInstalacao     = formData.garantiaInstalacao      || '1';
-
+    
     const geracaoAnual = kitPowerVal * 365 * 4.5;
     const custokWh = geracaoAnual > 0 ? (saleP / (geracaoAnual * 25)).toFixed(2) : '0';
-
-    const dataGerada = new Date().toLocaleDateString('pt-BR');
-    const dataValidade = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR');
+    const economiakWh = (Number(formData.energyRate) - Number(custokWh)).toFixed(2);
     
-    const maxFluxo = Math.max(...fluxoCaixa);
-    const minFluxo = Math.min(...fluxoCaixa);
-    const rangeFluxo = maxFluxo - minFluxo;
+    const maxFC = Math.max(...fluxoCaixa);
+    const minFC = Math.min(...fluxoCaixa);
+
+    const newWindow = window.open('', '_blank');
+    if (!newWindow) return;
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -444,322 +431,634 @@ export default function ProposalGenerator() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Proposta Comercial MT Solar</title>
         <style>
-          body { margin: 0; padding: 0; font-family: Arial, sans-serif; background: #fff; color: #333; }
+          body { margin: 0; padding: 0; font-family: Arial, sans-serif; background: #fff; }
           .page { 
             width: 210mm; 
-            height: 297mm; 
+            min-height: 297mm; 
             margin: 0 auto; 
             page-break-after: always; 
             position: relative; 
             overflow: hidden; 
             box-sizing: border-box; 
-            background: #fff;
           }
-          .sidebar { position: absolute; left: 0; top: 0; bottom: 0; width: 12mm; background: ${AZUL}; z-index: 5; }
-          .top-bar { position: absolute; left: 0; right: 0; top: 0; height: 10mm; background: ${AZUL}; display: flex; align-items: center; padding-left: 20mm; color: #fff; font-size: 8pt; font-weight: bold; letter-spacing: 1px; z-index: 6; }
-          .grid-background { position: absolute; inset: 0; background-image: radial-gradient(#e2e8f0 0.5px, transparent 0.5px); background-size: 10mm 10mm; z-index: 1; }
-          .content-area { position: relative; z-index: 10; padding: 20mm 20mm 20mm 28mm; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; }
-          .section-title { font-size: 18pt; font-weight: 900; color: ${AZUL}; margin-bottom: 4mm; border-bottom: 3px solid ${AMARELO}; display: inline-block; padding-bottom: 1mm; }
-          .card { background: #fff; border: 1px solid ${AZUL_CLARO}; border-radius: 8px; padding: 5mm; margin-bottom: 5mm; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 4mm; }
-          th { text-align: left; font-size: 9pt; color: ${CINZA}; text-transform: uppercase; padding: 2mm; border-bottom: 1px solid #eee; }
-          td { padding: 2mm; font-size: 10pt; border-bottom: 1px solid #f9f9f9; }
-          .highlight { color: ${AZUL}; font-weight: bold; }
           @media print {
             @page { size: A4; margin: 0; }
             body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .page { box-shadow: none; margin: 0; }
+            img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+
+          /* PÁGINA 1: CAPA */
+          .sidebar-capa { 
+            position: absolute; 
+            left: 0; 
+            top: 0; 
+            width: 18mm; 
+            height: 100%; 
+            background: ${AZUL}; 
+          }
+          .top-bar-capa { 
+            width: 100%; 
+            height: 14mm; 
+            background: #fff; 
+            border-bottom: 2px solid ${AZUL_CLARO}; 
+            display: flex; 
+            align-items: center; 
+            padding-left: 24mm; 
+          }
+          .top-bar-text { 
+            font-size: 9pt; 
+            color: ${AZUL}; 
+            font-weight: bold; 
+            letter-spacing: 2px; 
+          }
+          .grid-bg { 
+            position: absolute; 
+            top: 0; 
+            left: 18mm; 
+            right: 0; 
+            bottom: 0; 
+            background-image: linear-gradient(${AZUL_CLARO}22 1px, transparent 1px), linear-gradient(90deg, ${AZUL_CLARO}22 1px, transparent 1px);
+            background-size: 20mm 20mm;
+            opacity: 0.5;
+          }
+          .capa-content { 
+            position: relative; 
+            padding-left: 28mm; 
+            margin-top: 60mm; 
+          }
+          .capa-title { 
+            margin-top: 20mm; 
+          }
+          .capa-title span { 
+            font-size: 52pt; 
+            font-weight: 900; 
+            color: ${AZUL}; 
+            line-height: 1.1; 
+            display: block; 
+          }
+          .capa-footer { 
+            position: absolute; 
+            bottom: 12mm; 
+            left: 28mm; 
+            font-size: 9pt; 
+            color: ${CINZA}; 
+            line-height: 1.8; 
+          }
+
+          /* ESTILOS PÁGINAS INTERNAS */
+          .header-interna {
+            width: 100%;
+            border-bottom: 2px solid ${AZUL};
+            margin-bottom: 6mm;
+            padding-bottom: 2mm;
+          }
+          .footer-interna {
+            border-top: 2px solid ${AZUL};
+            padding-top: 3mm;
+            margin-top: auto;
+            font-size: 8pt;
+            color: ${CINZA};
+          }
+
+          /* PÁGINA 2: SOBRE NÓS */
+          .page-sobre {
+            padding: 16mm 16mm 16mm 28mm;
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+          }
+          .header-sobre {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .header-sobre h1 {
+            font-size: 18pt;
+            font-weight: 900;
+            color: ${AZUL};
+            margin: 0;
+          }
+          .separator-sobre {
+            border-bottom: 3px solid ${AZUL};
+            margin-bottom: 6mm;
+            margin-top: 2mm;
+          }
+          .texto-sobre {
+            font-size: 10pt;
+            color: #333;
+            line-height: 1.8;
+            text-align: justify;
+          }
+          .cards-sobre {
+            margin-top: 8mm;
+            width: 100%;
+            border-collapse: collapse;
+          }
+          .card-item {
+            padding: 6mm;
+            text-align: center;
+            width: 33.33%;
+          }
+          .card-title {
+            font-size: 16pt;
+            font-weight: 900;
+            color: ${AZUL};
+            margin-bottom: 2mm;
+          }
+          .section-title-sobre {
+            font-size: 12pt;
+            font-weight: 900;
+            color: ${AZUL};
+            margin-top: 8mm;
+          }
+          .separator-light {
+            border-bottom: 2px solid ${AZUL_CLARO};
+            margin-bottom: 4mm;
+            margin-top: 1mm;
+          }
+          .map-container {
+            width: 100%;
+            border-collapse: collapse;
+          }
+
+          /* PÁGINA 3: CLIENTE + EQUIPAMENTOS */
+          .page-equip {
+            padding: 16mm;
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+          }
+          .card-cliente {
+            background: ${AZUL_CLARO}33;
+            border-left: 4px solid ${AZUL};
+            border-radius: 4px;
+            padding: 4mm 6mm;
+            margin-bottom: 6mm;
+          }
+          .equip-table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          .equip-col {
+            width: 50%;
+            vertical-align: top;
+            padding-right: 4mm;
+          }
+          .equip-item {
+            margin-bottom: 2mm;
+            font-size: 10pt;
+          }
+          .equip-label {
+            color: ${CINZA};
+          }
+          .equip-value {
+            font-weight: bold;
+            color: ${AZUL};
+          }
+
+          /* PÁGINA 4: INFORMAÇÕES DO SISTEMA */
+          .page-info-sistema {
+            padding: 16mm;
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+          }
+          .card-dados-sistema {
+            background: #fff;
+            border: 1px solid ${AZUL_CLARO};
+            border-radius: 6px;
+            padding: 4mm 8mm;
+            margin-bottom: 6mm;
+          }
+          .legenda-item {
+            font-size: 9pt;
+            color: ${CINZA};
+            margin-top: 2mm;
+            line-height: 1.4;
           }
         </style>
       </head>
       <body>
         <!-- PÁGINA 1: CAPA -->
-        <div class="page" style="display:flex; flex-direction:column; justify-content:space-between; padding:20mm; background: linear-gradient(135deg, #f8fafc 0%, #e8f4fd 100%);">
-          <div class="grid-background" style="left:0; opacity: 0.3;"></div>
-          <div style="border-bottom: 3px solid #1e3a5f; padding-bottom: 4mm; position: relative; z-index: 10;">
-            <div style="font-size: 14pt; font-weight: 900; color: #1e3a5f; letter-spacing: 2px;">MT SOLAR — ENERGIA RENOVÁVEL</div>
-          </div>
-          <div style="text-align: center; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10mm; position: relative; z-index: 10;">
-            <div style="width: 60mm; height: 60mm; background: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(30,58,95,0.15); border: 4px solid #f59e0b;">
-              <div style="text-align: center;">
-                <div style="font-size: 24pt; font-weight: 900; color: #1e3a5f; line-height: 1;">MT</div>
-                <div style="font-size: 24pt; font-weight: 900; color: #f59e0b; line-height: 1;">SOLAR</div>
-              </div>
-            </div>
-            <div style="height: 2px; width: 40mm; background: #f59e0b; border-radius: 2px;"></div>
-            <div style="font-size: 14pt; color: #6b7280; font-weight: bold;">
-              Preparada para: <span style="color: #1e3a5f;">${formData.clientName || 'Cliente'}</span>
-            </div>
-            <div style="font-size: 10pt; color: ${CINZA}; margin-top: 4mm;">Ref: ${proposalNumber} | Data: ${dataGerada}</div>
-          </div>
-          <div style="border-top: 2px solid #f59e0b; padding-top: 6mm; text-align: center; font-size: 9pt; color: #6b7280; position: relative; z-index: 10;">
-            <div>mtsolar.energia@gmail.com | @mtsolar_</div>
-            <div style="margin-top: 2mm; font-weight: bold; color: #1e3a5f;">(81) 99700-3260 | (81) 99504-3980</div>
-          </div>
+        <div style="width:210mm;height:297mm;margin:0 auto;page-break-after:always;overflow:hidden;position:relative;">
+          <img src="/Pag__1.jpeg" style="width:100%;height:100%;object-fit:cover;display:block;" />
         </div>
 
         <!-- PÁGINA 2: SOBRE NÓS -->
-        <div class="page">
-          <div class="sidebar"></div>
-          <div class="top-bar"><span>MT SOLAR — SOBRE NÓS</span></div>
-          <div class="content-area">
-            <div class="section-title">Sobre Nós</div>
-            <p style="font-size: 11pt; line-height: 1.6; text-align: justify; color: #444;">
-              Somos uma empresa integradora de sistemas de energia solar fotovoltaica, fundamentada em valores cristãos que norteiam nossas ações com ética, transparência e respeito ao próximo. Nosso objetivo é proporcionar a maior economia possível na conta de energia para nossos clientes, através de soluções de engenharia de alta performance e equipamentos de primeira linha.
-            </p>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4mm; margin-top: 10mm;">
-              <div class="card" style="text-align: center;">
-                <div style="font-weight: bold; color: ${AZUL}; margin-bottom: 2mm;">Missão</div>
-                <div style="font-size: 9pt;">Levar economia e sustentabilidade através da energia solar.</div>
-              </div>
-              <div class="card" style="text-align: center;">
-                <div style="font-weight: bold; color: ${AZUL}; margin-bottom: 2mm;">Visão</div>
-                <div style="font-size: 9pt;">Ser referência em energia renovável no Nordeste.</div>
-              </div>
-              <div class="card" style="text-align: center;">
-                <div style="font-weight: bold; color: ${AZUL}; margin-bottom: 2mm;">Valores</div>
-                <div style="font-size: 9pt;">Ética, Transparência e Compromisso com o Cliente.</div>
-              </div>
+        <div style="width:210mm;height:297mm;margin:0 auto;page-break-after:always;overflow:hidden;position:relative;">
+          <img src="/Pag__2.jpeg" style="width:100%;height:100%;object-fit:cover;display:block;" />
+        </div>
+
+        <!-- PÁGINA 3: ESPAÇO DA CARNE (CLIENTES) -->
+        <div style="width:210mm;height:297mm;margin:0 auto;page-break-after:always;overflow:hidden;position:relative;">
+          <img src="/Pag__3.jpeg" style="width:100%;height:100%;object-fit:cover;display:block;" />
+        </div>
+
+        <!-- PÁGINA 4: SIMPLA ENERGIA (CLIENTES) -->
+        <div style="width:210mm;height:297mm;margin:0 auto;page-break-after:always;overflow:hidden;position:relative;">
+          <img src="/Pag__4.jpeg" style="width:100%;height:100%;object-fit:cover;display:block;" />
+        </div>
+
+        <!-- PÁGINA 5: CLIENTE + EQUIPAMENTOS -->
+        <div class="page page-equip">
+          <table class="header-interna">
+            <tr>
+              <td>
+                <div style="font-size:10pt; font-weight:bold; color:${AZUL};">MT SOLAR</div>
+                <div style="font-size:8pt; color:${CINZA};">— Energia renovável —</div>
+              </td>
+              <td style="text-align:right; color:${CINZA}; font-size:9pt;">
+                Proposta Comercial
+              </td>
+            </tr>
+          </table>
+
+          <div class="card-cliente">
+            <div style="font-size:11pt; font-weight:bold; color:${AZUL}; margin-bottom:2mm;">DADOS DO CLIENTE</div>
+            <table style="width:100%; font-size:10pt; border-collapse: collapse;">
+              <tr><td style="color:${CINZA}; width:100px; padding:1mm 0;">Nome:</td><td style="font-weight:bold; color:${AZUL};">${formData.clientName}</td></tr>
+              <tr><td style="color:${CINZA}; padding:1mm 0;">Telefone:</td><td style="font-weight:bold; color:${AZUL};">${formData.clientPhone}</td></tr>
+              <tr><td style="color:${CINZA}; padding:1mm 0;">E-mail:</td><td style="font-weight:bold; color:${AZUL};">${formData.clientEmail}</td></tr>
+              <tr><td style="color:${CINZA}; padding:1mm 0;">Endereço:</td><td style="font-weight:bold; color:${AZUL};">${formData.clientAddress}</td></tr>
+              <tr><td style="color:${CINZA}; padding:1mm 0;">Cidade/Estado:</td><td style="font-weight:bold; color:${AZUL};">${formData.clientCity} - ${formData.clientState}</td></tr>
+            </table>
+            <div style="margin-top:4mm; display:flex; justify-content:space-between;">
+              <span style="font-size:9pt; color:${CINZA};">Ref: ${proposalNumber}</span>
+              <span style="font-size:9pt; color:${CINZA};">Proposta gerada em: ${dataGerada}</span>
             </div>
-            <div style="margin-top: 10mm; text-align: center;">
-              <div style="font-weight: bold; color: ${AZUL}; margin-bottom: 4mm;">Onde Atuamos</div>
-              <div style="display: flex; justify-content: center; gap: 10mm; font-weight: bold; color: ${AMARELO};">
-                <span>PERNAMBUCO</span>
-                <span>PARAÍBA</span>
-                <span>ALAGOAS</span>
-                <span>BAHIA</span>
-              </div>
+          </div>
+
+          <div style="font-size:12pt; font-weight:bold; color:${AZUL}; margin-top:4mm;">EQUIPAMENTOS DO SISTEMA</div>
+          <div class="separator-light"></div>
+          
+          <div style="margin-bottom: 4mm; font-size: 10pt; color: ${CINZA}; font-weight: bold;">
+            Descrição do Kit: <span style="color: ${AZUL};">${formData.kitName || 'Kit Fotovoltaico Standard'}</span>
+          </div>
+
+          <table class="equip-table">
+            <tr>
+              <td class="equip-col">
+                <div style="display:flex; align-items:center; gap:2mm; margin-bottom:3mm;">
+                  <span style="font-size:14pt;">🔲</span>
+                  <span style="font-size:11pt; font-weight:bold; color:${AZUL};">Módulo Fotovoltaico</span>
+                </div>
+                <div class="equip-item"><span class="equip-label">Fabricante:</span> <span class="equip-value">${formData.moduleModel || 'Conforme proposta'}</span></div>
+                <div class="equip-item"><span class="equip-label">Potência:</span> <span class="equip-value">${formData.modulePower} Wp</span></div>
+                <div class="equip-item"><span class="equip-label">Garantia (defeitos):</span> <span class="equip-value">10 Anos</span></div>
+                <div class="equip-item"><span class="equip-label">Garantia (eficiência):</span> <span class="equip-value">25 Anos</span></div>
+                <div class="equip-item"><span class="equip-label">Quantidade:</span> <span class="equip-value">${formData.moduleQty} unidades</span></div>
+              </td>
+              <td class="equip-col">
+                <div style="display:flex; align-items:center; gap:2mm; margin-bottom:3mm;">
+                  <span style="font-size:14pt;">⚡</span>
+                  <span style="font-size:11pt; font-weight:bold; color:${AZUL};">Inversor</span>
+                </div>
+                <div class="equip-item"><span class="equip-label">Modelo:</span> <span class="equip-value">${formData.inverterModel || 'Conforme proposta'}</span></div>
+                <div class="equip-item"><span class="equip-label">Fabricante:</span> <span class="equip-value">${formData.inverterBrand || 'Conforme proposta'}</span></div>
+                <div class="equip-item"><span class="equip-label">Potência:</span> <span class="equip-value">${formData.inverterPower} W</span></div>
+                <div class="equip-item"><span class="equip-label">Garantia (defeitos):</span> <span class="equip-value">10 Anos</span></div>
+                <div class="equip-item"><span class="equip-label">Monitoramento:</span> <span class="equip-value">Wi-Fi</span></div>
+                <div class="equip-item"><span class="equip-label">Quantidade:</span> <span class="equip-value">${formData.inverterQty} unidade(s)</span></div>
+              </td>
+            </tr>
+          </table>
+
+          <div style="margin-top: 6mm; background: ${AZUL_CLARO}44; border-radius:4px; padding: 3mm 4mm;">
+            <div style="display:flex; align-items:center; gap:2mm; margin-bottom:2mm;">
+              <span style="font-size:12pt;">🔌</span>
+              <span style="font-size:10pt; font-weight:bold; color:${AZUL};">Equipamento Adicional</span>
             </div>
+            <div style="font-size:10pt; color:${AZUL}; font-weight:bold;">ESTRUTURA DE FIXAÇÃO</div>
+            <div style="font-size:9pt; color:${CINZA};">Quantidade: conforme projeto</div>
+          </div>
+
+          <div class="footer-interna" style="margin-top: auto;">
+            <div style="font-weight:bold; color:${AZUL};">MT SOLAR - ENERGIA RENOVÁVEL</div>
+            <div>mtsolar.energia@gmail.com | @mtsolar_ | Rua Rossini Roosevelt de Albuquerque, nº10 - Piedade, Jaboatão dos Guararapes - PE | (81) 99700-3260 | (81) 99504-3980</div>
           </div>
         </div>
 
-        <!-- PÁGINA 3: CLIENTE + EQUIPAMENTOS -->
-        <div class="page">
-          <div class="sidebar"></div>
-          <div class="top-bar"><span>MT SOLAR — DADOS DO PROJETO</span></div>
-          <div class="content-area">
-            <div class="section-title">Dados do Cliente</div>
-            <div class="card">
-              <table>
-                <tr><td><strong>Nome:</strong></td><td>${formData.clientName}</td></tr>
-                <tr><td><strong>Telefone:</strong></td><td>${formData.clientPhone}</td></tr>
-                <tr><td><strong>E-mail:</strong></td><td>${formData.clientEmail}</td></tr>
-                <tr><td><strong>Cidade/UF:</strong></td><td>${formData.clientCity} - ${formData.clientState}</td></tr>
-              </table>
-            </div>
+        <!-- PÁGINA 6: INFORMAÇÕES DO SISTEMA -->
+        <div class="page page-info-sistema">
+          <table class="header-interna">
+            <tr>
+              <td>
+                <div style="font-size:10pt; font-weight:bold; color:${AZUL};">MT SOLAR</div>
+                <div style="font-size:8pt; color:${CINZA};">— Energia renovável —</div>
+              </td>
+              <td style="text-align:right; color:${CINZA}; font-size:9pt;">
+                Proposta Comercial
+              </td>
+            </tr>
+          </table>
 
-            <div class="section-title" style="margin-top: 6mm;">Equipamentos Propostos</div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6mm;">
-              <div class="card">
-                <div style="font-weight: bold; color: ${AZUL}; border-bottom: 1px solid ${AMARELO}; padding-bottom: 2mm; margin-bottom: 3mm;">Módulos Fotovoltaicos</div>
-                <div style="font-size: 9pt;">
-                  <p><strong>Fabricante:</strong> ${formData.moduleModel}</p>
-                  <p><strong>Potência Unitária:</strong> ${formData.modulePower} Wp</p>
-                  <p><strong>Quantidade:</strong> ${formData.moduleQty} unidades</p>
-                  <p><strong>Potência Total:</strong> ${formData.kitPower} kWp</p>
-                </div>
-              </div>
-              <div class="card">
-                <div style="font-weight: bold; color: ${AZUL}; border-bottom: 1px solid ${AMARELO}; padding-bottom: 2mm; margin-bottom: 3mm;">Inversor Solar</div>
-                <div style="font-size: 9pt;">
-                  <p><strong>Fabricante:</strong> ${formData.inverterBrand}</p>
-                  <p><strong>Modelo:</strong> ${formData.inverterModel}</p>
-                  <p><strong>Potência:</strong> ${formData.inverterPower} W</p>
-                  <p><strong>Quantidade:</strong> ${formData.inverterQty} unidade</p>
-                </div>
-              </div>
-            </div>
-            ${formData.kitSupplier ? `
-              <div class="card" style="border-left: 4px solid ${AMARELO};">
-                <strong>Fornecedor:</strong> ${formData.kitSupplier}
-              </div>
-            ` : ''}
+          <div style="text-align:center; margin-bottom: 8mm;">
+            <div style="font-size:16pt; font-weight:bold; color:${AZUL};">Informações do Sistema</div>
+            <div style="font-size:10pt; color:${CINZA};">As principais informações do sistema proposto estão indicadas nesta seção.</div>
           </div>
-        </div>
 
-        <!-- PÁGINA 4: INFORMAÇÕES DO SISTEMA -->
-        <div class="page">
-          <div class="sidebar"></div>
-          <div class="top-bar"><span>MT SOLAR — DESEMPENHO DO SISTEMA</span></div>
-          <div class="content-area">
-            <div class="section-title">Informações do Sistema</div>
-            <div class="card">
-              <table style="margin-bottom:0">
-                <tr><td>Potência do Sistema:</td><td class="highlight">${formData.kitPower} kWp</td></tr>
-                <tr><td>Geração Média Mensal:</td><td class="highlight">${(kitPowerVal * 30 * 4.5).toFixed(0)} kWh</td></tr>
-                <tr><td>Área Mínima Requerida:</td><td>${(Number(formData.moduleQty) * 1.87).toFixed(1)} m²</td></tr>
-                <tr><td>Peso Estimado no Telhado:</td><td>${(Number(formData.moduleQty) * 22).toFixed(0)} kg</td></tr>
-              </table>
-            </div>
-
-            <div style="margin-top: 6mm;">
-              <div style="font-weight:bold; color:${AZUL}; margin-bottom:4mm; text-align:center;">Estimativa de Geração Mensal (kWh)</div>
-              <div style="height: 60mm; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 10mm; border-bottom: 2px solid ${AZUL};">
-                ${geracaoMes.map((val, i) => `
-                  <div style="flex: 1; margin: 0 1mm; display: flex; flex-direction: column; align-items: center;">
-                    <div style="width: 100%; background: ${AZUL}; height: ${(val / maxVal) * 50}mm; border-radius: 2px 2px 0 0;"></div>
-                    <div style="font-size: 7pt; color: ${CINZA}; margin-top: 2mm;">${meses[i]}</div>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-
-            <div class="card" style="margin-top: 10mm; background: ${AZUL_CLARO}33;">
-              <p style="font-size: 9pt; color: ${AZUL}; text-align: center; margin: 0;">
-                O sistema é dimensionado para suprir <strong>100%</strong> do consumo médio mensal de <strong>${consumoMensal} kWh</strong>.
-              </p>
-            </div>
+          <div class="card-dados-sistema">
+            <table style="width:100%; font-size:11pt; border-collapse: collapse;">
+              <tr style="border-bottom: 1px solid ${AZUL_CLARO}88;">
+                <td style="padding: 3mm 0; color:${CINZA};">Potência do sistema:</td>
+                <td style="padding: 3mm 0; text-align:right; color:${AZUL}; font-weight:bold;">${formData.kitPower} kWp</td>
+              </tr>
+              <tr style="border-bottom: 1px solid ${AZUL_CLARO}88;">
+                <td style="padding: 3mm 0; color:${CINZA};">Área mínima requerida:</td>
+                <td style="padding: 3mm 0; text-align:right; color:${AZUL}; font-weight:bold;">${(Number(formData.moduleQty || 9) * 1.87).toFixed(2)} m²</td>
+              </tr>
+              <tr style="border-bottom: 1px solid ${AZUL_CLARO}88;">
+                <td style="padding: 3mm 0; color:${CINZA};">Peso distribuído dos módulos:</td>
+                <td style="padding: 3mm 0; text-align:right; color:${AZUL}; font-weight:bold;">${(Number(formData.moduleQty || 9) * 1.6).toFixed(2)} kg/m²</td>
+              </tr>
+              <tr>
+                <td style="padding: 3mm 0; color:${CINZA};">Vida útil do sistema:</td>
+                <td style="padding: 3mm 0; text-align:right; color:${AZUL}; font-weight:bold;">25 a 35 Anos</td>
+              </tr>
+            </table>
           </div>
-        </div>
 
-        <!-- PÁGINA 5: INDICADORES DE VIABILIDADE -->
-        <div class="page">
-          <div class="sidebar"></div>
-          <div class="top-bar"><span>MT SOLAR — ANÁLISE FINANCEIRA</span></div>
-          <div class="content-area">
-            <div class="section-title">Indicadores de Viabilidade</div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4mm;">
-              <div class="card">
-                <div style="font-size: 8pt; color: ${CINZA};">Retorno do Investimento (Payback)</div>
-                <div style="font-size: 16pt; font-weight: bold; color: ${AZUL};">${paybackAnos} anos e ${paybackMesesRest} meses</div>
-              </div>
-              <div class="card">
-                <div style="font-size: 8pt; color: ${CINZA};">ROI (Retorno Sobre Investimento)</div>
-                <div style="font-size: 16pt; font-weight: bold; color: ${AZUL};">${roi}x</div>
-              </div>
-              <div class="card">
-                <div style="font-size: 8pt; color: ${CINZA};">Economia Estimada (25 anos)</div>
-                <div style="font-size: 16pt; font-weight: bold; color: #10b981;">R$ ${economiaTotal25.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</div>
-              </div>
-              <div class="card">
-                <div style="font-size: 8pt; color: ${CINZA};">Valor do Investimento</div>
-                <div style="font-size: 16pt; font-weight: bold; color: ${AZUL};">R$ ${saleP.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-              </div>
-            </div>
-
-            <div style="margin-top: 8mm;">
-              <div style="font-weight:bold; color:${AZUL}; margin-bottom:4mm; text-align:center;">Fluxo de Caixa Acumulado (25 Anos)</div>
-              <div style="height: 50mm; width: 100%; border-left: 2px solid ${CINZA}; border-bottom: 2px solid ${CINZA}; position: relative; margin-top: 10mm;">
-                <div style="position: absolute; left: 0; right: 0; bottom: ${(Math.abs(minFluxo) / rangeFluxo) * 100}%; height: 1px; background: #ccc; border-top: 1px dashed #999;"></div>
-                <div style="display: flex; align-items: flex-end; justify-content: space-between; height: 100%; padding: 0 2mm;">
-                  ${[1, 5, 10, 15, 20, 25].map(ano => {
-                    const val = fluxoCaixa[ano - 1];
-                    const heightPct = ((val - minFluxo) / rangeFluxo) * 100;
-                    return `
-                      <div style="flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end;">
-                        <div style="width: 8mm; background: ${val >= 0 ? '#10b981' : '#ef4444'}; height: ${heightPct}%; border-radius: 2px 2px 0 0;"></div>
-                        <div style="font-size: 7pt; color: ${CINZA}; margin-top: 2mm;">Ano ${ano}</div>
-                      </div>
-                    `;
-                  }).join('')}
-                </div>
-              </div>
-            </div>
+          <div style="margin-top: 4mm;">
+            <div style="font-size:13pt; font-weight:bold; color:${AZUL}; text-align:center; margin-bottom:6mm;">Consumo X Geração</div>
             
-            <div class="card" style="margin-top: 8mm; border-left: 4px solid #10b981;">
-              <p style="font-size: 9pt; margin: 0;">O custo da sua energia hoje é de <strong>R$ ${formData.energyRate}</strong>. Com o sistema solar, seu custo passará a ser de aproximadamente <strong>R$ ${custokWh}</strong> por kWh.</p>
-            </div>
-          </div>
-        </div>
+            <div style="width:100%; height:180px; position:relative; margin-bottom: 10mm;">
+              <svg width="100%" height="160" viewBox="0 0 500 160" preserveAspectRatio="none">
+                <!-- Linhas de grade horizontais -->
+                <line x1="0" y1="20" x2="500" y2="20" stroke="${AZUL_CLARO}" stroke-width="0.5" stroke-dasharray="2,2" />
+                <line x1="0" y1="60" x2="500" y2="60" stroke="${AZUL_CLARO}" stroke-width="0.5" stroke-dasharray="2,2" />
+                <line x1="0" y1="100" x2="500" y2="100" stroke="${AZUL_CLARO}" stroke-width="0.5" stroke-dasharray="2,2" />
+                <line x1="0" y1="140" x2="500" y2="140" stroke="${AZUL}" stroke-width="1" />
 
-        <!-- PÁGINA 6: SERVIÇOS INCLUSOS -->
-        <div class="page">
-          <div class="sidebar"></div>
-          <div class="top-bar"><span>MT SOLAR — SERVIÇOS E GARANTIAS</span></div>
-          <div class="content-area">
-            <div class="section-title">Serviços Inclusos</div>
-            <div style="font-size: 10pt; line-height: 1.8;">
-              <div style="padding: 1mm 0; border-bottom: 1px solid #eee;">1. Vistoria técnica e projeto elétrico do sistema.</div>
-              <div style="padding: 1mm 0; border-bottom: 1px solid #eee;">2. Anotação da responsabilidade técnica (ART) do projeto e instalação.</div>
-              <div style="padding: 1mm 0; border-bottom: 1px solid #eee;">3. Obtenção das licenças junto à concessionária de energia local.</div>
-              <div style="padding: 1mm 0; border-bottom: 1px solid #eee;">4. Montagem dos módulos fotovoltaicos com estruturas apropriadas.</div>
-              <div style="padding: 1mm 0; border-bottom: 1px solid #eee;">5. Instalação e montagem elétrica do sistema (Inversor, String Box).</div>
-              <div style="padding: 1mm 0; border-bottom: 1px solid #eee;">6. Testes de funcionamento e comissionamento.</div>
-              <div style="padding: 1mm 0; border-bottom: 1px solid #eee;">7. Frete e logística de entrega dos equipamentos.</div>
-              <div style="padding: 1mm 0; border-bottom: 1px solid #eee;">8. Monitoramento do sistema via aplicativo.</div>
+                ${meses.map((mes, i) => {
+                  const xBase = i * 40 + 10;
+                  const hConsumo = (consumoMensal / maxVal) * 120;
+                  const hGeracao = (geracaoMes[i] / maxVal) * 120;
+                  return `
+                    <rect x="${xBase}" y="${140 - hConsumo}" width="16" height="${hConsumo}" fill="#9ca3af" rx="2" />
+                    <rect x="${xBase + 18}" y="${140 - hGeracao}" width="16" height="${hGeracao}" fill="${AZUL}" rx="2" />
+                    <text x="${xBase + 17}" y="155" font-size="7" text-anchor="middle" fill="${CINZA}">${mes}</text>
+                  `;
+                }).join('')}
+              </svg>
             </div>
 
-            <div class="section-title" style="margin-top: 8mm;">Garantias do Sistema</div>
-            <div class="card">
-              <table style="margin-bottom:0">
-                <tr><th>Componente</th><th>Garantia</th></tr>
-                <tr><td>Módulos (Defeitos)</td><td>${gModuloDefeito} anos</td></tr>
-                <tr><td>Módulos (Eficiência 80%)</td><td>${gModuloEfic} anos</td></tr>
-                <tr><td>Inversor Solar</td><td>${gInversor} anos</td></tr>
-                <tr><td>Estrutura de Fixação</td><td>${gEstrutura} anos</td></tr>
-                <tr><td>Instalação Elétrica</td><td>${gInstalacao} anos</td></tr>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <!-- PÁGINA 7: CONSIDERAÇÕES FINAIS -->
-        <div class="page">
-          <div class="sidebar"></div>
-          <div class="top-bar"><span>MT SOLAR — FINALIZAÇÃO</span></div>
-          <div class="content-area">
-            <div class="section-title">Considerações Finais</div>
-            <div style="font-size: 9pt; line-height: 1.6; text-align: justify; color: #555;">
-              <p>1. Esta proposta tem validade de <strong>7 dias</strong> a contar da data de sua emissão, estando sujeita a alterações caso haja reajuste nos preços dos fornecedores.</p>
-              <p>2. O prazo de instalação é de aproximadamente 15 a 30 dias após a entrega dos equipamentos e aprovação da concessionária.</p>
-              <p>3. Não estão inclusos: reformas no padrão de entrada, reforço de telhado ou obras de infraestrutura civil não previstas.</p>
-            </div>
-            
-            <div style="margin-top: 10mm; display: grid; grid-template-columns: 1fr 1fr; gap: 10mm;">
-              <div style="text-align: center;">
-                <div style="height: 20mm; border-bottom: 1px solid ${AZUL}; margin-bottom: 2mm;"></div>
-                <div style="font-size: 8pt; font-weight: bold;">MT SOLAR</div>
-                <div style="font-size: 7pt; color: ${CINZA};">Energia Renovável</div>
+            <div style="display:flex; justify-content:center; gap:10mm; margin-top:4mm;">
+              <div style="display:flex; align-items:center; gap:2mm; font-size:9pt; color:${CINZA};">
+                <div style="width:10px; height:10px; background:#9ca3af; border-radius:50%;"></div> Consumo (kWh)
               </div>
-              <div style="text-align: center;">
-                <div style="height: 20mm; border-bottom: 1px solid ${AZUL}; margin-bottom: 2mm;"></div>
-                <div style="font-size: 8pt; font-weight: bold;">${formData.clientName}</div>
-                <div style="font-size: 7pt; color: ${CINZA};">Aceite da Proposta</div>
+              <div style="display:flex; align-items:center; gap:2mm; font-size:9pt; color:${CINZA};">
+                <div style="width:10px; height:10px; background:${AZUL}; border-radius:50%;"></div> Geração (kWh)
               </div>
             </div>
+          </div>
 
-            <div style="margin-top: 15mm; text-align: center;">
-              <div style="font-size: 14pt; font-weight: bold; color: ${AZUL};">Validade: ${dataValidade}</div>
-              <div style="font-size: 10pt; color: ${CINZA}; margin-top: 2mm;">Proposta Gerada em: ${dataGerada}</div>
-            </div>
+          <div style="margin-top: 10mm; background: ${AZUL_CLARO}22; padding: 4mm; border-radius: 6px;">
+            <div class="legenda-item"><strong>kWp:</strong> Simplificadamente, é a máxima potência que o sistema poderia alcançar em condições ideais de laboratório (STC). É a unidade usada para medir o tamanho do seu sistema.</div>
+            <div class="legenda-item"><strong>kWh:</strong> Unidade de medida padrão de energia elétrica consumida ou gerada ao longo do tempo. É o que você paga na sua conta de luz.</div>
+          </div>
 
-            <div style="flex-grow: 1; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 10mm;">
-              <div style="font-size: 24pt; font-weight: 900; color: ${AZUL_CLARO}; opacity: 0.5;">MT SOLAR</div>
-            </div>
+          <div class="footer-interna" style="margin-top: auto;">
+            <div style="font-weight:bold; color:${AZUL};">MT SOLAR - ENERGIA RENOVÁVEL</div>
+            <div>mtsolar.energia@gmail.com | @mtsolar_ | Rua Rossini Roosevelt de Albuquerque, nº10 - Piedade, Jaboatão dos Guararapes - PE | (81) 99700-3260 | (81) 99504-3980</div>
           </div>
         </div>
 
-        <!-- PÁGINA 8: FOTOS DE VISTORIA -->
-        ${formData.includePhotos && formData.photos.length > 0 ? `
-          <div class="page">
-            <div class="sidebar"></div>
-            <div class="top-bar"><span>MT SOLAR — FOTOS DE VISTORIA</span></div>
-            <div class="content-area">
-              <div class="section-title">Fotos de Vistoria</div>
-              <p style="font-size: 10pt; color: ${CINZA}; margin-bottom: 6mm;">Registro fotográfico das condições técnicas identificadas em campo.</p>
+        <!-- PÁGINA 7: INDICADORES DE VIABILIDADE -->
+        <div class="page">
+          <table class="header-interna">
+            <tr>
+              <td>
+                <div style="font-size:10pt; font-weight:bold; color:${AZUL};">MT SOLAR</div>
+                <div style="font-size:8pt; color:${CINZA};">— Energia renovável —</div>
+              </td>
+              <td style="text-align:right; color:${CINZA}; font-size:9pt;">
+                Proposta Comercial
+              </td>
+            </tr>
+          </table>
+
+          <div style="text-align:center; margin-bottom: 6mm;">
+            <div style="font-size:14pt; font-weight:bold; color:${AZUL};">Indicadores de Viabilidade</div>
+          </div>
+
+          <div style="background: #fff; border: 1px solid ${AZUL_CLARO}; border-radius:6px; padding:4mm 6mm;">
+            <table style="width:100%; border-collapse: collapse; font-size:10pt;">
+              <tr style="border-bottom:1px solid ${AZUL_CLARO}33;">
+                <td style="padding:3mm 0; font-size:13pt; font-weight:bold; text-decoration:underline; color:${AZUL}">Valor do sistema:</td>
+                <td style="padding:3mm 0; text-align:right; font-size:13pt; font-weight:bold; color:${AZUL}">R$ ${saleP.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+              </tr>
+              <tr style="border-bottom:1px solid ${AZUL_CLARO}33;">
+                <td style="padding:2mm 0; color:${CINZA}">Reajuste anual de energia:</td>
+                <td style="padding:2mm 0; text-align:right; font-weight:bold;">10%</td>
+              </tr>
+              <tr style="border-bottom:1px solid ${AZUL_CLARO}33;">
+                <td style="padding:2mm 0; color:${CINZA}">Payback (tempo de retorno):</td>
+                <td style="padding:2mm 0; text-align:right; font-weight:bold;">${paybackAnos} anos e ${paybackMesesRest} meses</td>
+              </tr>
+              <tr style="border-bottom:1px solid ${AZUL_CLARO}33;">
+                <td style="padding:2mm 0; color:${CINZA}">ROI (retorno sobre investimento):</td>
+                <td style="padding:2mm 0; text-align:right; font-weight:bold;">${roi} vezes</td>
+              </tr>
+              <tr style="border-bottom:1px solid ${AZUL_CLARO}33;">
+                <td style="padding:2mm 0; color:${CINZA}">TIR (taxa interna de retorno):</td>
+                <td style="padding:2mm 0; text-align:right; font-weight:bold;">${tir} %</td>
+              </tr>
+              <tr style="border-bottom:1px solid ${AZUL_CLARO}33;">
+                <td style="padding:2mm 0; color:${CINZA}">Valor kWh Sistema FV:</td>
+                <td style="padding:2mm 0; text-align:right; font-weight:bold;">R$ ${custokWh}/kWh (R$ ${economiakWh} de economia por kWh)</td>
+              </tr>
+              <tr>
+                <td style="padding:3mm 0; font-weight:bold; color:${AZUL}">Economia total em 25 anos:</td>
+                <td style="padding:3mm 0; text-align:right; font-weight:bold; color:${AZUL}">R$ ${economiaTotal25.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="text-align:center; margin-top:8mm; margin-bottom:4mm;">
+            <div style="font-size:12pt; font-weight:bold; color:${AZUL};">Fluxo de Caixa (Ano x R$)</div>
+          </div>
+
+          <div style="width:100%; height:160px; position:relative;">
+            <svg width="100%" height="150" viewBox="0 0 520 150" preserveAspectRatio="none">
+              <!-- Eixo X (Zero) -->
+              <line x1="0" y1="100" x2="520" y2="100" stroke="${CINZA}" stroke-width="1" />
               
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4mm;">
-                ${formData.photos.map((url, i) => `
-                  <div style="border: 1px solid ${AZUL_CLARO}; border-radius: 8px; overflow: hidden; height: 75mm; display: flex; align-items: center; justify-content: center; background: #f8fafc; position: relative;">
-                    <img src="${url}" style="max-width: 100%; max-height: 100%; object-fit: cover;" />
-                    <div style="position: absolute; bottom: 2mm; right: 2mm; background: rgba(0,0,0,0.5); color: #fff; font-size: 7pt; padding: 1mm 2mm; border-radius: 4px;">Foto ${i+1}</div>
-                  </div>
-                `).join('')}
-              </div>
+              ${fluxoCaixa.map((val, i) => {
+                const xBase = i * 20 + 10;
+                const barWidth = 14;
+                const absMax = Math.max(maxFC, Math.abs(minFC));
+                const barHeight = (Math.abs(val) / absMax) * 80;
+                const y = val >= 0 ? 100 - barHeight : 100;
+                const color = val >= 0 ? AZUL : '#ef4444';
+                
+                let label = '';
+                if ([1, 5, 10, 15, 20, 25].includes(i + 1)) {
+                  label = `<text x="${xBase + 7}" y="145" font-size="8" text-anchor="middle" fill="${CINZA}">${i + 1}</text>`;
+                }
+
+                return `
+                  <rect x="${xBase}" y="${y}" width="${barWidth}" height="${barHeight}" fill="${color}" rx="1" />
+                  ${label}
+                `;
+              }).join('')}
+            </svg>
+          </div>
+          
+          <div style="display:flex; justify-content:center; gap:5mm; margin-top:2mm; font-size:8pt; color:${CINZA};">
+            <div style="display:flex; align-items:center; gap:1mm;">
+              <div style="width:8px; height:8px; background:${AZUL}; border-radius:2px;"></div> Fluxo de Caixa (R$)
             </div>
           </div>
-        ` : ''}
+
+          <div class="footer-interna" style="margin-top: auto;">
+            <div style="font-weight:bold; color:${AZUL};">MT SOLAR - ENERGIA RENOVÁVEL</div>
+            <div>mtsolar.energia@gmail.com | @mtsolar_ | Rua Rossini Roosevelt de Albuquerque, nº10 - Piedade, Jaboatão dos Guararapes - PE | (81) 99700-3260 | (81) 99504-3980</div>
+          </div>
+        </div>
+
+        <!-- PÁGINA 8: SERVIÇOS INCLUSOS -->
+        <div class="page">
+          <table class="header-interna">
+            <tr>
+              <td>
+                <div style="font-size:10pt; font-weight:bold; color:${AZUL};">MT SOLAR</div>
+                <div style="font-size:8pt; color:${CINZA};">— Energia renovável —</div>
+              </td>
+              <td style="text-align:right; color:${CINZA}; font-size:9pt;">
+                Proposta Comercial
+              </td>
+            </tr>
+          </table>
+
+          <div style="text-align:center; margin-bottom: 6mm;">
+            <div style="font-size:16pt; font-weight:bold; color:${AZUL};">Serviços Inclusos</div>
+            <div style="margin-top:2mm; border-bottom: 2px solid ${AZUL_CLARO}; width: 60mm; margin: 2mm auto;"></div>
+          </div>
+
+          <div style="font-size:11pt; line-height:2; color:#333; margin-top: 6mm;">
+            <div style="padding: 2mm 0; border-bottom: 1px solid ${AZUL_CLARO}33;">1. Vistoria técnica e projeto elétrico do sistema.</div>
+            <div style="padding: 2mm 0; border-bottom: 1px solid ${AZUL_CLARO}33;">2. Anotação da responsabilidade técnica (ART) do projeto e instalação.</div>
+            <div style="padding: 2mm 0; border-bottom: 1px solid ${AZUL_CLARO}33;">3. Obtenção das licenças junto à concessionária de energia local.</div>
+            <div style="padding: 2mm 0; border-bottom: 1px solid ${AZUL_CLARO}33;">4. Montagem dos módulos fotovoltaicos com estruturas apropriadas para o tipo de telhado/solo.</div>
+            <div style="padding: 2mm 0; border-bottom: 1px solid ${AZUL_CLARO}33;">5. Instalação e montagem elétrica do sistema.</div>
+            <div style="padding: 2mm 0; border-bottom: 1px solid ${AZUL_CLARO}33;">6. Gestão, supervisão e fiscalização da Obra de instalação.</div>
+            <div style="padding: 2mm 0; border-bottom: 1px solid ${AZUL_CLARO}33;">7. Frete incluso de todos equipamentos referentes ao sistema.</div>
+            <div style="padding: 2mm 0; border-bottom: 1px solid ${AZUL_CLARO}33;">8. Documentação personalizada do projeto fotovoltaico.</div>
+          </div>
+
+          <div style="background: ${AZUL_CLARO}44; border-radius:4px; padding:4mm; margin-top:6mm;">
+            <div style="font-size:10pt; color:${CINZA}; text-align:center; font-style:italic;">
+              "OBS: Não estão inclusos eventuais serviços de alvenaria, reforço estrutural, e/ou alterações na rede de distribuição as quais eventualmente podem ser solicitadas pela concessionária."
+            </div>
+          </div>
+
+          <div style="margin-top: 8mm; background:${AZUL}11; border:1px solid ${AZUL}44; border-radius:6px; padding:6mm;">
+            <div style="font-weight:bold; color:${AZUL}; margin-bottom:4mm; font-size:12pt; text-align:center;">Garantias do Sistema</div>
+            
+            <table style="width:100%; border-collapse: collapse; font-size:10pt; border: 1px solid ${AZUL_CLARO};">
+              <thead>
+                <tr style="background: ${AZUL}; color: white;">
+                  <th style="padding: 3mm; text-align: left;">Componente</th>
+                  <th style="padding: 3mm; text-align: center;">Garantia Defeitos</th>
+                  <th style="padding: 3mm; text-align: center;">Garantia Eficiência</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="border-bottom: 1px solid ${AZUL_CLARO};">
+                  <td style="padding: 3mm;">Módulos Fotovoltaicos</td>
+                  <td style="padding: 3mm; text-align: center;">10 Anos</td>
+                  <td style="padding: 3mm; text-align: center;">25 Anos</td>
+                </tr>
+                <tr style="border-bottom: 1px solid ${AZUL_CLARO};">
+                  <td style="padding: 3mm;">Inversor</td>
+                  <td style="padding: 3mm; text-align: center;">10 Anos</td>
+                  <td style="padding: 3mm; text-align: center;">—</td>
+                </tr>
+                <tr style="border-bottom: 1px solid ${AZUL_CLARO};">
+                  <td style="padding: 3mm;">Estrutura de Fixação</td>
+                  <td style="padding: 3mm; text-align: center;">5 Anos</td>
+                  <td style="padding: 3mm; text-align: center;">—</td>
+                </tr>
+                <tr>
+                  <td style="padding: 3mm;">Instalação Elétrica</td>
+                  <td style="padding: 3mm; text-align: center;">1 Ano</td>
+                  <td style="padding: 3mm; text-align: center;">—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="footer-interna" style="margin-top: auto;">
+            <div style="font-weight:bold; color:${AZUL};">MT SOLAR - ENERGIA RENOVÁVEL</div>
+            <div>mtsolar.energia@gmail.com | @mtsolar_ | Rua Rossini Roosevelt de Albuquerque, nº10 - Piedade, Jaboatão dos Guararapes - PE | (81) 99700-3260 | (81) 99504-3980</div>
+          </div>
+        </div>
+
+        <!-- PÁGINA 9: CONSIDERAÇÕES FINAIS E VALIDADE -->
+        <div class="page">
+          <table class="header-interna">
+            <tr>
+              <td>
+                <div style="font-size:10pt; font-weight:bold; color:${AZUL};">MT SOLAR</div>
+                <div style="font-size:8pt; color:${CINZA};">— Energia renovável —</div>
+              </td>
+              <td style="text-align:right; color:${CINZA}; font-size:9pt;">
+                Proposta Comercial
+              </td>
+            </tr>
+          </table>
+
+          <div style="text-align:center; margin-bottom: 6mm;">
+            <div style="font-size:16pt; font-weight:bold; color:${AZUL};">Considerações Finais e Validade</div>
+          </div>
+
+          <div style="font-size:10pt; line-height:1.8; color:#333; text-align:justify;">
+            <div style="padding:2mm 0; border-bottom:1px solid ${AZUL_CLARO}33;">1. Os valores apresentados de geração de energia são estimativas baseadas em informações consultadas no banco de dados do CRESESB, e representam médias mensais e anuais, sendo que a geração varia de acordo com os meses do ano, assim como de acordo com fatores meteorológicos.</div>
+            <div style="padding:2mm 0; border-bottom:1px solid ${AZUL_CLARO}33;">2. As estimativas de geração de energia, custos e economia foram baseadas e projetadas de acordo com as informações de consumo apresentadas pelo cliente, o estudo de irradiação solar local e a análise da inflação energética nos últimos anos.</div>
+            <div style="padding:2mm 0; border-bottom:1px solid ${AZUL_CLARO}33;">3. O sistema proposto foi projetado considerando-se o atual perfil de consumo do cliente, tal como de acordo com os requisitos apresentados pelo cliente.</div>
+            <div style="padding:2mm 0; border-bottom:1px solid ${AZUL_CLARO}33;">4. Por não possuir partes móveis, o sistema não exige manutenção preventiva. Periodicamente (6 meses a 1 ano), é recomendável a limpeza dos módulos fotovoltaicos para otimizar a geração de energia, especialmente em regiões/estações secas.</div>
+          </div>
+
+          <div style="margin-top: 8mm; background:${AZUL_CLARO}55; border-radius:6px; padding:5mm; text-align:center;">
+            <div style="font-size:11pt; color:#333;">
+              Esta proposta foi gerada em <strong style="color:${AZUL}">${dataGerada}</strong> e é válida até <strong style="color:${AMARELO}">${dataValidade}</strong>
+            </div>
+            <div style="font-size:9pt; color:${CINZA}; margin-top:2mm;">Validade de 7 dias corridos a partir da data de geração.</div>
+          </div>
+
+          <div style="margin-top: 15mm;">
+            <table style="width:100%; border-collapse: collapse;">
+              <tr>
+                <td style="width:45%; text-align:center; padding-top:10mm;">
+                  <div style="border-top: 1px solid ${CINZA}; padding-top:2mm;">
+                    <div style="font-size:10pt; font-weight:bold; color:${AZUL};">MT Solar</div>
+                    <div style="font-size:9pt; color:${CINZA};">Responsável Técnico</div>
+                  </div>
+                </td>
+                <td style="width:10%;"></td>
+                <td style="width:45%; text-align:center; padding-top:10mm;">
+                  <div style="border-top: 1px solid ${CINZA}; padding-top:2mm;">
+                    <div style="font-size:10pt; font-weight:bold; color:${AZUL};">${formData.clientName}</div>
+                    <div style="font-size:9pt; color:${CINZA};">Cliente</div>
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="margin-top: auto; border-top: 3px solid ${AZUL}; padding-top:3mm;">
+            <div style="font-weight:bold; color:${AZUL}; font-size:9pt;">MT SOLAR - ENERGIA RENOVÁVEL</div>
+            <div style="font-size:8pt; color:${CINZA}; margin-top:1mm;">mtsolar.energia@gmail.com | @mtsolar_ | (81) 99700-3260 | (81) 99504-3980</div>
+            <div style="font-size:8pt; color:${CINZA}; margin-top:1mm;">Número da proposta: ${proposalNumber}</div>
+          </div>
+        </div>
       </body>
       </html>
     `;
 
     newWindow.document.write(htmlContent);
     newWindow.document.close();
-    
-    // Pequeno delay para garantir que imagens (especialmente as fotos) carreguem antes do print
-    setTimeout(() => {
-      newWindow.print();
-    }, 1500);
+    setTimeout(() => { newWindow.print(); }, 1500);
   };
 
   const tabs = [
@@ -772,8 +1071,7 @@ export default function ProposalGenerator() {
   ];
 
   const currentStepIndex = tabs.findIndex(t => t.id === activeTab);
-
-  const inputStyle = "border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const isReady = !!formData.clientName && !!formData.kitCost;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
