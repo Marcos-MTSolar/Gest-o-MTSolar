@@ -17,7 +17,8 @@ import {
   Plus,
   Camera,
   History,
-  Clock
+  Clock,
+  Layers
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -57,6 +58,8 @@ interface FormData {
   photos: string[];
   kitSupplier: string;
   financeGracePeriod: string;
+  estruturaMateriais: string[];
+  estruturaOutro: string;
 }
 
 interface Results {
@@ -112,6 +115,21 @@ const AVAILABLE_SERVICES = [
   }
 ];
 
+const materiaisEstrutura = [
+  'Trilho de Alumínio',
+  'Parafuso Inox',
+  'Gancho para Telha Cerâmica',
+  'Gancho para Telha Metálica',
+  'Gancho para Telha Fibrocimento',
+  'Estrutura em Aço Galvanizado',
+  'Clipe de Fixação Alumínio',
+  'Mini-trilho Alumínio',
+  'Estrutura para Solo',
+  'Perfil de Alumínio',
+  'Parafuso de Aço Inox M8',
+  'Conectores de Aterramento',
+];
+
 export default function ProposalGenerator() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('dados');
@@ -147,7 +165,9 @@ export default function ProposalGenerator() {
     includePhotos: false,
     photos: [],
     kitSupplier: '',
-    financeGracePeriod: '0'
+    financeGracePeriod: '0',
+    estruturaMateriais: [],
+    estruturaOutro: ''
   });
 
   const [results, setResults] = useState<Results>({
@@ -159,6 +179,15 @@ export default function ProposalGenerator() {
   });
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
+
+  const toggleMaterial = (material: string) => {
+    setFormData(prev => ({
+      ...prev,
+      estruturaMateriais: prev.estruturaMateriais.includes(material)
+        ? prev.estruturaMateriais.filter(m => m !== material)
+        : [...prev.estruturaMateriais, material]
+    }));
+  };
 
   const fetchHistory = async () => {
     try {
@@ -420,6 +449,20 @@ export default function ProposalGenerator() {
     const maxFC = Math.max(...fluxoCaixa);
     const minFC = Math.min(...fluxoCaixa);
 
+    // Variáveis de Garantia
+    const gModuloDefeito  = formData.garantiaModuloDefeito  || '10';
+    const gModuloEfic     = formData.garantiaModuloEficiencia || '25';
+    const gInversor       = formData.garantiaInversorDefeito || '10';
+    const gEstrutura      = formData.garantiaEstrutura       || '5';
+    const gInstalacao     = formData.garantiaInstalacao      || '1';
+
+    // Monta lista de materiais da estrutura
+    const todosMateriais = [
+      ...formData.estruturaMateriais,
+      ...(formData.estruturaOutro ? [formData.estruturaOutro] : [])
+    ];
+    const temMateriais = todosMateriais.length > 0;
+
     const newWindow = window.open('', '_blank');
     if (!newWindow) return;
 
@@ -659,395 +702,718 @@ export default function ProposalGenerator() {
           <img src="/Pag__4.jpeg" style="width:100%;height:100%;object-fit:cover;display:block;" />
         </div>
 
-        <!-- PÁGINA 5: CLIENTE + EQUIPAMENTOS -->
-        <div class="page page-equip">
-          <table class="header-interna">
-            <tr>
-              <td>
-                <div style="font-size:10pt; font-weight:bold; color:${AZUL};">MT SOLAR</div>
-                <div style="font-size:8pt; color:${CINZA};">— Energia renovável —</div>
-              </td>
-              <td style="text-align:right; color:${CINZA}; font-size:9pt;">
-                Proposta Comercial
-              </td>
-            </tr>
-          </table>
+        <!-- PÁGINA 5: DADOS DO CLIENTE + EQUIPAMENTOS -->
+        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
+          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;position:relative;">
 
-          <div class="card-cliente">
-            <div style="font-size:11pt; font-weight:bold; color:${AZUL}; margin-bottom:2mm;">DADOS DO CLIENTE</div>
-            <table style="width:100%; font-size:10pt; border-collapse: collapse;">
-              <tr><td style="color:${CINZA}; width:100px; padding:1mm 0;">Nome:</td><td style="font-weight:bold; color:${AZUL};">${formData.clientName}</td></tr>
-              <tr><td style="color:${CINZA}; padding:1mm 0;">Telefone:</td><td style="font-weight:bold; color:${AZUL};">${formData.clientPhone}</td></tr>
-              <tr><td style="color:${CINZA}; padding:1mm 0;">E-mail:</td><td style="font-weight:bold; color:${AZUL};">${formData.clientEmail}</td></tr>
-              <tr><td style="color:${CINZA}; padding:1mm 0;">Endereço:</td><td style="font-weight:bold; color:${AZUL};">${formData.clientAddress}</td></tr>
-              <tr><td style="color:${CINZA}; padding:1mm 0;">Cidade/Estado:</td><td style="font-weight:bold; color:${AZUL};">${formData.clientCity} - ${formData.clientState}</td></tr>
+          <!-- FAIXA DECORATIVA TOPO -->
+          <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
+            height:28mm;padding:0 14mm;display:flex;align-items:center;
+            justify-content:space-between;">
+            <div>
+              <div style="color:#f59e0b;font-size:9pt;font-weight:bold;
+                letter-spacing:2px;text-transform:uppercase;">MT Solar — Energia Renovável</div>
+              <div style="color:#fff;font-size:16pt;font-weight:900;margin-top:1mm;">
+                Proposta Comercial</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="color:rgba(255,255,255,0.7);font-size:8pt;">Proposta Nº</div>
+              <div style="color:#f59e0b;font-size:13pt;font-weight:bold;">
+                PROP-${Date.now().toString().slice(-6)}</div>
+              <div style="color:rgba(255,255,255,0.7);font-size:8pt;">
+                ${new Date().toLocaleDateString('pt-BR')}</div>
+            </div>
+          </div>
+
+          <!-- BARRA AMARELA FINA DECORATIVA -->
+          <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24,#f59e0b);"></div>
+
+          <!-- CORPO DA PÁGINA -->
+          <div style="padding:8mm 14mm;">
+
+            <!-- DADOS DO CLIENTE -->
+            <div style="margin-bottom:6mm;">
+              <div style="display:flex;align-items:center;gap:3mm;margin-bottom:3mm;">
+                <div style="width:4px;height:16px;background:#f59e0b;border-radius:2px;"></div>
+                <span style="font-size:12pt;font-weight:900;color:#1e3a5f;
+                  text-transform:uppercase;letter-spacing:1px;">Dados do Cliente</span>
+              </div>
+              <div style="background:linear-gradient(135deg,#f0f7ff,#e8f4fd);
+                border-radius:8px;border-left:4px solid #1e3a5f;padding:5mm 6mm;">
+                <table style="width:100%;border-collapse:collapse;font-size:10pt;">
+                  <tr>
+                    <td style="padding:1mm 0;color:#6b7280;width:35%;">Nome:</td>
+                    <td style="padding:1mm 0;font-weight:bold;color:#1e3a5f;">
+                      ${formData.clientName || '—'}</td>
+                    <td style="padding:1mm 0;color:#6b7280;width:20%;">Telefone:</td>
+                    <td style="padding:1mm 0;font-weight:bold;color:#1e3a5f;">
+                      ${formData.clientPhone || '—'}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:1mm 0;color:#6b7280;">E-mail:</td>
+                    <td style="padding:1mm 0;color:#1e3a5f;" colspan="3">
+                      ${formData.clientEmail || '—'}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:1mm 0;color:#6b7280;">Endereço:</td>
+                    <td style="padding:1mm 0;color:#1e3a5f;" colspan="3">
+                      ${formData.clientAddress || '—'}, ${formData.clientCity || '—'} - ${formData.clientState || '—'}
+                    </td>
+                  </tr>
+                </table>
+              </div>
+            </div>
+
+            <!-- TÍTULO EQUIPAMENTOS -->
+            <div style="display:flex;align-items:center;gap:3mm;margin-bottom:4mm;">
+              <div style="width:4px;height:16px;background:#f59e0b;border-radius:2px;"></div>
+              <span style="font-size:12pt;font-weight:900;color:#1e3a5f;
+                text-transform:uppercase;letter-spacing:1px;">Equipamentos do Sistema</span>
+            </div>
+
+            <!-- KIT DESCRIPTION BADGE -->
+            ${formData.kitName ? `
+            <div style="background:#1e3a5f;color:#f59e0b;border-radius:6px;
+              padding:3mm 5mm;margin-bottom:4mm;font-size:10pt;font-weight:bold;
+              text-align:center;letter-spacing:0.5px;">
+              ☀️ ${formData.kitName}
+            </div>` : ''}
+
+            <!-- GRID MÓDULO + INVERSOR -->
+            <table style="width:100%;border-collapse:separate;border-spacing:4mm 0;margin-bottom:4mm;">
+              <tr style="vertical-align:top;">
+
+                <!-- MÓDULO FOTOVOLTAICO -->
+                <td style="width:50%;background:#f8fafc;border-radius:8px;
+                  border:2px solid #d6e4f0;padding:5mm;position:relative;">
+                  <div style="background:linear-gradient(135deg,#1e3a5f,#2d5a8e);
+                    color:#f59e0b;font-size:10pt;font-weight:900;padding:2mm 4mm;
+                    border-radius:5px;margin-bottom:4mm;text-align:center;
+                    letter-spacing:0.5px;">
+                    🔲 Módulo Fotovoltaico
+                  </div>
+                  <table style="width:100%;border-collapse:collapse;font-size:9.5pt;">
+                    <tr style="border-bottom:1px solid #e5e7eb;">
+                      <td style="padding:1.5mm 0;color:#6b7280;">Fabricante</td>
+                      <td style="padding:1.5mm 0;font-weight:bold;color:#1e3a5f;text-align:right;">
+                        ${formData.moduleModel || 'Conforme proposta'}</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #e5e7eb;">
+                      <td style="padding:1.5mm 0;color:#6b7280;">Potência</td>
+                      <td style="padding:1.5mm 0;font-weight:bold;color:#1e3a5f;text-align:right;">
+                        ${formData.modulePower ? formData.modulePower + ' Wp' : '—'}</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #e5e7eb;">
+                      <td style="padding:1.5mm 0;color:#6b7280;">Qtd. Módulos</td>
+                      <td style="padding:1.5mm 0;font-weight:bold;color:#1e3a5f;text-align:right;">
+                        ${formData.moduleQty || '—'}</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #e5e7eb;">
+                      <td style="padding:1.5mm 0;color:#6b7280;">Gar. Defeitos</td>
+                      <td style="padding:1.5mm 0;text-align:right;">
+                        <span style="background:#dcfce7;color:#166534;border-radius:4px;
+                          padding:0.5mm 2mm;font-size:8.5pt;font-weight:bold;">
+                          ${gModuloDefeito} Anos</span></td>
+                    </tr>
+                    <tr>
+                      <td style="padding:1.5mm 0;color:#6b7280;">Gar. Eficiência</td>
+                      <td style="padding:1.5mm 0;text-align:right;">
+                        <span style="background:#dcfce7;color:#166534;border-radius:4px;
+                          padding:0.5mm 2mm;font-size:8.5pt;font-weight:bold;">
+                          ${gModuloEfic} Anos</span></td>
+                    </tr>
+                  </table>
+                </td>
+
+                <!-- INVERSOR -->
+                <td style="width:50%;background:#f8fafc;border-radius:8px;
+                  border:2px solid #d6e4f0;padding:5mm;">
+                  <div style="background:linear-gradient(135deg,#1e3a5f,#2d5a8e);
+                    color:#f59e0b;font-size:10pt;font-weight:900;padding:2mm 4mm;
+                    border-radius:5px;margin-bottom:4mm;text-align:center;
+                    letter-spacing:0.5px;">
+                    ⚡ Inversor
+                  </div>
+                  <table style="width:100%;border-collapse:collapse;font-size:9.5pt;">
+                    <tr style="border-bottom:1px solid #e5e7eb;">
+                      <td style="padding:1.5mm 0;color:#6b7280;">Modelo</td>
+                      <td style="padding:1.5mm 0;font-weight:bold;color:#1e3a5f;text-align:right;">
+                        ${formData.inverterModel || '—'}</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #e5e7eb;">
+                      <td style="padding:1.5mm 0;color:#6b7280;">Fabricante</td>
+                      <td style="padding:1.5mm 0;font-weight:bold;color:#1e3a5f;text-align:right;">
+                        ${formData.inverterBrand || '—'}</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #e5e7eb;">
+                      <td style="padding:1.5mm 0;color:#6b7280;">Potência</td>
+                      <td style="padding:1.5mm 0;font-weight:bold;color:#1e3a5f;text-align:right;">
+                        ${formData.inverterPower ? Number(formData.inverterPower).toLocaleString('pt-BR') + ' W' : '—'}</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #e5e7eb;">
+                      <td style="padding:1.5mm 0;color:#6b7280;">Monitoramento</td>
+                      <td style="padding:1.5mm 0;font-weight:bold;color:#1e3a5f;text-align:right;">Wi-Fi</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #e5e7eb;">
+                      <td style="padding:1.5mm 0;color:#6b7280;">Quantidade</td>
+                      <td style="padding:1.5mm 0;font-weight:bold;color:#1e3a5f;text-align:right;">
+                        ${formData.inverterQty || '1'}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:1.5mm 0;color:#6b7280;">Gar. Defeitos</td>
+                      <td style="padding:1.5mm 0;text-align:right;">
+                        <span style="background:#dcfce7;color:#166534;border-radius:4px;
+                          padding:0.5mm 2mm;font-size:8.5pt;font-weight:bold;">
+                          ${gInversor} Anos</span></td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
             </table>
-            <div style="margin-top:4mm; display:flex; justify-content:space-between;">
-              <span style="font-size:9pt; color:${CINZA};">Ref: ${proposalNumber}</span>
-              <span style="font-size:9pt; color:${CINZA};">Proposta gerada em: ${dataGerada}</span>
+
+            <!-- ESTRUTURA + ELÉTRICA (linha extra) -->
+            <table style="width:100%;border-collapse:separate;border-spacing:4mm 0;margin-bottom:5mm;">
+              <tr>
+                <!-- ESTRUTURA DE FIXAÇÃO -->
+                <td style="width:50%;background:#fff8e7;border:2px solid #f59e0b;
+                  border-radius:8px;padding:3mm 5mm;">
+                  <div style="font-size:9.5pt;font-weight:bold;color:#1e3a5f;margin-bottom:2mm;">
+                    🔩 Estrutura de Fixação
+                  </div>
+
+                  ${temMateriais ? `
+                    <!-- LISTA DE MATERIAIS SELECIONADOS -->
+                    <div style="font-size:8.5pt;color:#6b7280;margin-bottom:2mm;">
+                      Materiais inclusos:</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:2mm;">
+                      ${todosMateriais.map(m => `
+                        <span style="background:#1e3a5f;color:#f59e0b;border-radius:20px;
+                          padding:0.5mm 3mm;font-size:8pt;font-weight:bold;">${m}</span>
+                      `).join('')}
+                    </div>
+                  ` : `
+                    <!-- PADRÃO QUANDO NENHUM MATERIAL FOI INFORMADO -->
+                    <div style="font-size:9pt;color:#374151;">
+                      Conforme tipo de telhado/solo do projeto
+                    </div>
+                    <div style="font-size:8.5pt;color:#6b7280;margin-top:1mm;">
+                      Inclui todos os materiais necessários para fixação adequada dos módulos.
+                    </div>
+                  `}
+
+                  <div style="display:flex;justify-content:space-between;
+                    align-items:center;margin-top:2mm;">
+                    <span style="font-size:8.5pt;color:#6b7280;">Garantia da estrutura:</span>
+                    <span style="background:#dcfce7;color:#166534;border-radius:4px;
+                      padding:0.5mm 2mm;font-size:8.5pt;font-weight:bold;">
+                      ${gEstrutura} Anos</span>
+                  </div>
+                </td>
+                <td style="width:50%;background:#fff8e7;border:2px solid #f59e0b;
+                  border-radius:8px;padding:3mm 5mm;">
+                  <div style="font-size:9.5pt;font-weight:bold;color:#1e3a5f;margin-bottom:1mm;">
+                    🔌 Instalação Elétrica
+                  </div>
+                  <div style="display:flex;justify-content:space-between;font-size:9pt;">
+                    <span style="color:#6b7280;">Garantia:</span>
+                    <span style="background:#dcfce7;color:#166534;border-radius:4px;
+                      padding:0.5mm 2mm;font-weight:bold;">${gInstalacao} Ano(s)</span>
+                  </div>
+                  <div style="font-size:8.5pt;color:#6b7280;margin-top:1mm;">
+                    Garantia de mão de obra da instalação
+                  </div>
+                </td>
+              </tr>
+            </table>
+
+            <!-- RODAPÉ DA PÁGINA -->
+            <div style="border-top:2px solid #1e3a5f;padding-top:3mm;
+              display:flex;justify-content:space-between;align-items:center;">
+              <div style="font-size:8pt;color:#1e3a5f;font-weight:bold;">
+                MT SOLAR — ENERGIA RENOVÁVEL
+              </div>
+              <div style="font-size:7.5pt;color:#6b7280;">
+                mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99504-3980
+              </div>
             </div>
-          </div>
 
-          <div style="font-size:12pt; font-weight:bold; color:${AZUL}; margin-top:4mm;">EQUIPAMENTOS DO SISTEMA</div>
-          <div class="separator-light"></div>
-          
-          <div style="margin-bottom: 4mm; font-size: 10pt; color: ${CINZA}; font-weight: bold;">
-            Descrição do Kit: <span style="color: ${AZUL};">${formData.kitName || 'Kit Fotovoltaico Standard'}</span>
-          </div>
-
-          <table class="equip-table">
-            <tr>
-              <td class="equip-col">
-                <div style="display:flex; align-items:center; gap:2mm; margin-bottom:3mm;">
-                  <span style="font-size:14pt;">🔲</span>
-                  <span style="font-size:11pt; font-weight:bold; color:${AZUL};">Módulo Fotovoltaico</span>
-                </div>
-                <div class="equip-item"><span class="equip-label">Fabricante:</span> <span class="equip-value">${formData.moduleModel || 'Conforme proposta'}</span></div>
-                <div class="equip-item"><span class="equip-label">Potência:</span> <span class="equip-value">${formData.modulePower} Wp</span></div>
-                <div class="equip-item"><span class="equip-label">Garantia (defeitos):</span> <span class="equip-value">10 Anos</span></div>
-                <div class="equip-item"><span class="equip-label">Garantia (eficiência):</span> <span class="equip-value">25 Anos</span></div>
-                <div class="equip-item"><span class="equip-label">Quantidade:</span> <span class="equip-value">${formData.moduleQty} unidades</span></div>
-              </td>
-              <td class="equip-col">
-                <div style="display:flex; align-items:center; gap:2mm; margin-bottom:3mm;">
-                  <span style="font-size:14pt;">⚡</span>
-                  <span style="font-size:11pt; font-weight:bold; color:${AZUL};">Inversor</span>
-                </div>
-                <div class="equip-item"><span class="equip-label">Modelo:</span> <span class="equip-value">${formData.inverterModel || 'Conforme proposta'}</span></div>
-                <div class="equip-item"><span class="equip-label">Fabricante:</span> <span class="equip-value">${formData.inverterBrand || 'Conforme proposta'}</span></div>
-                <div class="equip-item"><span class="equip-label">Potência:</span> <span class="equip-value">${formData.inverterPower} W</span></div>
-                <div class="equip-item"><span class="equip-label">Garantia (defeitos):</span> <span class="equip-value">10 Anos</span></div>
-                <div class="equip-item"><span class="equip-label">Monitoramento:</span> <span class="equip-value">Wi-Fi</span></div>
-                <div class="equip-item"><span class="equip-label">Quantidade:</span> <span class="equip-value">${formData.inverterQty} unidade(s)</span></div>
-              </td>
-            </tr>
-          </table>
-
-          <div style="margin-top: 6mm; background: ${AZUL_CLARO}44; border-radius:4px; padding: 3mm 4mm;">
-            <div style="display:flex; align-items:center; gap:2mm; margin-bottom:2mm;">
-              <span style="font-size:12pt;">🔌</span>
-              <span style="font-size:10pt; font-weight:bold; color:${AZUL};">Equipamento Adicional</span>
-            </div>
-            <div style="font-size:10pt; color:${AZUL}; font-weight:bold;">ESTRUTURA DE FIXAÇÃO</div>
-            <div style="font-size:9pt; color:${CINZA};">Quantidade: conforme projeto</div>
-          </div>
-
-          <div class="footer-interna" style="margin-top: auto;">
-            <div style="font-weight:bold; color:${AZUL};">MT SOLAR - ENERGIA RENOVÁVEL</div>
-            <div>mtsolar.energia@gmail.com | @mtsolar_ | Rua Rossini Roosevelt de Albuquerque, nº10 - Piedade, Jaboatão dos Guararapes - PE | (81) 99700-3260 | (81) 99504-3980</div>
           </div>
         </div>
 
         <!-- PÁGINA 6: INFORMAÇÕES DO SISTEMA -->
-        <div class="page page-info-sistema">
-          <table class="header-interna">
-            <tr>
-              <td>
-                <div style="font-size:10pt; font-weight:bold; color:${AZUL};">MT SOLAR</div>
-                <div style="font-size:8pt; color:${CINZA};">— Energia renovável —</div>
-              </td>
-              <td style="text-align:right; color:${CINZA}; font-size:9pt;">
-                Proposta Comercial
-              </td>
-            </tr>
-          </table>
+        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
+          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
 
-          <div style="text-align:center; margin-bottom: 8mm;">
-            <div style="font-size:16pt; font-weight:bold; color:${AZUL};">Informações do Sistema</div>
-            <div style="font-size:10pt; color:${CINZA};">As principais informações do sistema proposto estão indicadas nesta seção.</div>
+          <!-- FAIXA TOPO (mesmo padrão) -->
+          <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
+            height:18mm;padding:0 14mm;display:flex;align-items:center;
+            justify-content:space-between;">
+            <span style="color:#fff;font-size:13pt;font-weight:900;">
+              Informações do Sistema</span>
+            <span style="color:#f59e0b;font-size:9pt;font-weight:bold;">MT Solar</span>
           </div>
+          <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24,#f59e0b);"></div>
 
-          <div class="card-dados-sistema">
-            <table style="width:100%; font-size:11pt; border-collapse: collapse;">
-              <tr style="border-bottom: 1px solid ${AZUL_CLARO}88;">
-                <td style="padding: 3mm 0; color:${CINZA};">Potência do sistema:</td>
-                <td style="padding: 3mm 0; text-align:right; color:${AZUL}; font-weight:bold;">${formData.kitPower} kWp</td>
-              </tr>
-              <tr style="border-bottom: 1px solid ${AZUL_CLARO}88;">
-                <td style="padding: 3mm 0; color:${CINZA};">Área mínima requerida:</td>
-                <td style="padding: 3mm 0; text-align:right; color:${AZUL}; font-weight:bold;">${(Number(formData.moduleQty || 9) * 1.87).toFixed(2)} m²</td>
-              </tr>
-              <tr style="border-bottom: 1px solid ${AZUL_CLARO}88;">
-                <td style="padding: 3mm 0; color:${CINZA};">Peso distribuído dos módulos:</td>
-                <td style="padding: 3mm 0; text-align:right; color:${AZUL}; font-weight:bold;">${(Number(formData.moduleQty || 9) * 1.6).toFixed(2)} kg/m²</td>
-              </tr>
+          <div style="padding:8mm 14mm;">
+
+            <!-- SUBTÍTULO -->
+            <p style="font-size:10pt;color:#6b7280;text-align:center;margin:0 0 5mm 0;">
+              As principais informações do sistema proposto estão indicadas nesta seção.
+            </p>
+
+            <!-- 4 CARDS DE DADOS -->
+            <table style="width:100%;border-collapse:separate;border-spacing:3mm;margin-bottom:6mm;">
               <tr>
-                <td style="padding: 3mm 0; color:${CINZA};">Vida útil do sistema:</td>
-                <td style="padding: 3mm 0; text-align:right; color:${AZUL}; font-weight:bold;">25 a 35 Anos</td>
+                <td style="background:linear-gradient(135deg,#1e3a5f,#2d5a8e);
+                  border-radius:8px;padding:4mm;text-align:center;">
+                  <div style="color:#f59e0b;font-size:8pt;font-weight:bold;
+                    text-transform:uppercase;letter-spacing:1px;">Potência</div>
+                  <div style="color:#fff;font-size:16pt;font-weight:900;margin:1mm 0;">
+                    ${formData.kitPower || '0'} <span style="font-size:11pt;">kWp</span></div>
+                  <div style="color:rgba(255,255,255,0.6);font-size:7.5pt;">do sistema</div>
+                </td>
+                <td style="background:#fff8e7;border:2px solid #f59e0b;
+                  border-radius:8px;padding:4mm;text-align:center;">
+                  <div style="color:#92400e;font-size:8pt;font-weight:bold;
+                    text-transform:uppercase;letter-spacing:1px;">Área Mínima</div>
+                  <div style="color:#1e3a5f;font-size:16pt;font-weight:900;margin:1mm 0;">
+                    ${(Number(formData.moduleQty||9)*1.87).toFixed(2)} <span style="font-size:11pt;">m²</span></div>
+                  <div style="color:#6b7280;font-size:7.5pt;">requerida</div>
+                </td>
+                <td style="background:#f0fdf4;border:2px solid #86efac;
+                  border-radius:8px;padding:4mm;text-align:center;">
+                  <div style="color:#166534;font-size:8pt;font-weight:bold;
+                    text-transform:uppercase;letter-spacing:1px;">Peso Dist.</div>
+                  <div style="color:#1e3a5f;font-size:16pt;font-weight:900;margin:1mm 0;">
+                    ${(Number(formData.moduleQty||9)*1.6).toFixed(2)} <span style="font-size:11pt;">kg/m²</span></div>
+                  <div style="color:#6b7280;font-size:7.5pt;">dos módulos</div>
+                </td>
+                <td style="background:#f8fafc;border:2px solid #d6e4f0;
+                  border-radius:8px;padding:4mm;text-align:center;">
+                  <div style="color:#1e3a5f;font-size:8pt;font-weight:bold;
+                    text-transform:uppercase;letter-spacing:1px;">Vida Útil</div>
+                  <div style="color:#1e3a5f;font-size:13pt;font-weight:900;margin:1mm 0;">
+                    25–35 <span style="font-size:10pt;">Anos</span></div>
+                  <div style="color:#6b7280;font-size:7.5pt;">do sistema</div>
+                </td>
               </tr>
             </table>
-          </div>
 
-          <div style="margin-top: 4mm;">
-            <div style="font-size:13pt; font-weight:bold; color:${AZUL}; text-align:center; margin-bottom:6mm;">Consumo X Geração</div>
-            
+            <!-- TÍTULO GRÁFICO -->
+            <div style="display:flex;align-items:center;gap:3mm;margin-bottom:3mm;">
+              <div style="width:4px;height:16px;background:#f59e0b;border-radius:2px;"></div>
+              <span style="font-size:12pt;font-weight:900;color:#1e3a5f;">
+                Consumo X Geração</span>
+              <span style="font-size:9pt;color:#6b7280;">(kWh mensais estimados)</span>
+            </div>
+
+            <!-- GRÁFICO SVG -->
             <div style="width:100%; height:180px; position:relative; margin-bottom: 10mm;">
               <svg width="100%" height="160" viewBox="0 0 500 160" preserveAspectRatio="none">
                 <!-- Linhas de grade horizontais -->
-                <line x1="0" y1="20" x2="500" y2="20" stroke="${AZUL_CLARO}" stroke-width="0.5" stroke-dasharray="2,2" />
-                <line x1="0" y1="60" x2="500" y2="60" stroke="${AZUL_CLARO}" stroke-width="0.5" stroke-dasharray="2,2" />
-                <line x1="0" y1="100" x2="500" y2="100" stroke="${AZUL_CLARO}" stroke-width="0.5" stroke-dasharray="2,2" />
-                <line x1="0" y1="140" x2="500" y2="140" stroke="${AZUL}" stroke-width="1" />
+                <line x1="0" y1="20" x2="500" y2="20" stroke="#f1f5f9" stroke-width="0.5" stroke-dasharray="2,2" />
+                <line x1="0" y1="60" x2="500" y2="60" stroke="#f1f5f9" stroke-width="0.5" stroke-dasharray="2,2" />
+                <line x1="0" y1="100" x2="500" y2="100" stroke="#f1f5f9" stroke-width="0.5" stroke-dasharray="2,2" />
+                <line x1="0" y1="140" x2="500" y2="140" stroke="#1e3a5f" stroke-width="1" />
 
                 ${meses.map((mes, i) => {
                   const xBase = i * 40 + 10;
                   const hConsumo = (consumoMensal / maxVal) * 120;
                   const hGeracao = (geracaoMes[i] / maxVal) * 120;
                   return `
-                    <rect x="${xBase}" y="${140 - hConsumo}" width="16" height="${hConsumo}" fill="#9ca3af" rx="2" />
-                    <rect x="${xBase + 18}" y="${140 - hGeracao}" width="16" height="${hGeracao}" fill="${AZUL}" rx="2" />
-                    <text x="${xBase + 17}" y="155" font-size="7" text-anchor="middle" fill="${CINZA}">${mes}</text>
+                    <rect x="${xBase}" y="${140 - hConsumo}" width="16" height="${hConsumo}" fill="#d6e4f0" rx="2" />
+                    <rect x="${xBase + 18}" y="${140 - hGeracao}" width="16" height="${hGeracao}" fill="#1e3a5f" rx="2" />
+                    <text x="${xBase + 17}" y="155" font-size="7" text-anchor="middle" fill="#6b7280">${mes}</text>
                   `;
                 }).join('')}
               </svg>
             </div>
 
-            <div style="display:flex; justify-content:center; gap:10mm; margin-top:4mm;">
-              <div style="display:flex; align-items:center; gap:2mm; font-size:9pt; color:${CINZA};">
-                <div style="width:10px; height:10px; background:#9ca3af; border-radius:50%;"></div> Consumo (kWh)
-              </div>
-              <div style="display:flex; align-items:center; gap:2mm; font-size:9pt; color:${CINZA};">
-                <div style="width:10px; height:10px; background:${AZUL}; border-radius:50%;"></div> Geração (kWh)
-              </div>
+            <!-- LEGENDA DO GRÁFICO -->
+            <div style="display:flex;justify-content:center;gap:8mm;
+              margin-top:3mm;font-size:9pt;color:#6b7280;">
+              <span>⬛ <span style="color:#d6e4f0;background:#d6e4f0;
+                border-radius:2px;padding:0 4px;">__</span> Consumo (kWh)</span>
+              <span>⬛ <span style="color:#1e3a5f;background:#1e3a5f;
+                border-radius:2px;padding:0 4px;">__</span> Geração (kWh)</span>
             </div>
-          </div>
 
-          <div style="margin-top: 10mm; background: ${AZUL_CLARO}22; padding: 4mm; border-radius: 6px;">
-            <div class="legenda-item"><strong>kWp:</strong> Simplificadamente, é a máxima potência que o sistema poderia alcançar em condições ideais de laboratório (STC). É a unidade usada para medir o tamanho do seu sistema.</div>
-            <div class="legenda-item"><strong>kWh:</strong> Unidade de medida padrão de energia elétrica consumida ou gerada ao longo do tempo. É o que você paga na sua conta de luz.</div>
-          </div>
+            <!-- GLOSSÁRIO kWp / kWh -->
+            <div style="background:#f8fafc;border-radius:8px;border-left:4px solid #f59e0b;
+              padding:4mm 5mm;margin-top:5mm;font-size:9pt;color:#374151;line-height:1.7;">
+              <p style="margin:0 0 2mm 0;">
+                <strong style="color:#1e3a5f;">kWp:</strong>
+                Simplificadamente, é a máxima potência que o sistema poderia alcançar na ausência
+                de perdas. Tecnicamente, corresponde à máxima potência instantânea que o conjunto
+                de módulos fotovoltaicos pode fornecer dentro dos padrões STC.</p>
+              <p style="margin:0;">
+                <strong style="color:#1e3a5f;">kWh:</strong>
+                Unidade de medida padrão de energia elétrica consumida ou gerada em um determinado
+                período (convencionalmente, período de um mês).</p>
+            </div>
 
-          <div class="footer-interna" style="margin-top: auto;">
-            <div style="font-weight:bold; color:${AZUL};">MT SOLAR - ENERGIA RENOVÁVEL</div>
-            <div>mtsolar.energia@gmail.com | @mtsolar_ | Rua Rossini Roosevelt de Albuquerque, nº10 - Piedade, Jaboatão dos Guararapes - PE | (81) 99700-3260 | (81) 99504-3980</div>
+            <!-- RODAPÉ -->
+            <div style="border-top:2px solid #1e3a5f;padding-top:3mm;margin-top:5mm;
+              display:flex;justify-content:space-between;align-items:center;">
+              <div style="font-size:8pt;color:#1e3a5f;font-weight:bold;">
+                MT SOLAR — ENERGIA RENOVÁVEL</div>
+              <div style="font-size:7.5pt;color:#6b7280;">
+                mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99504-3980</div>
+            </div>
+
           </div>
         </div>
 
         <!-- PÁGINA 7: INDICADORES DE VIABILIDADE -->
-        <div class="page">
-          <table class="header-interna">
-            <tr>
-              <td>
-                <div style="font-size:10pt; font-weight:bold; color:${AZUL};">MT SOLAR</div>
-                <div style="font-size:8pt; color:${CINZA};">— Energia renovável —</div>
-              </td>
-              <td style="text-align:right; color:${CINZA}; font-size:9pt;">
-                Proposta Comercial
-              </td>
-            </tr>
-          </table>
+        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
+          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
 
-          <div style="text-align:center; margin-bottom: 6mm;">
-            <div style="font-size:14pt; font-weight:bold; color:${AZUL};">Indicadores de Viabilidade</div>
+          <!-- FAIXA TOPO -->
+          <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
+            height:18mm;padding:0 14mm;display:flex;align-items:center;
+            justify-content:space-between;">
+            <span style="color:#fff;font-size:13pt;font-weight:900;">
+              Indicadores de Viabilidade</span>
+            <span style="color:#f59e0b;font-size:9pt;font-weight:bold;">MT Solar</span>
           </div>
+          <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24,#f59e0b);"></div>
 
-          <div style="background: #fff; border: 1px solid ${AZUL_CLARO}; border-radius:6px; padding:4mm 6mm;">
-            <table style="width:100%; border-collapse: collapse; font-size:10pt;">
-              <tr style="border-bottom:1px solid ${AZUL_CLARO}33;">
-                <td style="padding:3mm 0; font-size:13pt; font-weight:bold; text-decoration:underline; color:${AZUL}">Valor do sistema:</td>
-                <td style="padding:3mm 0; text-align:right; font-size:13pt; font-weight:bold; color:${AZUL}">R$ ${saleP.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-              </tr>
-              <tr style="border-bottom:1px solid ${AZUL_CLARO}33;">
-                <td style="padding:2mm 0; color:${CINZA}">Reajuste anual de energia:</td>
-                <td style="padding:2mm 0; text-align:right; font-weight:bold;">10%</td>
-              </tr>
-              <tr style="border-bottom:1px solid ${AZUL_CLARO}33;">
-                <td style="padding:2mm 0; color:${CINZA}">Payback (tempo de retorno):</td>
-                <td style="padding:2mm 0; text-align:right; font-weight:bold;">${paybackAnos} anos e ${paybackMesesRest} meses</td>
-              </tr>
-              <tr style="border-bottom:1px solid ${AZUL_CLARO}33;">
-                <td style="padding:2mm 0; color:${CINZA}">ROI (retorno sobre investimento):</td>
-                <td style="padding:2mm 0; text-align:right; font-weight:bold;">${roi} vezes</td>
-              </tr>
-              <tr style="border-bottom:1px solid ${AZUL_CLARO}33;">
-                <td style="padding:2mm 0; color:${CINZA}">TIR (taxa interna de retorno):</td>
-                <td style="padding:2mm 0; text-align:right; font-weight:bold;">${tir} %</td>
-              </tr>
-              <tr style="border-bottom:1px solid ${AZUL_CLARO}33;">
-                <td style="padding:2mm 0; color:${CINZA}">Valor kWh Sistema FV:</td>
-                <td style="padding:2mm 0; text-align:right; font-weight:bold;">R$ ${custokWh}/kWh (R$ ${economiakWh} de economia por kWh)</td>
-              </tr>
+          <div style="padding:8mm 14mm;">
+
+            <!-- DESTAQUE: VALOR DO SISTEMA -->
+            <div style="background:linear-gradient(135deg,#1e3a5f,#2d5a8e);
+              border-radius:10px;padding:5mm 8mm;margin-bottom:5mm;
+              display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <div style="color:#f59e0b;font-size:8.5pt;font-weight:bold;
+                  text-transform:uppercase;letter-spacing:1px;">
+                  Valor Total do Sistema</div>
+                <div style="color:#fff;font-size:22pt;font-weight:900;margin-top:1mm;">
+                  R$ ${saleP.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
+                </div>
+              </div>
+              <div style="text-align:right;">
+                <div style="color:rgba(255,255,255,0.7);font-size:8pt;">Reajuste anual previsto</div>
+                <div style="color:#f59e0b;font-size:14pt;font-weight:bold;">10% a.a.</div>
+              </div>
+            </div>
+
+            <!-- GRID 3 INDICADORES -->
+            <table style="width:100%;border-collapse:separate;border-spacing:3mm;margin-bottom:5mm;">
               <tr>
-                <td style="padding:3mm 0; font-weight:bold; color:${AZUL}">Economia total em 25 anos:</td>
-                <td style="padding:3mm 0; text-align:right; font-weight:bold; color:${AZUL}">R$ ${economiaTotal25.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+                <td style="background:#fff8e7;border:2px solid #f59e0b;border-radius:8px;
+                  padding:4mm;text-align:center;">
+                  <div style="color:#92400e;font-size:8pt;font-weight:bold;
+                    text-transform:uppercase;letter-spacing:1px;">Payback</div>
+                  <div style="color:#1e3a5f;font-size:15pt;font-weight:900;margin:1mm 0;">
+                    ${paybackAnos} anos</div>
+                  <div style="color:#6b7280;font-size:8pt;">e ${paybackMesesRest} meses</div>
+                </td>
+                <td style="background:#f0fdf4;border:2px solid #86efac;border-radius:8px;
+                  padding:4mm;text-align:center;">
+                  <div style="color:#166534;font-size:8pt;font-weight:bold;
+                    text-transform:uppercase;letter-spacing:1px;">ROI</div>
+                  <div style="color:#1e3a5f;font-size:15pt;font-weight:900;margin:1mm 0;">
+                    ${roi}x</div>
+                  <div style="color:#6b7280;font-size:8pt;">retorno sobre investimento</div>
+                </td>
+                <td style="background:#fdf4ff;border:2px solid #e9d5ff;border-radius:8px;
+                  padding:4mm;text-align:center;">
+                  <div style="color:#6b21a8;font-size:8pt;font-weight:bold;
+                    text-transform:uppercase;letter-spacing:1px;">TIR</div>
+                  <div style="color:#1e3a5f;font-size:15pt;font-weight:900;margin:1mm 0;">
+                    ${tir}%</div>
+                  <div style="color:#6b7280;font-size:8pt;">taxa interna de retorno</div>
+                </td>
               </tr>
             </table>
-          </div>
 
-          <div style="text-align:center; margin-top:8mm; margin-bottom:4mm;">
-            <div style="font-size:12pt; font-weight:bold; color:${AZUL};">Fluxo de Caixa (Ano x R$)</div>
-          </div>
-
-          <div style="width:100%; height:160px; position:relative;">
-            <svg width="100%" height="150" viewBox="0 0 520 150" preserveAspectRatio="none">
-              <!-- Eixo X (Zero) -->
-              <line x1="0" y1="100" x2="520" y2="100" stroke="${CINZA}" stroke-width="1" />
-              
-              ${fluxoCaixa.map((val, i) => {
-                const xBase = i * 20 + 10;
-                const barWidth = 14;
-                const absMax = Math.max(maxFC, Math.abs(minFC));
-                const barHeight = (Math.abs(val) / absMax) * 80;
-                const y = val >= 0 ? 100 - barHeight : 100;
-                const color = val >= 0 ? AZUL : '#ef4444';
-                
-                let label = '';
-                if ([1, 5, 10, 15, 20, 25].includes(i + 1)) {
-                  label = `<text x="${xBase + 7}" y="145" font-size="8" text-anchor="middle" fill="${CINZA}">${i + 1}</text>`;
-                }
-
-                return `
-                  <rect x="${xBase}" y="${y}" width="${barWidth}" height="${barHeight}" fill="${color}" rx="1" />
-                  ${label}
-                `;
-              }).join('')}
-            </svg>
-          </div>
-          
-          <div style="display:flex; justify-content:center; gap:5mm; margin-top:2mm; font-size:8pt; color:${CINZA};">
-            <div style="display:flex; align-items:center; gap:1mm;">
-              <div style="width:8px; height:8px; background:${AZUL}; border-radius:2px;"></div> Fluxo de Caixa (R$)
+            <!-- ECONOMIA EM DESTAQUE -->
+            <div style="background:#f0fdf4;border:2px solid #86efac;border-radius:10px;
+              padding:4mm 6mm;margin-bottom:5mm;
+              display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <div style="color:#166534;font-size:8.5pt;font-weight:bold;
+                  text-transform:uppercase;letter-spacing:1px;">Economia Total em 25 Anos</div>
+                <div style="color:#1e3a5f;font-size:18pt;font-weight:900;">
+                  R$ ${economiaTotal25.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
+                </div>
+              </div>
+              <div style="text-align:right;">
+                <div style="color:#6b7280;font-size:8pt;">kWh do sistema FV</div>
+                <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
+                  R$ ${custokWh}/kWh</div>
+                <div style="color:#166534;font-size:8.5pt;font-weight:bold;">
+                  R$ ${economiakWh} economia/kWh</div>
+              </div>
             </div>
-          </div>
 
-          <div class="footer-interna" style="margin-top: auto;">
-            <div style="font-weight:bold; color:${AZUL};">MT SOLAR - ENERGIA RENOVÁVEL</div>
-            <div>mtsolar.energia@gmail.com | @mtsolar_ | Rua Rossini Roosevelt de Albuquerque, nº10 - Piedade, Jaboatão dos Guararapes - PE | (81) 99700-3260 | (81) 99504-3980</div>
+            <!-- TÍTULO GRÁFICO FLUXO -->
+            <div style="display:flex;align-items:center;gap:3mm;margin-bottom:3mm;">
+              <div style="width:4px;height:16px;background:#f59e0b;border-radius:2px;"></div>
+              <span style="font-size:12pt;font-weight:900;color:#1e3a5f;">
+                Fluxo de Caixa</span>
+              <span style="font-size:9pt;color:#6b7280;">(Ano x R$)</span>
+            </div>
+
+            <!-- GRÁFICO SVG DE FLUXO DE CAIXA -->
+            <div style="width:100%; height:160px; position:relative;">
+              <svg width="100%" height="150" viewBox="0 0 520 150" preserveAspectRatio="none">
+                <!-- Eixo X (Zero) -->
+                <line x1="0" y1="100" x2="520" y2="100" stroke="#1e3a5f" stroke-width="1.5" />
+                
+                ${fluxoCaixa.map((val, i) => {
+                  const xBase = i * 20 + 10;
+                  const barWidth = 14;
+                  const absMax = Math.max(maxFC, Math.abs(minFC));
+                  const barHeight = (Math.abs(val) / absMax) * 80;
+                  const y = val >= 0 ? 100 - barHeight : 100;
+                  const color = val >= 0 ? '#1e3a5f' : '#fca5a5';
+                  
+                  let label = '';
+                  if ([1, 5, 10, 15, 20, 25].includes(i + 1)) {
+                    label = `<text x="${xBase + 7}" y="145" font-size="8" text-anchor="middle" fill="#6b7280">${i + 1}</text>`;
+                  }
+
+                  return `
+                    <rect x="${xBase}" y="${y}" width="${barWidth}" height="${barHeight}" fill="${color}" rx="1" />
+                    ${label}
+                  `;
+                }).join('')}
+              </svg>
+            </div>
+
+            <!-- LEGENDA -->
+            <div style="display:flex;justify-content:center;gap:6mm;
+              margin-top:2mm;font-size:8.5pt;color:#6b7280;">
+              <span>■ <span style="color:#1e3a5f;font-weight:bold;">Fluxo positivo</span></span>
+              <span>■ <span style="color:#fca5a5;font-weight:bold;">Período de retorno</span></span>
+            </div>
+
+            <!-- RODAPÉ -->
+            <div style="border-top:2px solid #1e3a5f;padding-top:3mm;margin-top:4mm;
+              display:flex;justify-content:space-between;align-items:center;">
+              <div style="font-size:8pt;color:#1e3a5f;font-weight:bold;">
+                MT SOLAR — ENERGIA RENOVÁVEL</div>
+              <div style="font-size:7.5pt;color:#6b7280;">
+                mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99504-3980</div>
+            </div>
+
           </div>
         </div>
 
         <!-- PÁGINA 8: SERVIÇOS INCLUSOS -->
-        <div class="page">
-          <table class="header-interna">
-            <tr>
-              <td>
-                <div style="font-size:10pt; font-weight:bold; color:${AZUL};">MT SOLAR</div>
-                <div style="font-size:8pt; color:${CINZA};">— Energia renovável —</div>
-              </td>
-              <td style="text-align:right; color:${CINZA}; font-size:9pt;">
-                Proposta Comercial
-              </td>
-            </tr>
-          </table>
+        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
+          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
 
-          <div style="text-align:center; margin-bottom: 6mm;">
-            <div style="font-size:16pt; font-weight:bold; color:${AZUL};">Serviços Inclusos</div>
-            <div style="margin-top:2mm; border-bottom: 2px solid ${AZUL_CLARO}; width: 60mm; margin: 2mm auto;"></div>
+          <!-- FAIXA TOPO -->
+          <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
+            height:18mm;padding:0 14mm;display:flex;align-items:center;
+            justify-content:space-between;">
+            <span style="color:#fff;font-size:13pt;font-weight:900;">
+              Serviços Inclusos</span>
+            <span style="color:#f59e0b;font-size:9pt;font-weight:bold;">MT Solar</span>
           </div>
+          <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24,#f59e0b);"></div>
 
-          <div style="font-size:11pt; line-height:2; color:#333; margin-top: 6mm;">
-            <div style="padding: 2mm 0; border-bottom: 1px solid ${AZUL_CLARO}33;">1. Vistoria técnica e projeto elétrico do sistema.</div>
-            <div style="padding: 2mm 0; border-bottom: 1px solid ${AZUL_CLARO}33;">2. Anotação da responsabilidade técnica (ART) do projeto e instalação.</div>
-            <div style="padding: 2mm 0; border-bottom: 1px solid ${AZUL_CLARO}33;">3. Obtenção das licenças junto à concessionária de energia local.</div>
-            <div style="padding: 2mm 0; border-bottom: 1px solid ${AZUL_CLARO}33;">4. Montagem dos módulos fotovoltaicos com estruturas apropriadas para o tipo de telhado/solo.</div>
-            <div style="padding: 2mm 0; border-bottom: 1px solid ${AZUL_CLARO}33;">5. Instalação e montagem elétrica do sistema.</div>
-            <div style="padding: 2mm 0; border-bottom: 1px solid ${AZUL_CLARO}33;">6. Gestão, supervisão e fiscalização da Obra de instalação.</div>
-            <div style="padding: 2mm 0; border-bottom: 1px solid ${AZUL_CLARO}33;">7. Frete incluso de todos equipamentos referentes ao sistema.</div>
-            <div style="padding: 2mm 0; border-bottom: 1px solid ${AZUL_CLARO}33;">8. Documentação personalizada do projeto fotovoltaico.</div>
-          </div>
+          <div style="padding:8mm 14mm;">
 
-          <div style="background: ${AZUL_CLARO}44; border-radius:4px; padding:4mm; margin-top:6mm;">
-            <div style="font-size:10pt; color:${CINZA}; text-align:center; font-style:italic;">
-              "OBS: Não estão inclusos eventuais serviços de alvenaria, reforço estrutural, e/ou alterações na rede de distribuição as quais eventualmente podem ser solicitadas pela concessionária."
+            <!-- LISTA DE SERVIÇOS -->
+            ${[
+              'Vistoria técnica e projeto elétrico do sistema.',
+              'Anotação da responsabilidade técnica (ART) do projeto e instalação.',
+              'Obtenção das licenças junto à concessionária de energia local.',
+              'Montagem dos módulos fotovoltaicos com estruturas apropriadas para o tipo de telhado/solo.',
+              'Instalação e montagem elétrica do sistema.',
+              'Gestão, supervisão e fiscalização da Obra de instalação.',
+              'Frete incluso de todos equipamentos referentes ao sistema.',
+              'Documentação personalizada do projeto fotovoltaico.'
+            ].map((servico, i) => `
+              <div style="display:flex;align-items:flex-start;gap:4mm;
+                padding:4mm 0;border-bottom:1px solid #f0f0f0;">
+                <div style="min-width:8mm;height:8mm;background:${i % 2 === 0 ? '#1e3a5f' : '#f59e0b'};
+                  border-radius:50%;display:flex;align-items:center;justify-content:center;
+                  color:${i % 2 === 0 ? '#f59e0b' : '#1e3a5f'};font-weight:900;
+                  font-size:9pt;flex-shrink:0;">${i + 1}</div>
+                <div style="font-size:10.5pt;color:#374151;line-height:1.5;
+                  padding-top:0.5mm;">${servico}</div>
+              </div>
+            `).join('')}
+
+            <!-- OBS -->
+            <div style="background:#fff8e7;border:1.5px solid #f59e0b;border-radius:8px;
+              padding:4mm 5mm;margin-top:5mm;">
+              <div style="font-size:9pt;font-weight:bold;color:#92400e;margin-bottom:1mm;">
+                ⚠️ Observação Importante
+              </div>
+              <div style="font-size:9.5pt;color:#374151;text-align:justify;line-height:1.6;">
+                Não estão inclusos eventuais serviços de alvenaria, reforço estrutural, e/ou
+                alterações na rede de distribuição as quais eventualmente podem ser solicitadas
+                pela concessionária.
+              </div>
             </div>
-          </div>
 
-          <div style="margin-top: 8mm; background:${AZUL}11; border:1px solid ${AZUL}44; border-radius:6px; padding:6mm;">
-            <div style="font-weight:bold; color:${AZUL}; margin-bottom:4mm; font-size:12pt; text-align:center;">Garantias do Sistema</div>
-            
-            <table style="width:100%; border-collapse: collapse; font-size:10pt; border: 1px solid ${AZUL_CLARO};">
-              <thead>
-                <tr style="background: ${AZUL}; color: white;">
-                  <th style="padding: 3mm; text-align: left;">Componente</th>
-                  <th style="padding: 3mm; text-align: center;">Garantia Defeitos</th>
-                  <th style="padding: 3mm; text-align: center;">Garantia Eficiência</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr style="border-bottom: 1px solid ${AZUL_CLARO};">
-                  <td style="padding: 3mm;">Módulos Fotovoltaicos</td>
-                  <td style="padding: 3mm; text-align: center;">10 Anos</td>
-                  <td style="padding: 3mm; text-align: center;">25 Anos</td>
-                </tr>
-                <tr style="border-bottom: 1px solid ${AZUL_CLARO};">
-                  <td style="padding: 3mm;">Inversor</td>
-                  <td style="padding: 3mm; text-align: center;">10 Anos</td>
-                  <td style="padding: 3mm; text-align: center;">—</td>
-                </tr>
-                <tr style="border-bottom: 1px solid ${AZUL_CLARO};">
-                  <td style="padding: 3mm;">Estrutura de Fixação</td>
-                  <td style="padding: 3mm; text-align: center;">5 Anos</td>
-                  <td style="padding: 3mm; text-align: center;">—</td>
-                </tr>
-                <tr>
-                  <td style="padding: 3mm;">Instalação Elétrica</td>
-                  <td style="padding: 3mm; text-align: center;">1 Ano</td>
-                  <td style="padding: 3mm; text-align: center;">—</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div class="footer-interna" style="margin-top: auto;">
-            <div style="font-weight:bold; color:${AZUL};">MT SOLAR - ENERGIA RENOVÁVEL</div>
-            <div>mtsolar.energia@gmail.com | @mtsolar_ | Rua Rossini Roosevelt de Albuquerque, nº10 - Piedade, Jaboatão dos Guararapes - PE | (81) 99700-3260 | (81) 99504-3980</div>
-          </div>
-        </div>
-
-        <!-- PÁGINA 9: CONSIDERAÇÕES FINAIS E VALIDADE -->
-        <div class="page">
-          <table class="header-interna">
-            <tr>
-              <td>
-                <div style="font-size:10pt; font-weight:bold; color:${AZUL};">MT SOLAR</div>
-                <div style="font-size:8pt; color:${CINZA};">— Energia renovável —</div>
-              </td>
-              <td style="text-align:right; color:${CINZA}; font-size:9pt;">
-                Proposta Comercial
-              </td>
-            </tr>
-          </table>
-
-          <div style="text-align:center; margin-bottom: 6mm;">
-            <div style="font-size:16pt; font-weight:bold; color:${AZUL};">Considerações Finais e Validade</div>
-          </div>
-
-          <div style="font-size:10pt; line-height:1.8; color:#333; text-align:justify;">
-            <div style="padding:2mm 0; border-bottom:1px solid ${AZUL_CLARO}33;">1. Os valores apresentados de geração de energia são estimativas baseadas em informações consultadas no banco de dados do CRESESB, e representam médias mensais e anuais, sendo que a geração varia de acordo com os meses do ano, assim como de acordo com fatores meteorológicos.</div>
-            <div style="padding:2mm 0; border-bottom:1px solid ${AZUL_CLARO}33;">2. As estimativas de geração de energia, custos e economia foram baseadas e projetadas de acordo com as informações de consumo apresentadas pelo cliente, o estudo de irradiação solar local e a análise da inflação energética nos últimos anos.</div>
-            <div style="padding:2mm 0; border-bottom:1px solid ${AZUL_CLARO}33;">3. O sistema proposto foi projetado considerando-se o atual perfil de consumo do cliente, tal como de acordo com os requisitos apresentados pelo cliente.</div>
-            <div style="padding:2mm 0; border-bottom:1px solid ${AZUL_CLARO}33;">4. Por não possuir partes móveis, o sistema não exige manutenção preventiva. Periodicamente (6 meses a 1 ano), é recomendável a limpeza dos módulos fotovoltaicos para otimizar a geração de energia, especialmente em regiões/estações secas.</div>
-          </div>
-
-          <div style="margin-top: 8mm; background:${AZUL_CLARO}55; border-radius:6px; padding:5mm; text-align:center;">
-            <div style="font-size:11pt; color:#333;">
-              Esta proposta foi gerada em <strong style="color:${AZUL}">${dataGerada}</strong> e é válida até <strong style="color:${AMARELO}">${dataValidade}</strong>
+            <!-- TABELA DE GARANTIAS -->
+            <div style="margin-top:5mm;">
+              <div style="display:flex;align-items:center;gap:3mm;margin-bottom:3mm;">
+                <div style="width:4px;height:16px;background:#f59e0b;border-radius:2px;"></div>
+                <span style="font-size:12pt;font-weight:900;color:#1e3a5f;">
+                  Garantias do Sistema</span>
+              </div>
+              <table style="width:100%;border-collapse:collapse;font-size:9.5pt;">
+                <thead>
+                  <tr style="background:linear-gradient(135deg,#1e3a5f,#2d5a8e);">
+                    <th style="padding:3mm 4mm;text-align:left;color:#f59e0b;
+                      border-radius:6px 0 0 0;">Componente</th>
+                    <th style="padding:3mm 4mm;text-align:center;color:#fff;">
+                      Garantia Defeitos</th>
+                    <th style="padding:3mm 4mm;text-align:center;color:#fff;
+                      border-radius:0 6px 0 0;">Garantia Eficiência</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style="background:#f8fafc;">
+                    <td style="padding:2.5mm 4mm;color:#374151;border-bottom:1px solid #e5e7eb;">
+                      Módulos Fotovoltaicos</td>
+                    <td style="padding:2.5mm 4mm;text-align:center;border-bottom:1px solid #e5e7eb;">
+                      <span style="background:#dcfce7;color:#166534;border-radius:4px;
+                        padding:0.5mm 3mm;font-weight:bold;">${gModuloDefeito} Anos</span></td>
+                    <td style="padding:2.5mm 4mm;text-align:center;border-bottom:1px solid #e5e7eb;">
+                      <span style="background:#dcfce7;color:#166534;border-radius:4px;
+                        padding:0.5mm 3mm;font-weight:bold;">${gModuloEfic} Anos</span></td>
+                  </tr>
+                  <tr>
+                    <td style="padding:2.5mm 4mm;color:#374151;border-bottom:1px solid #e5e7eb;">
+                      Inversor</td>
+                    <td style="padding:2.5mm 4mm;text-align:center;border-bottom:1px solid #e5e7eb;">
+                      <span style="background:#dcfce7;color:#166534;border-radius:4px;
+                        padding:0.5mm 3mm;font-weight:bold;">${gInversor} Anos</span></td>
+                    <td style="padding:2.5mm 4mm;text-align:center;border-bottom:1px solid #e5e7eb;
+                      color:#9ca3af;">—</td>
+                  </tr>
+                  <tr style="background:#f8fafc;">
+                    <td style="padding:2.5mm 4mm;color:#374151;border-bottom:1px solid #e5e7eb;">
+                      Estrutura de Fixação
+                      ${temMateriais ? `
+                        <div style="font-size:8pt;color:#6b7280;margin-top:1mm;">
+                          ${todosMateriais.slice(0,3).join(' · ')}
+                          ${todosMateriais.length > 3 ? ` · +${todosMateriais.length - 3} mais` : ''}
+                        </div>` : ''}
+                    </td>
+                    <td style="padding:2.5mm 4mm;text-align:center;border-bottom:1px solid #e5e7eb;">
+                      <span style="background:#dcfce7;color:#166534;border-radius:4px;
+                        padding:0.5mm 3mm;font-weight:bold;">${gEstrutura} Anos</span></td>
+                    <td style="padding:2.5mm 4mm;text-align:center;border-bottom:1px solid #e5e7eb;
+                      color:#9ca3af;">—</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:2.5mm 4mm;color:#374151;">Instalação Elétrica</td>
+                    <td style="padding:2.5mm 4mm;text-align:center;">
+                      <span style="background:#dcfce7;color:#166534;border-radius:4px;
+                        padding:0.5mm 3mm;font-weight:bold;">${gInstalacao} Ano(s)</span></td>
+                    <td style="padding:2.5mm 4mm;text-align:center;color:#9ca3af;">—</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-            <div style="font-size:9pt; color:${CINZA}; margin-top:2mm;">Validade de 7 dias corridos a partir da data de geração.</div>
-          </div>
 
-          <div style="margin-top: 15mm;">
-            <table style="width:100%; border-collapse: collapse;">
+            <!-- RODAPÉ -->
+            <div style="border-top:2px solid #1e3a5f;padding-top:3mm;margin-top:5mm;
+              display:flex;justify-content:space-between;align-items:center;">
+            <!-- PÁGINA 9: CONSIDERAÇÕES FINAIS E VALIDADE -->
+        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
+          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
+
+          <!-- FAIXA TOPO -->
+          <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
+            height:18mm;padding:0 14mm;display:flex;align-items:center;
+            justify-content:space-between;">
+            <span style="color:#fff;font-size:13pt;font-weight:900;">
+              Considerações Finais e Validade</span>
+            <span style="color:#f59e0b;font-size:9pt;font-weight:bold;">MT Solar</span>
+          </div>
+          <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24,#f59e0b);"></div>
+
+          <div style="padding:8mm 14mm;">
+
+            <!-- LISTA DE CONSIDERAÇÕES -->
+            ${[
+              'Os valores apresentados de geração de energia são estimativas baseadas em informações consultadas no banco de dados do CRESESB, e representam médias mensais e anuais, sendo que a geração varia de acordo com os meses do ano, assim como de acordo com fatores meteorológicos.',
+              'As estimativas de geração de energia, custos e economia foram baseadas e projetadas de acordo com as informações de consumo apresentadas pelo cliente, o estudo de irradiação solar local e a análise da inflação energética nos últimos anos.',
+              'O sistema proposto foi projetado considerando-se o atual perfil de consumo do cliente, tal como de acordo com os requisitos apresentados pelo cliente.',
+              'Por não possuir partes móveis, o sistema não exige manutenção preventiva. Periodicamente (6 meses a 1 ano), é recomendável a limpeza dos módulos fotovoltaicos para otimizar a geração de energia, especialmente em regiões/estações secas.'
+            ].map((texto, i) => `
+              <div style="display:flex;align-items:flex-start;gap:4mm;
+                padding:4mm 0;border-bottom:1px solid #f0f0f0;">
+                <div style="min-width:8mm;height:8mm;background:${i % 2 === 0 ? '#1e3a5f' : '#f59e0b'};
+                  border-radius:50%;display:flex;align-items:center;justify-content:center;
+                  color:${i % 2 === 0 ? '#f59e0b' : '#1e3a5f'};font-weight:900;
+                  font-size:9pt;flex-shrink:0;">${i + 1}</div>
+                <div style="font-size:10pt;color:#374151;line-height:1.6;
+                  text-align:justify;padding-top:0.5mm;">${texto}</div>
+              </div>
+            `).join('')}
+
+            <!-- VALIDADE -->
+            <div style="background:linear-gradient(135deg,#1e3a5f,#2d5a8e);
+              border-radius:10px;padding:5mm 8mm;margin-top:6mm;text-align:center;">
+              <div style="color:#f59e0b;font-size:8.5pt;font-weight:bold;
+                text-transform:uppercase;letter-spacing:2px;margin-bottom:2mm;">
+                Validade da Proposta</div>
+              <div style="color:#fff;font-size:11pt;line-height:1.8;">
+                Esta proposta foi gerada em
+                <strong style="color:#f59e0b;">${dataGerada}</strong>
+                e é válida até
+                <strong style="color:#f59e0b;">${dataValidade}</strong>
+              </div>
+              <div style="color:rgba(255,255,255,0.6);font-size:8.5pt;margin-top:1mm;">
+                7 dias corridos a partir da data de geração</div>
+            </div>
+
+            <!-- ASSINATURAS -->
+            <table style="width:100%;border-collapse:collapse;margin-top:12mm;">
               <tr>
-                <td style="width:45%; text-align:center; padding-top:10mm;">
-                  <div style="border-top: 1px solid ${CINZA}; padding-top:2mm;">
-                    <div style="font-size:10pt; font-weight:bold; color:${AZUL};">MT Solar</div>
-                    <div style="font-size:9pt; color:${CINZA};">Responsável Técnico</div>
+                <td style="width:45%;text-align:center;padding:0 5mm;">
+                  <div style="border-top:2px solid #1e3a5f;padding-top:3mm;">
+                    <div style="font-size:10pt;font-weight:bold;color:#1e3a5f;">MT Solar</div>
+                    <div style="font-size:9pt;color:#6b7280;">Responsável Técnico</div>
                   </div>
                 </td>
                 <td style="width:10%;"></td>
-                <td style="width:45%; text-align:center; padding-top:10mm;">
-                  <div style="border-top: 1px solid ${CINZA}; padding-top:2mm;">
-                    <div style="font-size:10pt; font-weight:bold; color:${AZUL};">${formData.clientName}</div>
-                    <div style="font-size:9pt; color:${CINZA};">Cliente</div>
+                <td style="width:45%;text-align:center;padding:0 5mm;">
+                  <div style="border-top:2px solid #1e3a5f;padding-top:3mm;">
+                    <div style="font-size:10pt;font-weight:bold;color:#1e3a5f;">
+                      ${formData.clientName || 'Cliente'}</div>
+                    <div style="font-size:9pt;color:#6b7280;">Contratante</div>
                   </div>
                 </td>
               </tr>
             </table>
-          </div>
 
-          <div style="margin-top: auto; border-top: 3px solid ${AZUL}; padding-top:3mm;">
-            <div style="font-weight:bold; color:${AZUL}; font-size:9pt;">MT SOLAR - ENERGIA RENOVÁVEL</div>
+            <!-- RODAPÉ FINAL -->
+            <div style="border-top:3px solid #f59e0b;padding-top:4mm;margin-top:10mm;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <div style="font-size:9pt;font-weight:bold;color:#1e3a5f;">
+                    MT SOLAR — ENERGIA RENOVÁVEL</div>
+                  <div style="font-size:8pt;color:#6b7280;">
+                    mtsolar.energia@gmail.com | @mtsolar_</div>
+                  <div style="font-size:8pt;color:#6b7280;">
+                    Rua Rossini Roosevelt de Albuquerque, nº10 - Piedade, Jaboatão dos Guararapes - PE</div>
+                  <div style="font-size:8pt;color:#6b7280;">
+                    (81) 99700-3260 | (81) 99504-3980</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="color:#6b7280;font-size:8pt;">Nº da Proposta</div>
+                  <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
+                    PROP-${Date.now().toString().slice(-6)}</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+ld; color:${AZUL}; font-size:9pt;">MT SOLAR - ENERGIA RENOVÁVEL</div>
             <div style="font-size:8pt; color:${CINZA}; margin-top:1mm;">mtsolar.energia@gmail.com | @mtsolar_ | (81) 99700-3260 | (81) 99504-3980</div>
             <div style="font-size:8pt; color:${CINZA}; margin-top:1mm;">Número da proposta: ${proposalNumber}</div>
           </div>
@@ -1665,8 +2031,75 @@ export default function ProposalGenerator() {
                 </div>
               </div>
 
-              {/* Garantias do Sistema */}
+              {/* Materiais da Estrutura de Fixação */}
               <div className="mt-8 pt-8 border-t border-gray-100">
+                <h3 className="text-lg font-bold text-blue-900 mb-1 flex items-center gap-2">
+                  <Layers className="w-5 h-5" />
+                  Materiais da Estrutura de Fixação
+                </h3>
+                <p className="text-sm text-gray-400 mb-2">Selecione os materiais utilizados na estrutura. Se nenhum for marcado, a proposta exibirá apenas 'Estrutura de Fixação' como padrão.</p>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 my-4">
+                  {materiaisEstrutura.map(material => {
+                    const isSelected = formData.estruturaMateriais.includes(material);
+                    return (
+                      <label 
+                        key={material}
+                        className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${
+                          isSelected 
+                            ? 'border-blue-500 bg-blue-50 text-blue-900' 
+                            : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300'
+                        }`}
+                      >
+                        <input 
+                          type="checkbox"
+                          className="hidden"
+                          checked={isSelected}
+                          onChange={() => toggleMaterial(material)}
+                        />
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${
+                          isSelected ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'
+                        }`}>
+                          {isSelected && <Check size={10} className="text-white" />}
+                        </div>
+                        <span className="text-xs font-medium">{material}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="space-y-1 mt-4">
+                  <label className="text-sm font-medium text-gray-700">Outro material (opcional)</label>
+                  <input 
+                    type="text" 
+                    value={formData.estruturaOutro}
+                    onChange={(e) => updateForm('estruturaOutro', e.target.value)}
+                    className={inputStyle}
+                    placeholder="Ex: Perfil Z de aço carbono"
+                  />
+                </div>
+
+                {(formData.estruturaMateriais.length > 0 || formData.estruturaOutro) && (
+                  <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-sm font-bold text-blue-900 mb-2">Materiais selecionados:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {formData.estruturaMateriais.map(m => (
+                        <span key={m} className="bg-blue-900 text-white text-[10px] px-2 py-1 rounded-full uppercase font-bold">
+                          {m}
+                        </span>
+                      ))}
+                      {formData.estruturaOutro && (
+                        <span className="bg-amber-500 text-white text-[10px] px-2 py-1 rounded-full uppercase font-bold">
+                          {formData.estruturaOutro}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Garantias do Sistema */}
+              <div className="mt-6 pt-6 border-t border-gray-100">
                 <h3 className="text-lg font-bold text-blue-900 mb-1 flex items-center gap-2">
                   <ShieldCheck className="w-5 h-5" />
                   Garantias do Sistema
@@ -1683,7 +2116,7 @@ export default function ProposalGenerator() {
                       className={inputStyle}
                       placeholder="Padrão: 10"
                     />
-                    <p className="text-[10px] text-gray-400">Ex: Leapton = 10 anos</p>
+                    <p className="text-xs text-gray-400">Ex: Leapton = 10 anos</p>
                   </div>
 
                   <div className="space-y-1">
@@ -1695,7 +2128,7 @@ export default function ProposalGenerator() {
                       className={inputStyle}
                       placeholder="Padrão: 25"
                     />
-                    <p className="text-[10px] text-gray-400">Ex: Leapton = 25 anos</p>
+                    <p className="text-xs text-gray-400">Ex: Leapton = 25 anos</p>
                   </div>
 
                   <div className="space-y-1">
@@ -1707,7 +2140,7 @@ export default function ProposalGenerator() {
                       className={inputStyle}
                       placeholder="Padrão: 10"
                     />
-                    <p className="text-[10px] text-gray-400">Ex: Goodwe = 10 anos | Growatt = 5 anos</p>
+                    <p className="text-xs text-gray-400">Ex: Goodwe = 10 anos | Growatt = 5 anos</p>
                   </div>
 
                   <div className="space-y-1">
@@ -1719,7 +2152,7 @@ export default function ProposalGenerator() {
                       className={inputStyle}
                       placeholder="Padrão: 5"
                     />
-                    <p className="text-[10px] text-gray-400">Varia conforme material (alumínio, aço galvanizado)</p>
+                    <p className="text-xs text-gray-400">Varia conforme material (alumínio, aço galvanizado)</p>
                   </div>
 
                   <div className="space-y-1">
@@ -1731,7 +2164,7 @@ export default function ProposalGenerator() {
                       className={inputStyle}
                       placeholder="Padrão: 1"
                     />
-                    <p className="text-[10px] text-gray-400">Garantia de mão de obra</p>
+                    <p className="text-xs text-gray-400">Garantia de mão de obra</p>
                   </div>
                 </div>
 
