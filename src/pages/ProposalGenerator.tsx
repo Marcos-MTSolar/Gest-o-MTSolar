@@ -442,7 +442,7 @@ export default function ProposalGenerator() {
     const paybackMeses = results.paybackMonths;
     const paybackAnos = Math.floor(paybackMeses / 12);
     const paybackMesesRest = Math.round(paybackMeses % 12);
-    const roi = annualSav > 0 ? (annualSav * 25 / saleP).toFixed(2) : '0';
+    const roi = annualSav > 0 ? ((annualSav * (Math.pow(1 + reajusteAnual, 25) - 1) / reajusteAnual) / saleP).toFixed(2) : '0';
     const tir = annualSav > 0 ? ((annualSav / saleP) * 100).toFixed(2) : '0';
     
     const economiaTotal25 = annualSav > 0 
