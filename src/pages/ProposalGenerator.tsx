@@ -445,12 +445,14 @@ export default function ProposalGenerator() {
     const roi = annualSav > 0 ? (annualSav * 25 / saleP).toFixed(2) : '0';
     const tir = annualSav > 0 ? ((annualSav / saleP) * 100).toFixed(2) : '0';
     
-    let economiaTotal25 = 0;
+    const economiaTotal25 = annualSav > 0 
+      ? annualSav * (Math.pow(1 + reajusteAnual, 25) - 1) / reajusteAnual 
+      : 0;
+
     let fluxoCaixa = [];
     let acumulado = -saleP;
     for (let ano = 1; ano <= 25; ano++) {
       const economiaAno = annualSav * Math.pow(1 + reajusteAnual, ano - 1);
-      economiaTotal25 += economiaAno;
       acumulado += economiaAno;
       fluxoCaixa.push(acumulado);
     }
