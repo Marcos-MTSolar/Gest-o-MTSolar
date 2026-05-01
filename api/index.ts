@@ -262,7 +262,8 @@ app.get('/api/projects', authenticateToken, async (req: any, res) => {
       *,
       clients (name),
       commercial_data (status, pendencies),
-      technical_data (status, structure_type)
+      technical_data (status, structure_type),
+      documents (*)
     `)
     .order('updated_at', { ascending: false });
 
@@ -645,6 +646,7 @@ app.put('/api/events/:id/complete', authenticateToken, async (req: any, res) => 
   res.json({ success: true });
 });
 
+
 // Proposal History
 app.get('/api/proposal-history', authenticateToken, async (req: any, res) => {
   const { data: history, error } = await supabase
@@ -654,6 +656,43 @@ app.get('/api/proposal-history', authenticateToken, async (req: any, res) => {
   
   if (error) return res.status(500).json({ error: error.message });
   res.json(history || []);
+});
+
+// Propostas Ativas (7 dias)
+app.get('/api/proposals-active', authenticateToken, async (req: any, res) => {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from('proposals')
+    .select('*')
+    .gte('created_at', sevenDaysAgo)
+    .order('created_at', { ascending: false });
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
+});
+
+app.post('/api/proposals', authenticateToken, async (req: any, res) => {
+  const { client_name, phone, email, address, proposal_number, margin, kit_value } = req.body;
+  const created_by = req.user?.name || req.user?.email || 'Desconhecido';
+
+  const { data, error } = await supabase
+    .from('proposals')
+    .insert([{
+      client_name,
+      phone,
+      email,
+      address,
+      proposal_number,
+      margin,
+      kit_value,
+      created_by
+    }])
+    .select()
+    .single();
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
 });
 
 app.post('/api/proposal-history', authenticateToken, async (req: any, res) => {

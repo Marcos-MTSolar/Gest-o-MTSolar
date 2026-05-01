@@ -226,6 +226,17 @@ export default function ProposalGenerator() {
         proposal_number: proposalNumber
       });
 
+      // Também salva na tabela de propostas detalhadas para preenchimento automático
+      await api.post('/api/proposals', {
+        client_name: formData.clientName,
+        phone: formData.clientPhone,
+        email: formData.clientEmail,
+        address: formData.clientAddress,
+        proposal_number: proposalNumber,
+        margin: marginNum,
+        kit_value: kitCostNum
+      });
+
       fetchHistory();
     } catch (error) {
       console.error('Erro ao salvar no histórico:', error);

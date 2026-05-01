@@ -21,11 +21,34 @@ export default function Commercial() {
   const [includeInspectionPhotos, setIncludeInspectionPhotos] = useState(false);
   const [inspectionPhotos, setInspectionPhotos] = useState<string[]>([]);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [activeTab, setActiveTab] = useState<'projects' | 'activeProposals'>('projects');
+  const [activeProposals, setActiveProposals] = useState<any[]>([]);
   const submitAction = useRef('pending');
 
   useEffect(() => {
     fetchProjects();
+    fetchActiveProposals();
   }, []);
+
+  const fetchActiveProposals = async () => {
+    try {
+      const res = await api.get('/api/proposals-active');
+      setActiveProposals(res.data);
+    } catch (err) {
+      console.error('Erro ao buscar propostas ativas:', err);
+    }
+  };
+
+  const fillFromProposal = (proposal: any) => {
+    setNewClient(prev => ({
+      ...prev,
+      name: proposal.client_name,
+      phone: proposal.phone,
+      email: proposal.email,
+      address: proposal.address
+    }));
+    alert('Dados da proposta preenchidos no formulário!');
+  };
 
   const fetchProjects = async () => {
     try {
@@ -176,7 +199,7 @@ export default function Commercial() {
   };
 
   return (
-    <div className="p-6">
+    <div className="min-h-screen overflow-y-auto pb-24">
       {!selectedProject ? (
         <>
           <div className="flex justify-between items-center mb-6">
@@ -341,53 +364,92 @@ export default function Commercial() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-6">
-            {projects.map(p => (
-              <div key={p.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-800">{p.client_name}</h3>
-                  <p className="text-sm text-gray-500">{p.title}</p>
-
-                  {p.commercial_status === 'pending' && p.commercial_pendencies && (
-                    <p className="text-xs text-amber-700 mt-1 bg-amber-50 p-1 rounded inline-block border border-amber-200">
-                      <strong>PendÃªncia:</strong> {p.commercial_pendencies}
-                    </p>
-                  )}
-
-                  <div className="flex gap-2 mt-2">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'bg-green-100 text-green-800' :
-                      ['pending', 'pendente_comercial'].includes(p.commercial_status) ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
-                      {['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'Finalizado' : 'Pendente'}
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={async () => {
-                    const res = await api.get(`/api/projects/${p.id}`);
-                    const data = res.data;
-                    setSelectedProject(data);
-                    setIncludeInspectionPhotos(!!data.include_inspection_photos);
-                    
-                    let photos = [];
-                    if (data.inspection_photos) {
-                      try {
-                        photos = typeof data.inspection_photos === 'string' 
-                          ? JSON.parse(data.inspection_photos) 
-                          : data.inspection_photos;
-                      } catch (e) {
-                        photos = [];
-                      }
-                    }
-                    setInspectionPhotos(Array.isArray(photos) ? photos : []);
-                  }}
-                  className={`px-4 py-2 rounded text-white ${['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-900 hover:bg-blue-800'}`}
-                >
-                  {['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'Ver Detalhes' : 'Gerenciar'}
-                </button>
-              </div>
-            ))}
+          <div className="flex border-b mb-6">
+            <button
+              onClick={() => setActiveTab('projects')}
+              className={`px-6 py-3 font-bold transition-colors ${activeTab === 'projects' ? 'border-b-2 border-blue-900 text-blue-900' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Projetos Pendentes
+            </button>
+            <button
+              onClick={() => setActiveTab('activeProposals')}
+              className={`px-6 py-3 font-bold transition-colors ${activeTab === 'activeProposals' ? 'border-b-2 border-blue-900 text-blue-900' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Propostas Ativas (7 dias)
+            </button>
           </div>
+
+          {activeTab === 'projects' ? (
+            <div className="grid grid-cols-1 gap-6">
+              {projects.length === 0 && (
+                <p className="text-gray-500">Nenhum projeto comercial pendente.</p>
+              )}
+              {projects.map(p => (
+                <div key={p.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center transition hover:shadow-md">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-800">{p.client_name}</h3>
+                    <p className="text-sm text-gray-500">{p.title}</p>
+                    {p.commercial_status === 'pending' && p.commercial_pendencies && (
+                      <p className="text-xs text-amber-700 mt-1 bg-amber-50 p-1 rounded inline-block border border-amber-200">
+                        <strong>Pendência:</strong> {p.commercial_pendencies}
+                      </p>
+                    )}
+                    <div className="flex gap-2 mt-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'bg-green-100 text-green-800' :
+                        ['pending', 'pendente_comercial'].includes(p.commercial_status) ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
+                        {['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'Finalizado' : 'Pendente'}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const res = await api.get(`/api/projects/${p.id}`);
+                      const data = res.data;
+                      setSelectedProject(data);
+                      setIncludeInspectionPhotos(!!data.include_inspection_photos);
+                      let photos = [];
+                      if (data.inspection_photos) {
+                        try {
+                          photos = typeof data.inspection_photos === 'string'
+                            ? JSON.parse(data.inspection_photos)
+                            : data.inspection_photos;
+                        } catch (e) { photos = []; }
+                      }
+                      setInspectionPhotos(Array.isArray(photos) ? photos : []);
+                    }}
+                    className={`px-4 py-2 rounded text-white font-medium ${['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-900 hover:bg-blue-800'}`}
+                  >
+                    {['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'Ver Detalhes' : 'Gerenciar'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {activeProposals.length === 0 && (
+                <p className="text-gray-500">Nenhuma proposta gerada nos últimos 7 dias.</p>
+              )}
+              {activeProposals.map(prop => (
+                <div key={prop.id} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center hover:border-blue-300 transition-all">
+                  <div>
+                    <h3 className="font-bold text-gray-800">{prop.client_name}</h3>
+                    <p className="text-sm text-gray-500">Proposta: <span className="font-mono">{prop.proposal_number}</span></p>
+                    <p className="text-xs text-gray-400 mt-1">Gerada em: {new Date(prop.created_at).toLocaleDateString('pt-BR')}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      fillFromProposal(prop);
+                      setShowNewClient(true);
+                    }}
+                    className="flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-lg hover:bg-blue-100 font-bold transition-all"
+                  >
+                    <Plus size={16} /> Cadastrar Cliente
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </>
       ) : (
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">

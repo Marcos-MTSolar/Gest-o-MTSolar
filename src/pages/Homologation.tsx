@@ -367,6 +367,37 @@ export default function Homologation() {
                     </label>
                   ))}
                 </div>
+
+                {/* SeÃ§Ã£o de Documentos do Cliente (ExibiÃ§Ã£o Apenas) */}
+                {selectedProject.documents && selectedProject.documents.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="text-lg font-bold mb-3 text-gray-800 flex items-center gap-2">
+                      <FileText size={20} className="text-blue-600" /> Documentos do Cliente
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {selectedProject.documents.map((doc: any) => (
+                        <div key={doc.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-200 transition-all">
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            <FileText size={16} className="text-blue-500 shrink-0" />
+                            <div className="overflow-hidden">
+                              <p className="text-xs font-bold text-gray-700 truncate">{doc.title || 'Documento'}</p>
+                              <p className="text-[10px] text-gray-400 truncate">{new Date(doc.created_at).toLocaleDateString('pt-BR')}</p>
+                            </div>
+                          </div>
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 p-1.5 hover:bg-blue-50 rounded-md transition-colors"
+                            title="Ver documento"
+                          >
+                            <Unlock size={16} />
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
