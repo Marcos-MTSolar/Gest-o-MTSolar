@@ -1491,6 +1491,7 @@ export default function ProposalGenerator() {
     newWindow.document.write(htmlContent);
     newWindow.document.close();
     setTimeout(() => { newWindow.print(); }, 2000);
+    saveToHistory(proposalNumber);
   };
 
   const tabs = [
