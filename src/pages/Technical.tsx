@@ -223,7 +223,6 @@ export default function Technical() {
                     <input
                       type="file"
                       multiple
-                      accept="image/*,video/*"
                       className="hidden"
                       id="inspection-media-upload"
                       onChange={handleFileSelect}

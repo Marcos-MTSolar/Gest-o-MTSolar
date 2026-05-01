@@ -199,7 +199,6 @@ export default function Settings() {
                     <input 
                       type="file" 
                       className="hidden" 
-                      accept="image/*"
                       onChange={handleLogoUpload}
                       disabled={uploading}
                     />

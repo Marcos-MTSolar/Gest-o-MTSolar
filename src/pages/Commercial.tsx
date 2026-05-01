@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import api from '../lib/api';
 import { Plus, Search, FileText, CheckCircle, Clock, Upload, FileCheck, AlertCircle, Camera } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -256,7 +256,6 @@ export default function Commercial() {
                             </span>
                             <input
                               type="file"
-                              accept="*"
                               className="hidden"
                               onChange={e => {
                                 const file = e.target.files?.[0];
@@ -317,7 +316,6 @@ export default function Commercial() {
                             </span>
                             <input
                               type="file"
-                              accept="*"
                               className="hidden"
                               onChange={e => {
                                 const file = e.target.files?.[0];
@@ -536,7 +534,6 @@ export default function Commercial() {
                             <input 
                               type="file" 
                               className="hidden" 
-                              accept="image/*"
                               disabled={isUploadingPhoto}
                               onChange={async (e) => {
                                 const file = e.target.files?.[0];

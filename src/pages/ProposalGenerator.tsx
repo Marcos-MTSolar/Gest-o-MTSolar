@@ -1746,7 +1746,6 @@ export default function ProposalGenerator() {
                         <input 
                           type="file" 
                           className="hidden" 
-                          accept="image/*"
                           disabled={isUploadingPhoto}
                           onChange={async (e) => {
                             const file = e.target.files?.[0];

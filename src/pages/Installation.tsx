@@ -166,7 +166,6 @@ export default function Installation() {
           </span>
           <input
             type="file"
-            accept="image/*"
             className="hidden"
             onChange={e => handleFileChange(name, e.target.files?.[0] ?? null)}
           />
