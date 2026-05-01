@@ -222,7 +222,7 @@ export default function ProposalGenerator() {
       await api.post('/api/proposal-history', {
         client_name: formData.clientName,
         margin: marginNum,
-        kit_value: salePrice,
+        kit_value: kitCostNum, // <-- agora salva o CUSTO real do kit
         proposal_number: proposalNumber
       });
 
@@ -1510,6 +1510,10 @@ export default function ProposalGenerator() {
     newWindow.document.close();
     setTimeout(() => { newWindow.print(); }, 2000);
     saveToHistory(proposalNumber);
+
+    // Retornar para tela inicial da proposta
+    setActiveTab('dados');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const tabs = [
@@ -2522,7 +2526,7 @@ export default function ProposalGenerator() {
                       <th className="px-6 py-4 border-b">Data</th>
                       <th className="px-6 py-4 border-b">Cliente</th>
                       <th className="px-6 py-4 border-b text-center">Margem</th>
-                      <th className="px-6 py-4 border-b text-right">Valor do Kit</th>
+                      <th className="px-6 py-4 border-b text-right">Custo do Kit</th>
                       <th className="px-6 py-4 border-b">Nº Proposta</th>
                       <th className="px-6 py-4 border-b">Gerado por</th>
                       <th className="px-6 py-4 border-b text-center">Ações</th>
