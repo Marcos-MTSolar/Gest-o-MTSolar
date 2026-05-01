@@ -192,6 +192,16 @@ export default function ProposalGenerator() {
     }
   };
 
+  const deleteHistory = async (id: number) => {
+    if (!window.confirm('Deseja excluir este registro do histórico?')) return;
+    try {
+      await api.delete(`/api/proposal-history/${id}`);
+      setHistory(prev => prev.filter((item: any) => item.id !== id));
+    } catch (error) {
+      console.error('Erro ao excluir histórico:', error);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'historico') {
       fetchHistory();
@@ -200,14 +210,22 @@ export default function ProposalGenerator() {
 
   const saveToHistory = async (proposalNumber: string) => {
     try {
-      const salePrice = results.salePrice || (Number(formData.kitCost) * (1 + Number(formData.marginPercent)/100));
-      
+      const kitCostNum = Number(formData.kitCost) || 0;
+      const marginNum = parseFloat(formData.marginPercent) || 0;
+      const salePrice = results.salePrice || (kitCostNum * (1 + marginNum / 100));
+
+      if (!formData.clientName || kitCostNum === 0) {
+        console.warn('saveToHistory: dados insuficientes para salvar no histórico.');
+        return;
+      }
+
       await api.post('/api/proposal-history', {
-        client_name: formData.clientName || 'Cliente sem nome',
-        margin: parseFloat(formData.marginPercent) || 0,
+        client_name: formData.clientName,
+        margin: marginNum,
         kit_value: salePrice,
         proposal_number: proposalNumber
       });
+
       fetchHistory();
     } catch (error) {
       console.error('Erro ao salvar no histórico:', error);
@@ -2507,6 +2525,7 @@ export default function ProposalGenerator() {
                       <th className="px-6 py-4 border-b text-right">Valor do Kit</th>
                       <th className="px-6 py-4 border-b">Nº Proposta</th>
                       <th className="px-6 py-4 border-b">Gerado por</th>
+                      <th className="px-6 py-4 border-b text-center">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="text-sm divide-y divide-gray-100">
@@ -2534,6 +2553,15 @@ export default function ProposalGenerator() {
                           </td>
                           <td className="px-6 py-4 text-gray-500 font-mono text-xs">{item.proposal_number || '—'}</td>
                           <td className="px-6 py-4 text-gray-500">{item.created_by || '—'}</td>
+                          <td className="px-6 py-4 text-center">
+                            <button
+                              onClick={() => deleteHistory(item.id)}
+                              className="text-red-500 hover:text-red-700 text-xs font-bold px-3 py-1 rounded-lg border border-red-200 hover:bg-red-50 transition-colors"
+                              title="Excluir registro"
+                            >
+                              Excluir
+                            </button>
+                          </td>
                         </tr>
                       ))
                     )}

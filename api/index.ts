@@ -679,6 +679,18 @@ app.post('/api/proposal-history', authenticateToken, async (req: any, res) => {
   res.json(data);
 });
 
+app.delete('/api/proposal-history/:id', authenticateToken, async (req: any, res) => {
+  const { id } = req.params;
+
+  const { error } = await supabase
+    .from('proposal_history')
+    .delete()
+    .eq('id', id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
 // Service Proposals
 app.get('/api/service-proposals', authenticateToken, async (req: any, res) => {
   const { data, error } = await supabase
