@@ -45,24 +45,29 @@ export async function uploadIndividualDocs(
   userId: string,
   files: { [docId: string]: File }
 ): Promise<void> {
-  for (const [docId, file] of Object.entries(files)) {
-    const filename = `proj_${projectId}/${Date.now()}_${file.name}`;
-    const { data, error: uploadErr } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(filename, file, { upsert: true });
-    
-    if (uploadErr) throw uploadErr;
+  const token = localStorage.getItem('token');
 
-    const { data: { publicUrl } } = supabase.storage.from(BUCKET_NAME).getPublicUrl(filename);
+  for (const [docId, file] of Object.entries(files)) {
     const docLabel = [...DOCS_OBRIGATORIOS, ...DOCS_OPCIONAIS].find(d => d.id === docId)?.label || docId;
 
-    await supabase.from('documents').insert({
-      project_id: projectId,
-      title: docLabel,
-      url: publicUrl,
-      uploaded_by: userId,
-      type: docId
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('project_id', String(projectId));
+    formData.append('title', docLabel);
+    formData.append('type', docId);
+
+    const response = await fetch('/api/documents', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: formData
     });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(`Erro ao enviar documento "${docLabel}": ${err.error || response.statusText}`);
+    }
   }
 }
 
