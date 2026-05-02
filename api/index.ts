@@ -243,7 +243,7 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
   }
 
   broadcast('CLIENT_CREATED', { id: client.id, name });
-  res.json({ id: client.id });
+  res.json({ id: client.id, project_id: project?.id });
 });
 
 app.put('/api/clients/:id', authenticateToken, async (req: any, res) => {

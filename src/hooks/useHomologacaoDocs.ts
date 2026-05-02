@@ -45,7 +45,8 @@ export async function uploadIndividualDocs(
   userId: string,
   files: { [docId: string]: File }
 ): Promise<void> {
-  const token = localStorage.getItem('token');
+  // import dinâmico para evitar dependência circular
+  const { default: api } = await import('../lib/api');
 
   for (const [docId, file] of Object.entries(files)) {
     const docLabel = [...DOCS_OBRIGATORIOS, ...DOCS_OPCIONAIS].find(d => d.id === docId)?.label || docId;
@@ -56,18 +57,9 @@ export async function uploadIndividualDocs(
     formData.append('title', docLabel);
     formData.append('type', docId);
 
-    const response = await fetch('/api/documents', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`
-      },
-      body: formData
+    await api.post('/api/documents', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
     });
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(`Erro ao enviar documento "${docLabel}": ${err.error || response.statusText}`);
-    }
   }
 }
 
