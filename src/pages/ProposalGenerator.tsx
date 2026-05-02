@@ -234,7 +234,11 @@ export default function ProposalGenerator() {
         address: formData.clientAddress,
         proposal_number: proposalNumber,
         margin: marginNum,
-        kit_value: kitCostNum
+        kit_value: kitCostNum,
+        inverter_model: formData.inverterModel,
+        inverter_power: formData.inverterPower,
+        module_model: formData.moduleModel,
+        module_power: formData.modulePower
       });
 
       fetchHistory();

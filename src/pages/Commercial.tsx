@@ -24,6 +24,7 @@ export default function Commercial() {
   const [activeTab, setActiveTab] = useState<'projects' | 'activeProposals'>('projects');
   const [activeProposals, setActiveProposals] = useState<any[]>([]);
   const [selectedProposalId, setSelectedProposalId] = useState('');
+  const [selectedProposal, setSelectedProposal] = useState<any | null>(null);
   const submitAction = useRef('pending');
 
   useEffect(() => {
@@ -48,6 +49,7 @@ export default function Commercial() {
       email: proposal.email,
       address: proposal.address
     }));
+    setSelectedProposal(proposal);
     alert('Dados da proposta preenchidos no formulário!');
   };
 
@@ -84,7 +86,16 @@ export default function Commercial() {
     setUploadingDocs(true);
     try {
       // 1. Cria o cliente
-      const res = await api.post('/api/clients', newClient);
+      const clientPayload = {
+        ...newClient,
+        ...(selectedProposal ? {
+          proposal_inverter_model: selectedProposal.inverter_model,
+          proposal_inverter_power: selectedProposal.inverter_power,
+          proposal_module_model: selectedProposal.module_model,
+          proposal_module_power: selectedProposal.module_power,
+        } : {})
+      };
+      const res = await api.post('/api/clients', clientPayload);
       const projectId = res.data?.project_id || res.data?.id;
 
       // 2. Faz upload dos arquivos individualmente no Supabase
@@ -102,6 +113,7 @@ export default function Commercial() {
       setDocFiles({});
       setNewClient({ name: '', phone: '', email: '', address: '', city: '', state: '', cpf_cnpj: '' });
       setSelectedProposalId('');
+      setSelectedProposal(null);
       fetchProjects();
       alert('Cliente cadastrado e documentos enviados com sucesso!');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -218,7 +230,7 @@ export default function Commercial() {
 
           {showNewClient && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white p-6 rounded-xl w-full max-w-2xl">
+              <div className="bg-white p-6 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                 <h2 className="text-xl font-bold mb-4">Cadastro de Cliente</h2>
                 <form onSubmit={handleCreateClient} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2 mb-4 bg-blue-50 p-4 rounded-lg border border-blue-100">
@@ -376,7 +388,7 @@ export default function Commercial() {
                   </div>
 
                   <div className="md:col-span-2 flex justify-end gap-2 mt-4">
-                    <button type="button" onClick={() => { setShowNewClient(false); setSelectedProposalId(''); }} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
+                    <button type="button" onClick={() => { setShowNewClient(false); setSelectedProposalId(''); setSelectedProposal(null); }} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
                     <button type="submit" disabled={uploadingDocs} className="px-4 py-2 bg-blue-900 text-white rounded hover:bg-blue-800 disabled:opacity-50 flex items-center gap-2">
                       {uploadingDocs ? (
                         <><span className="animate-spin">â³</span> Enviando...</>

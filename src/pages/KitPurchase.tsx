@@ -6,6 +6,10 @@ export default function KitPurchase() {
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [usingProposalData, setUsingProposalData] = useState(false);
+  const [inverterModel, setInverterModel] = useState('');
+  const [inverterPower, setInverterPower] = useState('');
+  const [moduleModel, setModuleModel] = useState('');
+  const [modulePower, setModulePower] = useState('');
 
   useEffect(() => {
     fetchProjects();
@@ -121,6 +125,10 @@ export default function KitPurchase() {
 
                       setUsingProposalData(preFilled);
                       setSelectedProject(project);
+                      setInverterModel(project.inverter_model || project.proposal_inverter_model || '');
+                      setInverterPower(project.inverter_power || project.proposal_inverter_power || '');
+                      setModuleModel(project.module_model || project.proposal_module_model || '');
+                      setModulePower(project.module_power || project.proposal_module_power || '');
                     }}
                     className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-800"
                   >
@@ -145,7 +153,14 @@ export default function KitPurchase() {
               <h2 className="text-xl font-bold text-gray-800">Kit Solar: {selectedProject.client_name}</h2>
               <p className="text-sm text-gray-500">{selectedProject.title}</p>
             </div>
-            <button onClick={() => { setSelectedProject(null); setUsingProposalData(false); }} className="text-gray-500 hover:text-gray-700 font-medium">Voltar</button>
+            <button onClick={() => { 
+              setSelectedProject(null); 
+              setUsingProposalData(false);
+              setInverterModel('');
+              setInverterPower('');
+              setModuleModel('');
+              setModulePower('');
+            }} className="text-gray-500 hover:text-gray-700 font-medium">Voltar</button>
           </div>
 
           <div className="p-6">
@@ -159,7 +174,8 @@ export default function KitPurchase() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Modelo do Inversor</label>
                 <input
                   name="inverter_model"
-                  defaultValue={selectedProject.inverter_model}
+                  value={inverterModel}
+                  onChange={e => setInverterModel(e.target.value)}
                   placeholder="Ex: Growatt 5kW"
                   className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 />
@@ -168,7 +184,8 @@ export default function KitPurchase() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Potência do Inversor</label>
                 <input
                   name="inverter_power"
-                  defaultValue={selectedProject.inverter_power}
+                  value={inverterPower}
+                  onChange={e => setInverterPower(e.target.value)}
                   placeholder="Ex: 5000W"
                   className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 />
@@ -177,7 +194,8 @@ export default function KitPurchase() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Modelo do Módulo</label>
                 <input
                   name="module_model"
-                  defaultValue={selectedProject.module_model}
+                  value={moduleModel}
+                  onChange={e => setModuleModel(e.target.value)}
                   placeholder="Ex: Canadian 550W"
                   className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 />
@@ -186,15 +204,19 @@ export default function KitPurchase() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Potência do Módulo</label>
                 <input
                   name="module_power"
-                  defaultValue={selectedProject.module_power}
+                  value={modulePower}
+                  onChange={e => setModulePower(e.target.value)}
                   placeholder="Ex: 550W"
                   className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
 
-              {usingProposalData && (
-                <div className="md:col-span-2 bg-amber-50 border border-amber-200 p-3 rounded-lg text-sm text-amber-800">
-                  ⚠️ Dados pré-preenchidos com base na proposta comercial. Altere caso o kit não esteja mais disponível.
+              {(selectedProject.proposal_inverter_model || selectedProject.proposal_module_model) &&
+                !selectedProject.inverter_model && !selectedProject.module_model && (
+                <div className="md:col-span-2 bg-amber-50 border border-amber-200 p-3 rounded-lg">
+                  <p className="text-sm text-amber-800">
+                    ⚠️ Dados pré-preenchidos com base na proposta comercial. Altere caso o kit não esteja mais disponível.
+                  </p>
                 </div>
               )}
 
