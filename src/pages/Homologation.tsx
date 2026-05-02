@@ -2,7 +2,7 @@ import React, { useEffect, useState, Component } from 'react';
 import api from '../lib/api';
 import { CheckSquare, AlertTriangle, CheckCircle, FileText, ListChecks, Save, Lock, Unlock, Calendar, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { deleteDocsHomologacao, getDownloadUrl } from '../hooks/useHomologacaoDocs';
+import { deleteDocsHomologacao } from '../hooks/useHomologacaoDocs';
 
 export default function Homologation() {
   const [projects, setProjects] = useState<any[]>([]);
@@ -307,21 +307,6 @@ export default function Homologation() {
               <p className="text-sm text-gray-500">{selectedProject.title}</p>
             </div>
             <div className="flex gap-2">
-              {selectedProject?.homologacao_docs_path && (
-                <button
-                  onClick={async () => {
-                    try {
-                      const url = await getDownloadUrl(selectedProject.homologacao_docs_path);
-                      window.open(url, '_blank');
-                    } catch {
-                      alert('Erro ao gerar link de download');
-                    }
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 text-sm"
-                >
-                  <FileText size={16} /> Baixar/Ver Documentos
-                </button>
-              )}
               <button onClick={() => { setSelectedProject(null); fetchProjects(); }} className="text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow font-medium px-4 py-2 rounded-lg transition-all border border-gray-300 shadow-sm bg-gray-50">Voltar para Lista</button>
             </div>
           </div>
@@ -406,9 +391,9 @@ export default function Homologation() {
                   <h3 className="text-lg font-bold mb-3 text-gray-800 flex items-center gap-2">
                     <FileText size={20} className="text-blue-600" /> Documentos do Cliente
                   </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {projectDocs.length > 0 ? (
-                      projectDocs.map((doc: any) => (
+                  {selectedProject.documents && selectedProject.documents.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {selectedProject.documents.map((doc: any) => (
                         <div key={doc.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-200 transition-all">
                           <div className="flex items-center gap-2 overflow-hidden">
                             <FileText size={16} className="text-blue-500 shrink-0" />
@@ -417,18 +402,21 @@ export default function Homologation() {
                               <p className="text-[10px] text-gray-400 truncate">{new Date(doc.created_at).toLocaleDateString('pt-BR')}</p>
                             </div>
                           </div>
-                          <button
-                            onClick={() => window.open(doc.url, '_blank')}
-                            className="bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded-md text-xs font-bold transition-colors"
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 p-1.5 hover:bg-blue-50 rounded-md transition-colors"
+                            title="Baixar documento"
                           >
-                            Baixar
-                          </button>
+                            <FileText size={16} />
+                          </a>
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-gray-500 italic col-span-2">Nenhum documento disponível para este projeto.</p>
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-400 italic">Nenhum documento disponível para este projeto.</p>
+                  )}
                 </div>
               </div>
             </div>
