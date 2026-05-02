@@ -5,6 +5,7 @@ import { ShoppingCart, Check, X, Trash2 } from 'lucide-react';
 export default function KitPurchase() {
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
+  const [usingProposalData, setUsingProposalData] = useState(false);
 
   useEffect(() => {
     fetchProjects();
@@ -97,7 +98,29 @@ export default function KitPurchase() {
                   <button
                     onClick={async () => {
                       const res = await api.get(`/api/projects/${p.id}`);
-                      setSelectedProject(res.data);
+                      const project = res.data;
+                      let preFilled = false;
+
+                      // Pre-fill kit data if empty and proposal data exists
+                      if (!project.inverter_model && project.proposal_inverter_model) {
+                        project.inverter_model = project.proposal_inverter_model;
+                        preFilled = true;
+                      }
+                      if (!project.inverter_power && project.proposal_inverter_power) {
+                        project.inverter_power = project.proposal_inverter_power;
+                        preFilled = true;
+                      }
+                      if (!project.module_model && project.proposal_module_model) {
+                        project.module_model = project.proposal_module_model;
+                        preFilled = true;
+                      }
+                      if (!project.module_power && project.proposal_module_power) {
+                        project.module_power = project.proposal_module_power;
+                        preFilled = true;
+                      }
+
+                      setUsingProposalData(preFilled);
+                      setSelectedProject(project);
                     }}
                     className="bg-blue-900 text-white px-4 py-2 rounded hover:bg-blue-800"
                   >
@@ -122,7 +145,7 @@ export default function KitPurchase() {
               <h2 className="text-xl font-bold text-gray-800">Kit Solar: {selectedProject.client_name}</h2>
               <p className="text-sm text-gray-500">{selectedProject.title}</p>
             </div>
-            <button onClick={() => setSelectedProject(null)} className="text-gray-500 hover:text-gray-700 font-medium">Voltar</button>
+            <button onClick={() => { setSelectedProject(null); setUsingProposalData(false); }} className="text-gray-500 hover:text-gray-700 font-medium">Voltar</button>
           </div>
 
           <div className="p-6">
@@ -168,6 +191,12 @@ export default function KitPurchase() {
                   className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
+
+              {usingProposalData && (
+                <div className="md:col-span-2 bg-amber-50 border border-amber-200 p-3 rounded-lg text-sm text-amber-800">
+                  ⚠️ Dados pré-preenchidos com base na proposta comercial. Altere caso o kit não esteja mais disponível.
+                </div>
+              )}
 
               <div className="md:col-span-2 mt-4 pt-4 border-t">
                 <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg">

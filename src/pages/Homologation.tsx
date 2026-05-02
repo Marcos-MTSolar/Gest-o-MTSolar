@@ -7,6 +7,7 @@ import { deleteDocsHomologacao, getDownloadUrl } from '../hooks/useHomologacaoDo
 export default function Homologation() {
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
+  const [projectDocs, setProjectDocs] = useState<any[]>([]);
 
   const [statusModal, setStatusModal] = useState<{ projectId: number, status: string, isOpen: boolean }>({ projectId: 0, status: '', isOpen: false });
   const [statusNote, setStatusNote] = useState('');
@@ -55,9 +56,34 @@ export default function Homologation() {
       if (status === 'connection_point_approved') {
         // Exclui documentos do Supabase Storage ao finalizar
         try {
-          const res = await api.get(`/api/projects/${id}`);
-          if (res.data?.homologacao_docs_path) {
-            await deleteDocsHomologacao(res.data.homologacao_docs_path);
+          // Buscar todos os documentos do projeto na tabela documents
+          const { data: docs } = await supabase
+            .from('documents')
+            .select('*')
+            .eq('project_id', id);
+
+          if (docs && docs.length > 0) {
+            for (const doc of docs) {
+              // Extrair o path relativo da URL pública
+              const path = doc.url.split('/homologacao-docs/')[1];
+              if (path) {
+                await supabase.storage.from('homologacao-docs').remove([path]);
+              }
+            }
+
+            // Remover todos os registros da tabela documents relacionados ao projeto
+            await supabase
+              .from('documents')
+              .delete()
+              .eq('project_id', id);
+
+            setProjectDocs([]);
+          }
+
+          // Também tenta limpar o path do ZIP antigo se existir
+          const projectRes = await api.get(`/api/projects/${id}`);
+          if (projectRes.data?.homologacao_docs_path) {
+            await deleteDocsHomologacao(projectRes.data.homologacao_docs_path);
             await supabase
               .from('projects')
               .update({ homologacao_docs_path: null, homologacao_docs_uploaded_at: null })
@@ -249,6 +275,13 @@ export default function Homologation() {
                       } else {
                         setActiveTab('observations');
                       }
+
+                      // Buscar documentos do cliente no Supabase
+                      const { data: docs } = await supabase
+                        .from('documents')
+                        .select('*')
+                        .eq('project_id', p.id);
+                      setProjectDocs(docs || []);
                     }}
                     className="bg-blue-900 text-white px-5 py-2.5 rounded-lg hover:bg-blue-800 shadow shadow-blue-900/20 font-medium shrink-0"
                   >
@@ -368,14 +401,14 @@ export default function Homologation() {
                   ))}
                 </div>
 
-                {/* SeÃ§Ã£o de Documentos do Cliente (ExibiÃ§Ã£o Apenas) */}
-                {selectedProject.documents && selectedProject.documents.length > 0 && (
-                  <div className="mt-6">
-                    <h3 className="text-lg font-bold mb-3 text-gray-800 flex items-center gap-2">
-                      <FileText size={20} className="text-blue-600" /> Documentos do Cliente
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {selectedProject.documents.map((doc: any) => (
+                {/* Seção de Documentos do Cliente */}
+                <div className="mt-6">
+                  <h3 className="text-lg font-bold mb-3 text-gray-800 flex items-center gap-2">
+                    <FileText size={20} className="text-blue-600" /> Documentos do Cliente
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {projectDocs.length > 0 ? (
+                      projectDocs.map((doc: any) => (
                         <div key={doc.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-200 transition-all">
                           <div className="flex items-center gap-2 overflow-hidden">
                             <FileText size={16} className="text-blue-500 shrink-0" />
@@ -384,20 +417,19 @@ export default function Homologation() {
                               <p className="text-[10px] text-gray-400 truncate">{new Date(doc.created_at).toLocaleDateString('pt-BR')}</p>
                             </div>
                           </div>
-                          <a
-                            href={doc.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 p-1.5 hover:bg-blue-50 rounded-md transition-colors"
-                            title="Ver documento"
+                          <button
+                            onClick={() => window.open(doc.url, '_blank')}
+                            className="bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded-md text-xs font-bold transition-colors"
                           >
-                            <Unlock size={16} />
-                          </a>
+                            Baixar
+                          </button>
                         </div>
-                      ))}
-                    </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500 italic col-span-2">Nenhum documento disponível para este projeto.</p>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
             </div>
           ) : (

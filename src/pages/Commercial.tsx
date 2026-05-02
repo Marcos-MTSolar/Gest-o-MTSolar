@@ -23,6 +23,7 @@ export default function Commercial() {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [activeTab, setActiveTab] = useState<'projects' | 'activeProposals'>('projects');
   const [activeProposals, setActiveProposals] = useState<any[]>([]);
+  const [selectedProposalId, setSelectedProposalId] = useState('');
   const submitAction = useRef('pending');
 
   useEffect(() => {
@@ -100,8 +101,10 @@ export default function Commercial() {
       setShowNewClient(false);
       setDocFiles({});
       setNewClient({ name: '', phone: '', email: '', address: '', city: '', state: '', cpf_cnpj: '' });
+      setSelectedProposalId('');
       fetchProjects();
       alert('Cliente cadastrado e documentos enviados com sucesso!');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error: any) {
       alert('Erro ao cadastrar cliente: ' + error.message);
     } finally {
@@ -154,6 +157,7 @@ export default function Commercial() {
       setShowEditClient(false);
       alert('Cadastro de cliente atualizado com sucesso!');
       await fetchProjects();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       // Refetch current project to update headers
       const res = await api.get(`/api/projects/${selectedProject.id}`);
       setSelectedProject(res.data);
@@ -217,6 +221,26 @@ export default function Commercial() {
               <div className="bg-white p-6 rounded-xl w-full max-w-2xl">
                 <h2 className="text-xl font-bold mb-4">Cadastro de Cliente</h2>
                 <form onSubmit={handleCreateClient} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2 mb-4 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <label className="block text-sm font-bold text-blue-900 mb-2">Vincular a uma Proposta Ativa (opcional)</label>
+                    <select
+                      className="w-full border p-2 rounded bg-white text-sm"
+                      value={selectedProposalId}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        setSelectedProposalId(id);
+                        if (id) {
+                          const proposta = activeProposals.find(p => String(p.id) === id);
+                          if (proposta) fillFromProposal(proposta);
+                        }
+                      }}
+                    >
+                      <option value="">— Nenhuma (preencher manualmente) —</option>
+                      {activeProposals.map(prop => (
+                        <option key={prop.id} value={prop.id}>{prop.client_name}</option>
+                      ))}
+                    </select>
+                  </div>
                   <input placeholder="Nome Completo" className="border p-2 rounded" required value={newClient.name} onChange={e => setNewClient({ ...newClient, name: e.target.value })} />
                   <input placeholder="CPF/CNPJ" className="border p-2 rounded" value={newClient.cpf_cnpj} onChange={e => setNewClient({ ...newClient, cpf_cnpj: e.target.value })} />
                   <input placeholder="Telefone" className="border p-2 rounded" value={newClient.phone} onChange={e => setNewClient({ ...newClient, phone: e.target.value })} />
@@ -352,7 +376,7 @@ export default function Commercial() {
                   </div>
 
                   <div className="md:col-span-2 flex justify-end gap-2 mt-4">
-                    <button type="button" onClick={() => setShowNewClient(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
+                    <button type="button" onClick={() => { setShowNewClient(false); setSelectedProposalId(''); }} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
                     <button type="submit" disabled={uploadingDocs} className="px-4 py-2 bg-blue-900 text-white rounded hover:bg-blue-800 disabled:opacity-50 flex items-center gap-2">
                       {uploadingDocs ? (
                         <><span className="animate-spin">â³</span> Enviando...</>
