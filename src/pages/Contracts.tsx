@@ -1,0 +1,534 @@
+import React, { useState } from 'react';
+import { 
+  FileSignature, 
+  Plus, 
+  Trash2, 
+  FileDown, 
+  User, 
+  Sun, 
+  Package, 
+  CreditCard, 
+  Calendar as CalendarIcon,
+  MapPin,
+  Check,
+  Building,
+  Briefcase
+} from 'lucide-react';
+import jsPDF from 'jspdf';
+import { cn } from '../lib/utils';
+import { motion } from 'motion/react';
+
+interface KitItem {
+  id: string;
+  quantity: number;
+  description: string;
+}
+
+export default function Contracts() {
+  const [formData, setFormData] = useState({
+    // Dados do Contratante
+    nome_contratante: '',
+    cpf_cnpj_contratante: '',
+    endereco_contratante: '',
+    cep_contratante: '',
+    cidade_estado_contratante: '',
+    
+    // Dados do Sistema
+    geracao_estimada_kwh: '',
+    potencia_kwp: '',
+    endereco_instalacao: '',
+    
+    // Pagamento
+    valor_total: '',
+    valor_extenso: '',
+    forma_pagamento: '',
+    
+    // Data e Local
+    cidade_contrato: 'Jaboatão dos Guararapes',
+    data_contrato: new Date().toISOString().split('T')[0]
+  });
+
+  const [kitItems, setKitItems] = useState<KitItem[]>([
+    { id: Math.random().toString(), quantity: 1, description: 'INVERSOR GOODWE 3.3K MONOFÁSICO 220V' }
+  ]);
+
+  const addKitItem = () => {
+    setKitItems([...kitItems, { id: Math.random().toString(), quantity: 1, description: '' }]);
+  };
+
+  const removeKitItem = (id: string) => {
+    if (kitItems.length > 1) {
+      setKitItems(kitItems.filter(item => item.id !== id));
+    }
+  };
+
+  const updateKitItem = (id: string, field: keyof KitItem, value: any) => {
+    setKitItems(kitItems.map(item => item.id === id ? { ...item, [field]: value } : item));
+  };
+
+  const updateForm = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const gerarPDF = async () => {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const imgTimbrado = '/Papel_-_timbrado.png';
+    const pageWidth = 210;
+    const pageHeight = 297;
+    
+    const addBackground = (pageNum: number) => {
+      doc.setPage(pageNum);
+      try {
+        doc.addImage(imgTimbrado, 'PNG', 0, 0, pageWidth, pageHeight);
+      } catch (e) {
+        console.warn("Papel timbrado não encontrado.");
+      }
+    };
+    
+    doc.setFont('helvetica');
+    doc.setFontSize(10);
+    
+    const marginLeft = 25;
+    const marginTop = 35; 
+    const contentWidth = 160;
+    let currentY = marginTop;
+
+    const addText = (text: string, options: { bold?: boolean, align?: string, spacing?: number, size?: number } = {}) => {
+      const { bold = false, align = 'justify', spacing = 5, size = 10 } = options;
+      doc.setFont('helvetica', bold ? 'bold' : 'normal');
+      doc.setFontSize(size);
+      
+      const lines = doc.splitTextToSize(text, contentWidth);
+      
+      if (currentY + (lines.length * spacing) > 265) {
+        doc.addPage();
+        currentY = marginTop;
+      }
+      
+      doc.text(lines, align === 'center' ? pageWidth/2 : align === 'right' ? pageWidth - marginLeft : marginLeft, currentY, { 
+        align: align as any, 
+        maxWidth: contentWidth 
+      });
+      currentY += (lines.length * spacing) + 2;
+    };
+
+    // --- Início do Conteúdo do Contrato ---
+    addText('CONTRATO DE VENDA E INSTALAÇÃO DE SISTEMA DE GERAÇÃO DE ENERGIA SOLAR FOTOVOLTAICO', { bold: true, align: 'center', size: 12 });
+    currentY += 5;
+
+    addText(`Pelo presente instrumento particular de contrato de venda e instalação de sistema de geração de energia solar fotovoltaico, entre partes, a saber, de um lado, ${formData.nome_contratante || '{{ nome_contratante }}'}, portador do CPF/CNPJ: ${formData.cpf_cnpj_contratante || '{{ cpf_cnpj_contratante }}'}, residente em ${formData.endereco_contratante || '{{ endereco_contratante }}'}, CEP ${formData.cep_contratante || '{{ cep_contratante }}'}, ${formData.cidade_estado_contratante || '{{ cidade_estado_contratante }}'}, doravante designado CONTRATANTE.`);
+
+    addText(`E, de outro lado, a empresa MT SOLAR ENERGIA RENOVAVEL, inscrita no CNPJ sob o nº 51.713.487/0001-90, com sede na Rua Rossini Roosevelt de Albuquerque, nº 10, loja-105, Piedade, Jaboatão dos Guararapes – PE, integrador credenciado SIRIUS, CNPJ nº: 35.765.147/0001-57, neste ato representa por seu sócio, Marcos Aurélio Silva do Nascimento, inscrita no CPF nº 092.375.674-48 e RG: 7.834.135 SDS/PE, adiante denominada CONTRATADA.`);
+
+    addText('As partes acima identificadas têm, entre si, justas e acertadas o presente contrato, que se regerá pelas cláusulas seguintes:');
+
+    addText('CLÁUSULA PRIMEIRA – DO OBJETO DO CONTRATO', { bold: true });
+    addText(`1.1- O presente contrato tem como objeto, a prestação, pelas CONTRATADAS, de venda e instalação completa dos equipamentos de um sistema de energia solar fotovoltaico para microgeração de energia de estimadamente ${formData.geracao_estimada_kwh || '{{ geracao_estimada_kwh }}'} kWh mensal, de modo a atingir uma potência nominal de ${formData.potencia_kwp || '{{ potencia_kwp }}'} kWp (Quilowatt-pico).`);
+    addText(`1.2- O equipamento adquirido será instalado no endereço: ${formData.endereco_instalacao || '{{ endereco_instalacao }}'}`);
+
+    addText('KIT FOTOVOLTAICO:', { bold: true });
+    kitItems.forEach((item, idx) => {
+      addText(`${String(idx + 1).padStart(2, '0')} – ${item.quantity}x ${item.description}`);
+    });
+
+    addText('CLÁUSULA SEGUNDA – DESCRIÇÃO DOS TRABALHOS A REALIZAR', { bold: true });
+    addText('Os trabalhos relacionados ao objeto acima identificado compreendem equipamentos, mão de obra e acessórios para instalação de sistemas de energia fotovoltaico, desde a elaboração do projeto até a homologação do sistema junto a concessionária de sua região.');
+    addText('Os equipamentos, ferramentas, mão de obra, segurança e acessórios para realização dos trabalhos são de inteira responsabilidade da CONTRATADA.');
+    addText('Nos equipamentos e materiais a fornecer pela empresa CONTRATADA, estarão compreendidos:');
+    addText('- Painéis solares certificados;');
+    addText('- Estruturas de fixação para campo de painéis;');
+    addText('- Cabeamentos DC e AC devidamente certificados e de características adequadas;');
+    addText('- Inversor de frequência certificado;');
+    addText('- Quadro de proteção (String box), quando necessário.');
+    addText('2.4- Os serviços contratados incluem Projeto inicial, ART, tratativas junto a concessionária local, instalação total dos equipamentos, cercamento do local, construção da casa de máquina, limpeza do terreno, serviços de engenharia e homologação do sistema.');
+
+    addText('CLÁUSULA TERCEIRA – PREÇO E FORMA DE PAGAMENTO', { bold: true });
+    addText(`- Como pagamento pela aquisição do sistema fotovoltaico e pelos serviços prestados, o CONTRATANTE pagará a CONTRATADA a quantia total de R$ ${parseFloat(formData.valor_total || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${formData.valor_extenso || '{{ valor_extenso }}'}).`);
+    addText(`- O pagamento a CONTRATADA será efetuado ${formData.forma_pagamento || '{{ forma_pagamento }}'}.`);
+
+    addText('CLÁUSULA QUARTA – DO PRAZO, ENTREGA E EXECUÇÃO DOS SERVIÇOS', { bold: true });
+    addText('A administração, supervisão e gerenciamento no que tange à execução de todos os serviços prestados pelos profissionais encaminhados pela CONTRATADA, ficarão sob responsabilidade exclusiva da mesma.');
+    addText('A entrega dos equipamentos está condicionada à quitação do pagamento do valor total do material referente ao sistema solar fotovoltaico, conforme a clausula terceira.');
+    addText('A instalação será executada durante a semana e em horário comercial, prevê um acabamento aparente com uso de canaletas e/ou eletrodutos.');
+    addText('O prazo total de implantação, que compreende desde o pagamento do valor contratado, descrito na clausula terceira, até a homologação do projeto, é de até 30 dias, podendo ser estendido por até 30 dias em decorrência dos prazos da concessionária local.');
+
+    addText('CLÁUSULA QUINTA – OBRIGAÇÕES DA CONTRATADA', { bold: true });
+    addText('[Texto fixo completo da Cláusula Quinta conforme modelo]');
+
+    addText('CLÁUSULA SEXTA – OBRIGAÇÕES DA CONTRATANTE', { bold: true });
+    addText('[Texto fixo completo da Cláusula Sexta conforme modelo]');
+
+    addText('CLÁUSULA SÉTIMA – EXCLUSÕES', { bold: true });
+    addText('[Texto fixo completo da Cláusula Sétima conforme modelo]');
+
+    addText('CLÁUSULA OITAVA – DA RESCISÃO CONTRATUAL', { bold: true });
+    addText('[Texto fixo completo da Cláusula Oitava conforme modelo]');
+
+    addText('CLÁUSULA NONA – DIREITO DE IMAGEM', { bold: true });
+    addText('[Texto fixo completo da Cláusula Nona conforme modelo]');
+
+    addText('CLÁUSULA DÉCIMA – CONDIÇÕES GERAIS', { bold: true });
+    addText('[Texto fixo completo da Cláusula Décima conforme modelo]');
+
+    addText('CLÁUSULA DÉCIMA PRIMEIRA – GARANTIAS E SEGURO', { bold: true });
+    addText('[Texto fixo completo da Cláusula Décima Primeira conforme modelo]');
+
+    addText('CLÁUSULA DÉCIMA SEGUNDA – DO FORO', { bold: true });
+    addText('As partes elegem o Foro da Comarca da cidade de Jaboatão dos Guararapes – Pernambuco, para dirimir qualquer questão decorrente deste contrato, com exclusão de qualquer outro, por mais privilegiado que seja.');
+
+    addText('E por estarem assim justas e acertadas, as partes firmam o presente instrumento em 2 (duas) vias de igual teor e forma, tudo na presença das duas testemunhas abaixo.');
+
+    currentY += 10;
+    const dataFormatada = new Date(formData.data_contrato).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+    addText(`${formData.cidade_contrato} - PE, ${dataFormatada}.`, { align: 'center' });
+
+    currentY += 20;
+    doc.line(marginLeft, currentY, marginLeft + 70, currentY);
+    doc.line(pageWidth - marginLeft - 70, currentY, pageWidth - marginLeft, currentY);
+    
+    currentY += 5;
+    doc.setFontSize(8);
+    doc.text('MT SOLAR ENERGIA RENOVAVEL\n51.713.487/0001-90', marginLeft + 35, currentY, { align: 'center' });
+    doc.text(`${formData.nome_contratante || 'CONTRATANTE'}\n${formData.cpf_cnpj_contratante || ''}`, pageWidth - marginLeft - 35, currentY, { align: 'center' });
+
+    const totalPages = doc.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      addBackground(i);
+    }
+    
+    const dataFormatadaArquivo = new Date(formData.data_contrato).toLocaleDateString('pt-BR').replace(/\//g, '-');
+    doc.save(`Contrato_${formData.nome_contratante || 'Cliente'}_${dataFormatadaArquivo}.pdf`);
+  };
+
+  const inputStyle = "w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/50 transition-all focus:bg-white text-sm";
+  const labelStyle = "block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1";
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-[1400px] mx-auto">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-8">
+          <div className="bg-amber-400 p-2.5 rounded-lg shadow-lg shadow-amber-400/20">
+            <FileSignature className="text-blue-900 w-7 h-7" />
+          </div>
+          <h1 className="text-2xl font-bold text-blue-900 tracking-tight uppercase">Gerador de Contratos</h1>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-10 gap-8">
+          {/* Formulário (60%) */}
+          <div className="xl:col-span-6 space-y-6">
+            {/* Dados do Contratante */}
+            <section className="bg-white rounded-2xl p-8 shadow-sm border border-gray-200 overflow-hidden relative">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
+              <div className="flex items-center gap-4 mb-8 relative z-10">
+                <div className="w-10 h-10 bg-blue-100 text-blue-900 rounded-xl flex items-center justify-center">
+                  <User size={20} />
+                </div>
+                <h2 className="text-lg font-bold text-gray-800 uppercase tracking-tight">Qualificação do Contratante</h2>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 relative z-10">
+                <div className="md:col-span-2">
+                  <label className={labelStyle}>Nome Completo / Razão Social</label>
+                  <input 
+                    value={formData.nome_contratante} 
+                    onChange={e => updateForm('nome_contratante', e.target.value)}
+                    className={inputStyle}
+                    placeholder="Ex: João da Silva"
+                  />
+                </div>
+                <div>
+                  <label className={labelStyle}>CPF / CNPJ</label>
+                  <input 
+                    value={formData.cpf_cnpj_contratante} 
+                    onChange={e => updateForm('cpf_cnpj_contratante', e.target.value)}
+                    className={inputStyle}
+                    placeholder="000.000.000-00"
+                  />
+                </div>
+                <div>
+                  <label className={labelStyle}>CEP</label>
+                  <input 
+                    value={formData.cep_contratante} 
+                    onChange={e => updateForm('cep_contratante', e.target.value)}
+                    className={inputStyle}
+                    placeholder="00000-000"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className={labelStyle}>Endereço Completo</label>
+                  <input 
+                    value={formData.endereco_contratante} 
+                    onChange={e => updateForm('endereco_contratante', e.target.value)}
+                    className={inputStyle}
+                    placeholder="Rua, número, bairro..."
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className={labelStyle}>Cidade – UF</label>
+                  <input 
+                    value={formData.cidade_estado_contratante} 
+                    onChange={e => updateForm('cidade_estado_contratante', e.target.value)}
+                    className={inputStyle}
+                    placeholder="Ex: Recife – PE"
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* Dados do Sistema */}
+            <section className="bg-white rounded-2xl p-8 shadow-sm border border-gray-200">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-10 h-10 bg-amber-100 text-amber-900 rounded-xl flex items-center justify-center">
+                  <Sun size={20} />
+                </div>
+                <h2 className="text-lg font-bold text-gray-800 uppercase tracking-tight">Dados do Sistema Solar</h2>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className={labelStyle}>Geração Estimada (kWh/mês)</label>
+                  <input 
+                    value={formData.geracao_estimada_kwh} 
+                    onChange={e => updateForm('geracao_estimada_kwh', e.target.value)}
+                    className={inputStyle}
+                    type="number"
+                    placeholder="Ex: 300"
+                  />
+                </div>
+                <div>
+                  <label className={labelStyle}>Potência (kWp)</label>
+                  <input 
+                    value={formData.potencia_kwp} 
+                    onChange={e => updateForm('potencia_kwp', e.target.value)}
+                    className={inputStyle}
+                    type="number"
+                    placeholder="Ex: 2.44"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className={labelStyle}>Endereço de Instalação</label>
+                  <input 
+                    value={formData.endereco_instalacao} 
+                    onChange={e => updateForm('endereco_instalacao', e.target.value)}
+                    className={inputStyle}
+                    placeholder="Onde o sistema será instalado"
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* Kit Fotovoltaico */}
+            <section className="bg-white rounded-2xl p-8 shadow-sm border border-gray-200">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-purple-100 text-purple-900 rounded-xl flex items-center justify-center">
+                    <Package size={20} />
+                  </div>
+                  <h2 className="text-lg font-bold text-gray-800 uppercase tracking-tight">Kit Fotovoltaico</h2>
+                </div>
+                <button 
+                  onClick={addKitItem}
+                  className="flex items-center gap-2 text-xs font-bold border border-blue-900 text-blue-900 hover:bg-blue-50 px-4 py-2 rounded-xl transition-all"
+                >
+                  <Plus size={16} /> Adicionar Item
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                {kitItems.map((item) => (
+                  <div key={item.id} className="flex gap-3 items-end group">
+                    <div className="w-20">
+                      <label className={labelStyle}>Qtd</label>
+                      <input 
+                        type="number"
+                        value={item.quantity}
+                        onChange={e => updateKitItem(item.id, 'quantity', parseInt(e.target.value) || 0)}
+                        className={cn(inputStyle, "text-center px-2")}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className={labelStyle}>Descrição</label>
+                      <input 
+                        value={item.description}
+                        onChange={e => updateKitItem(item.id, 'description', e.target.value)}
+                        className={inputStyle}
+                        placeholder="Ex: Módulo Solar 550W..."
+                      />
+                    </div>
+                    <button 
+                      onClick={() => removeKitItem(item.id)}
+                      className="p-3.5 text-gray-300 hover:text-red-500 bg-gray-50 rounded-xl hover:bg-red-50 transition-all mb-0.5"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Dados de Pagamento */}
+            <section className="bg-white rounded-2xl p-8 shadow-sm border border-gray-200">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-10 h-10 bg-green-100 text-green-900 rounded-xl flex items-center justify-center">
+                  <CreditCard size={20} />
+                </div>
+                <h2 className="text-lg font-bold text-gray-800 uppercase tracking-tight">Pagamento</h2>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className={labelStyle}>Valor Total (R$)</label>
+                  <input 
+                    value={formData.valor_total} 
+                    onChange={e => updateForm('valor_total', e.target.value)}
+                    className={cn(inputStyle, "font-bold text-blue-900")}
+                    type="number"
+                    placeholder="7508.00"
+                  />
+                </div>
+                <div>
+                  <label className={labelStyle}>Valor por Extenso</label>
+                  <input 
+                    value={formData.valor_extenso} 
+                    onChange={e => updateForm('valor_extenso', e.target.value)}
+                    className={inputStyle}
+                    placeholder="Ex: Sete mil..."
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className={labelStyle}>Forma de Pagamento</label>
+                  <textarea 
+                    value={formData.forma_pagamento} 
+                    onChange={e => updateForm('forma_pagamento', e.target.value)}
+                    className={cn(inputStyle, "h-32 resize-none")}
+                    placeholder="Ex: à vista, dados bancários..."
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* Data e Local */}
+            <section className="bg-white rounded-2xl p-8 shadow-sm border border-gray-200">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-10 h-10 bg-red-100 text-red-900 rounded-xl flex items-center justify-center">
+                  <CalendarIcon size={20} />
+                </div>
+                <h2 className="text-lg font-bold text-gray-800 uppercase tracking-tight">Data e Local</h2>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className={labelStyle}>Cidade do Contrato</label>
+                  <input 
+                    value={formData.cidade_contrato} 
+                    onChange={e => updateForm('cidade_contrato', e.target.value)}
+                    className={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label className={labelStyle}>Data</label>
+                  <input 
+                    type="date"
+                    value={formData.data_contrato} 
+                    onChange={e => updateForm('data_contrato', e.target.value)}
+                    className={inputStyle}
+                  />
+                </div>
+              </div>
+            </section>
+          </div>
+
+          {/* Pré-visualização (40%) */}
+          <div className="xl:col-span-4 h-fit space-y-6">
+            <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-200 sticky top-8">
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="font-bold text-gray-800 flex items-center gap-2 uppercase tracking-tight">
+                  <Check size={20} className="text-green-500" />
+                  Preview do Contrato
+                </h3>
+                <span className="text-[10px] font-bold text-blue-900 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 uppercase tracking-widest">Texto Real</span>
+              </div>
+              
+              <div className="bg-gray-50 rounded-xl p-8 border border-gray-100 h-[650px] overflow-y-auto text-[10px] leading-relaxed text-gray-600 font-serif">
+                <div className="text-center mb-8 border-b border-gray-200 pb-4">
+                  <p className="font-bold text-gray-800 uppercase tracking-tighter text-xs">CONTRATO DE VENDA E INSTALAÇÃO</p>
+                </div>
+                
+                <p className="mb-4 indent-6">
+                  Pelo presente instrumento, de um lado <strong>{formData.nome_contratante || '{{ CLIENTE }}'}</strong>, 
+                  inscrito no CPF/CNPJ <strong>{formData.cpf_cnpj_contratante || '{{ CPF/CNPJ }}'}</strong>, 
+                  e de outro lado <strong>MT SOLAR ENERGIA RENOVAVEL (CNPJ 51.713.487/0001-90)</strong>, 
+                  ajustam o presente contrato.
+                </p>
+                
+                <div className="space-y-4">
+                  <p><strong>CLÁUSULA 1:</strong> Objeto é o sistema de <strong>{formData.potencia_kwp || '{{ POWER }}'} kWp</strong> com geração de <strong>{formData.geracao_estimada_kwh || '{{ GEN }}'} kWh/mês</strong>.</p>
+                  
+                  <p><strong>ITENS DO KIT:</strong></p>
+                  <ul className="list-none space-y-1 ml-4 border-l-2 border-amber-400 pl-4">
+                    {kitItems.map((item, i) => (
+                      <li key={i}>{String(i+1).padStart(2, '0')} – {item.quantity}x {item.description || '...'}</li>
+                    ))}
+                  </ul>
+
+                  <p><strong>CLÁUSULA 2:</strong> Serviços incluem projeto, ART, instalação, cercamento e homologação.</p>
+
+                  <p><strong>VALOR TOTAL:</strong> R$ {parseFloat(formData.valor_total || '0').toLocaleString('pt-BR')} ({formData.valor_extenso || '...'}).</p>
+                  
+                  <p><strong>PAGAMENTO:</strong> {formData.forma_pagamento || '...'}</p>
+
+                  <p className="text-[8px] text-gray-400 mt-8 italic">* O contrato final conterá todas as 12 cláusulas jurídicas detalhadas.</p>
+                </div>
+
+                <div className="mt-16 text-center border-t border-gray-100 pt-8">
+                  <p>{formData.cidade_contrato}, {new Date(formData.data_contrato).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                  
+                  <div className="mt-12 grid grid-cols-2 gap-8">
+                    <div className="border-t border-gray-400 pt-2 font-bold text-gray-800 uppercase">MT SOLAR</div>
+                    <div className="border-t border-gray-400 pt-2 font-bold text-gray-800 uppercase truncate px-2">{formData.nome_contratante || 'CONTRATANTE'}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8 space-y-4">
+                <div className="flex items-center gap-4 p-4 bg-blue-900 rounded-xl shadow-lg relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-blue-800 rounded-full -mr-12 -mt-12 opacity-50 group-hover:scale-110 transition-transform"></div>
+                  <div className="bg-amber-400 p-2 rounded-lg text-blue-900 relative z-10">
+                    <Briefcase size={20} />
+                  </div>
+                  <div className="relative z-10">
+                    <p className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Integrador Sirius</p>
+                    <p className="text-[11px] text-white font-bold">Marcos Aurélio Silva</p>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={gerarPDF}
+                  className="w-full bg-amber-400 hover:bg-amber-500 text-blue-900 font-black py-5 rounded-xl shadow-xl shadow-amber-400/20 transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-xs border-b-4 border-amber-600 active:border-b-0 active:translate-y-1"
+                >
+                  <FileDown size={20} />
+                  Gerar Contrato PDF
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 rounded-2xl p-6 border border-blue-100 flex items-start gap-4">
+              <div className="bg-blue-900 p-2.5 rounded-lg text-white shadow-md">
+                <Building size={18} />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-blue-900 uppercase tracking-tight">Dados da Sede</h4>
+                <p className="text-[10px] text-blue-800/70 leading-relaxed mt-1 font-medium">
+                  Rua Rossini Roosevelt de Albuquerque, nº 10, Piedade<br/>
+                  Jaboatão dos Guararapes – PE<br/>
+                  CNPJ: 51.713.487/0001-90
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

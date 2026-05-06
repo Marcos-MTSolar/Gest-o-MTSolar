@@ -23,6 +23,7 @@ import Homologation from './pages/Homologation';
 import FinishedProjects from './pages/FinishedProjects';
 import Stock from './pages/Stock';
 import ProposalGenerator from './pages/ProposalGenerator';
+import Contracts from './pages/Contracts';
 
 
 function PrivateRoute({ children, roles }: { children: React.ReactNode, roles?: string[] }) {
@@ -62,6 +63,12 @@ export default function App() {
             <Route path="/commercial" element={
               <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
                 <Commercial />
+              </PrivateRoute>
+            } />
+
+            <Route path="/contracts" element={
+              <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
+                <Contracts />
               </PrivateRoute>
             } />
             

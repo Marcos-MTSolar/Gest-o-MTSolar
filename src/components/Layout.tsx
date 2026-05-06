@@ -19,7 +19,8 @@ import {
   Hammer,
   Calendar,
   Package,
-  FileSpreadsheet
+  FileSpreadsheet,
+  FileSignature
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
@@ -119,6 +120,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: 'Agenda', path: '/agenda', icon: Calendar, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Gerador de Proposta', path: '/proposal-generator', icon: FileSpreadsheet, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Comercial', path: '/commercial', icon: Briefcase, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
+    { name: 'Contratos', path: '/contracts', icon: FileSignature, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Técnica', path: '/technical', icon: Wrench, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
     { name: 'Obra Finalizada', path: '/installation', icon: Hammer, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
     { name: 'Kit Solar', path: '/kit-purchase', icon: ShoppingCart, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
