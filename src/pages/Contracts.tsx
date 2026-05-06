@@ -76,14 +76,15 @@ export default function Contracts() {
     const pageWidth = 210;
     const pageHeight = 297;
     
-    const addBackground = (pageNum: number) => {
-      doc.setPage(pageNum);
+    const addBackground = () => {
       try {
         doc.addImage(imgTimbrado, 'PNG', 0, 0, pageWidth, pageHeight);
       } catch (e) {
         console.warn("Papel timbrado não encontrado.");
       }
     };
+    
+    addBackground(); // página 1
     
     doc.setFont('helvetica');
     doc.setFontSize(10);
@@ -102,6 +103,7 @@ export default function Contracts() {
       
       if (currentY + (lines.length * spacing) > 265) {
         doc.addPage();
+        addBackground(); // timbrado na nova página ANTES do texto
         currentY = marginTop;
       }
       
@@ -153,25 +155,63 @@ export default function Contracts() {
     addText('O prazo total de implantação, que compreende desde o pagamento do valor contratado, descrito na clausula terceira, até a homologação do projeto, é de até 30 dias, podendo ser estendido por até 30 dias em decorrência dos prazos da concessionária local.');
 
     addText('CLÁUSULA QUINTA – OBRIGAÇÕES DA CONTRATADA', { bold: true });
-    addText('[Texto fixo completo da Cláusula Quinta conforme modelo]');
+    addText('Em cumprimento ao objeto do presente instrumento, são obrigações exclusivas da CONTRATADA:');
+    addText('- Planejar, conduzir e executar os serviços, com integral observância das disposições deste Contrato, obedecendo aos prazos contratuais e às normas vigentes;');
+    addText('- Fornecer ao CONTRATANTE todos os dados solicitados que se fizerem necessários ao bom entendimento e acompanhamento do serviço contratado;');
+    addText('- Executar a instalação de acordo com as normas técnicas oficiais em vigor;');
+    addText('- Auxiliar o CONTRATANTE no monitoramento do sistema de geração fotovoltaico até 01 (Um) ano, podendo após isso o CONTRATANTE renovar o contrato para dar continuidade ao monitoramento;');
+    addText('- Atender as possíveis ocorrências de falhas de equipamentos após serem reportadas pelo CONTRATANTE;');
+    addText('- Realizar o contato com os fabricantes dos equipamentos em caso de falha que exija substituição ou reparo, gerenciando o envio e recebimento para troca ou reparo; não se responsabilizando por eventuais cobranças no período de pausa na produção até o reestabelecimento do sistema;');
+    addText('- É de responsabilidade da CONTRATADA viabilizar para o CONTRATANTE todo o processo de compra do equipamento, independente do fornecedor;');
+    addText('- Respeitar e fazer com que seus colaboradores respeitem as normas de segurança e higiene no trabalho, incluindo o devido uso de EPIs e EPCs;');
+    addText('- Assumir integral responsabilidade pelas obrigações de natureza trabalhista e/ou previdenciária relativas aos trabalhadores alocados para a execução dos serviços.');
 
     addText('CLÁUSULA SEXTA – OBRIGAÇÕES DA CONTRATANTE', { bold: true });
-    addText('[Texto fixo completo da Cláusula Sexta conforme modelo]');
+    addText('São obrigações do CONTRATANTE:');
+    addText('- Disponibilizar espaço seguro para armazenamento do equipamento, desde a entrega até a conclusão das instalações;');
+    addText('- Comunicar previamente à CONTRATADA qualquer modificação e/ou criação de novos procedimentos a serem adotados;');
+    addText('- Efetuar todos os pagamentos ora contratados, responsabilizando-se por todos os ônus decorrentes do não cumprimento desta obrigação contratual;');
+    addText('- Relatar à CONTRATADA toda e qualquer irregularidade ou falha dos equipamentos ou nos serviços prestados, bem como realizar as manutenções periódicas do equipamento;');
+    addText('- Fornecer toda a infraestrutura necessária para a execução dos serviços, compreendida por: rede de internet no local de instalação do(s) inversor(es), local adequado para colocação do(s) inversor(es), superfície (telhado) em condições adequadas, infraestrutura de aterramento, cabeamento adequado para conexão ao quadro elétrico e quaisquer outras necessidades estruturais apontadas após avaliação técnica;');
+    addText('- Manter em dia as faturas de energia que farão parte do projeto para que não haja impeditivo no processo homologatório junto à concessionária;');
+    addText('- Informar os dados das contas que serão inclusas no projeto e, caso não estejam no mesmo CPF/CNPJ, autorizar ou realizar a troca de titularidade junto à concessionária;');
+    addText('OBS: Solicitamos laudo estrutural reconhecido por Engenheiro ou técnico estrutural. Não nos responsabilizamos por problemas já existentes no telhado.');
 
     addText('CLÁUSULA SÉTIMA – EXCLUSÕES', { bold: true });
-    addText('[Texto fixo completo da Cláusula Sétima conforme modelo]');
+    addText('7.1 A CONTRATADA não é de nenhuma forma responsável se houver alterações em regulamentos, normas ou leis que mudem as especificações técnicas necessárias para instalações fotovoltaicas após a entrega do sistema pronto ao CONTRATANTE.');
+    addText('- A CONTRATADA não se responsabiliza por danos causados na rede elétrica da edificação caso não tenham sido comprovadamente causados pelo sistema fotovoltaico. A comprovação deve se dar através de laudo técnico emitido por empresa ou engenheiro eletricista;');
+    addText('- Não estão inclusos no escopo deste contrato adaptações na rede elétrica da edificação não estritamente relacionadas à instalação do sistema, como: troca de lâmpadas, troca ou conserto de quadros elétricos, consertos de tomadas, passagem de cabos, malha de terra existente, SPDA, sistema de combate a incêndio, ou quaisquer outros itens não necessários à operação do sistema fotovoltaico;');
+    addText('- A CONTRATADA não será responsável por ineficácia dos equipamentos em caso de força maior ou caso fortuito, como: tempestades, guerras, desordens, sabotagens e atos terroristas;');
+    addText('- Este contrato não celebra nenhum serviço ou adaptação de natureza civil, estando assim sob responsabilidade do CONTRATANTE;');
+    addText('- O projeto baseia-se nas contas de energia e consumo fornecidas pelo CONTRATANTE. Havendo aumento de consumo diferente do garantido no projeto, a CONTRATADA não se responsabiliza pela não compensação do excedente;');
+    addText('- Os valores de produção do sistema são estimados e podem sofrer variações em decorrência das condições climáticas. Portanto, a CONTRATADA não garante os exatos valores de geração e produção;');
+    addText('- Os cálculos de economia e projeção financeira informados na proposta comercial são estimados e podem alterar em decorrência dos reajustes inflacionários e energéticos.');
 
     addText('CLÁUSULA OITAVA – DA RESCISÃO CONTRATUAL', { bold: true });
-    addText('[Texto fixo completo da Cláusula Oitava conforme modelo]');
+    addText('8.1- A eventual rescisão do presente contrato, por culpa ou descumprimento das obrigações por qualquer das partes, acarretará à parte infratora o pagamento de multa penal fixada em 10% (dez por cento) do valor total do negócio, além de responder por perdas e danos e pagamento de custas e honorários advocatícios.');
+    addText('8.2- Em havendo desistência por parte do CONTRATANTE, que não seja ocasionada por negativa de crédito ou inviabilidade técnica, fica o CONTRATANTE obrigado a pagar à CONTRATADA os custos referentes à vistoria, preparação e execução do projeto até o momento da rescisão, limitado a 10% (dez por cento) do valor total do contrato.');
 
     addText('CLÁUSULA NONA – DIREITO DE IMAGEM', { bold: true });
-    addText('[Texto fixo completo da Cláusula Nona conforme modelo]');
+    addText('9.1- O CONTRATANTE autoriza, de forma gratuita e sem qualquer ônus, a CONTRATADA a utilização de imagem dos serviços desenvolvidos, com o intuito de vinculá-los aos meios de comunicação da CONTRATADA, bem como sites, artigos, matérias jornalísticas etc.');
 
     addText('CLÁUSULA DÉCIMA – CONDIÇÕES GERAIS', { bold: true });
-    addText('[Texto fixo completo da Cláusula Décima conforme modelo]');
+    addText('- O presente CONTRATO irá vigorar pelo prazo de 12 meses, contados da data da correspondente assinatura, podendo ser prorrogado por acordo comum e escrito entre as PARTES, mediante celebração de aditivo;');
+    addText('- O CONTRATANTE poderá ceder ou transferir, total ou parcialmente, os direitos e obrigações decorrentes deste contrato desde que acordado entre as partes e documentado em aditivo contratual;');
+    addText('- Na falta dos equipamentos descritos no ANEXO A, a CONTRATADA poderá substituí-los, desde que sejam de mesmas características ou superior;');
+    addText('- As partes poderão rescindir o presente contrato, independentemente de qualquer notificação judicial ou extrajudicial, nas seguintes hipóteses: inadimplência reiterada de qualquer cláusula ou condição do presente contrato; nos demais casos previstos em lei;');
+    addText('- Ressalta-se que a CONTRATADA comercializa módulos fotovoltaicos de potências distintas, onde, a depender da potência fornecida por cada módulo, a potência pico pode variar algumas casas decimais, porém sem influenciar na geração dimensionada;');
+    addText('- A depender das condições arquitetônicas e civis do estabelecimento, o projeto pode sofrer alterações em relação à potência instalada e consequentemente ter o seu valor final modificado;');
+    addText('- A CONTRATADA deverá realizar as manutenções periódicas do Sistema Fotovoltaico, conforme manuais dos fabricantes, através de profissionais qualificados, de forma a garantir a integridade dos equipamentos e eficiência de produção.');
 
     addText('CLÁUSULA DÉCIMA PRIMEIRA – GARANTIAS E SEGURO', { bold: true });
-    addText('[Texto fixo completo da Cláusula Décima Primeira conforme modelo]');
+    addText('As garantias do sistema solar fotovoltaico são:');
+    addText('- Módulos: 20 anos contra defeito de fabricação e 30 anos contra queda de eficiência de até 80%;');
+    addText('- Inversores: 12 anos contra defeito de fabricação;');
+    addText('- Estrutura Metálica: 12 anos;');
+    addText('- Serviço de Instalação: 01 ano.');
+    addText('- A garantia não cobre incidentes naturais como descargas elétricas, tempestades e mau uso;');
+    addText('- A garantia é do fabricante, tendo a CONTRATADA o dever de viabilizar a troca de eventual problema, observando sempre as disposições da cláusula sétima;');
+    addText('- A não observação das instruções de instalação constantes no manual dos fabricantes, ou a utilização indevida dos produtos, anulam as garantias e podem incorrer em riscos à segurança física e material.');
 
     addText('CLÁUSULA DÉCIMA SEGUNDA – DO FORO', { bold: true });
     addText('As partes elegem o Foro da Comarca da cidade de Jaboatão dos Guararapes – Pernambuco, para dirimir qualquer questão decorrente deste contrato, com exclusão de qualquer outro, por mais privilegiado que seja.');
@@ -191,10 +231,6 @@ export default function Contracts() {
     doc.text('MT SOLAR ENERGIA RENOVAVEL\n51.713.487/0001-90', marginLeft + 35, currentY, { align: 'center' });
     doc.text(`${formData.nome_contratante || 'CONTRATANTE'}\n${formData.cpf_cnpj_contratante || ''}`, pageWidth - marginLeft - 35, currentY, { align: 'center' });
 
-    const totalPages = doc.getNumberOfPages();
-    for (let i = 1; i <= totalPages; i++) {
-      addBackground(i);
-    }
     
     const dataFormatadaArquivo = new Date(formData.data_contrato).toLocaleDateString('pt-BR').replace(/\//g, '-');
     doc.save(`Contrato_${formData.nome_contratante || 'Cliente'}_${dataFormatadaArquivo}.pdf`);
