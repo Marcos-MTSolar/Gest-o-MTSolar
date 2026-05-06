@@ -43,6 +43,10 @@ export default function Contracts() {
     valor_extenso: '',
     forma_pagamento: '',
     
+    // Integrador / Distribuidora
+    nome_integrador: 'SIRIUS',
+    cnpj_integrador: '35.765.147/0001-57',
+    
     // Data e Local
     cidade_contrato: 'Jaboatão dos Guararapes',
     data_contrato: new Date().toISOString().split('T')[0]
@@ -120,7 +124,7 @@ export default function Contracts() {
 
     addText(`Pelo presente instrumento particular de contrato de venda e instalação de sistema de geração de energia solar fotovoltaico, entre partes, a saber, de um lado, ${formData.nome_contratante || '{{ nome_contratante }}'}, portador do CPF/CNPJ: ${formData.cpf_cnpj_contratante || '{{ cpf_cnpj_contratante }}'}, residente em ${formData.endereco_contratante || '{{ endereco_contratante }}'}, CEP ${formData.cep_contratante || '{{ cep_contratante }}'}, ${formData.cidade_estado_contratante || '{{ cidade_estado_contratante }}'}, doravante designado CONTRATANTE.`);
 
-    addText(`E, de outro lado, a empresa MT SOLAR ENERGIA RENOVAVEL, inscrita no CNPJ sob o nº 51.713.487/0001-90, com sede na Rua Rossini Roosevelt de Albuquerque, nº 10, loja-105, Piedade, Jaboatão dos Guararapes – PE, integrador credenciado SIRIUS, CNPJ nº: 35.765.147/0001-57, neste ato representa por seu sócio, Marcos Aurélio Silva do Nascimento, inscrita no CPF nº 092.375.674-48 e RG: 7.834.135 SDS/PE, adiante denominada CONTRATADA.`);
+    addText(`E, de outro lado, a empresa MT SOLAR ENERGIA RENOVAVEL, inscrita no CNPJ sob o nº 51.713.487/0001-90, com sede na Rua Rossini Roosevelt de Albuquerque, nº 10, loja-105, Piedade, Jaboatão dos Guararapes – PE, integrador credenciado ${formData.nome_integrador}, CNPJ nº: ${formData.cnpj_integrador}, neste ato representa por seu sócio, Marcos Aurélio Silva do Nascimento, inscrita no CPF nº 092.375.674-48 e RG: 7.834.135 SDS/PE, adiante denominada CONTRATADA.`);
 
     addText('As partes acima identificadas têm, entre si, justas e acertadas o presente contrato, que se regerá pelas cláusulas seguintes:');
 
@@ -349,6 +353,37 @@ export default function Contracts() {
                     onChange={e => updateForm('endereco_instalacao', e.target.value)}
                     className={inputStyle}
                     placeholder="Onde o sistema será instalado"
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* Integrador / Distribuidora */}
+            <section className="bg-white rounded-2xl p-8 shadow-sm border border-gray-200">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-10 h-10 bg-orange-100 text-orange-900 rounded-xl flex items-center justify-center">
+                  <Building size={20} />
+                </div>
+                <h2 className="text-lg font-bold text-gray-800 uppercase tracking-tight">Integrador / Distribuidora</h2>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className={labelStyle}>Nome do Integrador</label>
+                  <input 
+                    value={formData.nome_integrador} 
+                    onChange={e => updateForm('nome_integrador', e.target.value)}
+                    className={inputStyle}
+                    placeholder="Ex: SIRIUS"
+                  />
+                </div>
+                <div>
+                  <label className={labelStyle}>CNPJ do Integrador</label>
+                  <input 
+                    value={formData.cnpj_integrador} 
+                    onChange={e => updateForm('cnpj_integrador', e.target.value)}
+                    className={inputStyle}
+                    placeholder="00.000.000/0001-00"
                   />
                 </div>
               </div>
