@@ -20,7 +20,8 @@ import {
   Calendar,
   Package,
   FileSpreadsheet,
-  FileSignature
+  FileSignature,
+  MessageCircle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
@@ -128,6 +129,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     ...(hasCompletedInspection ? [{ name: 'Homologação', path: '/homologation', icon: CheckSquare, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] }] : []),
     { name: 'Finalizados', path: '/finished', icon: Archive, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Mensagens', path: '/messages', icon: MessageSquare, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
+    { name: 'Atendimento', path: '/whatsapp', icon: MessageCircle, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Usuários', path: '/users', icon: Users, roles: ['CEO', 'ADMIN'] },
     { name: 'Configurações', path: '/settings', icon: Settings, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
   ];
