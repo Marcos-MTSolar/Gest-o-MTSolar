@@ -118,6 +118,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const menuItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
+    { name: 'Atendimento', path: '/whatsapp', icon: MessageCircle, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Agenda', path: '/agenda', icon: Calendar, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Gerador de Proposta', path: '/proposal-generator', icon: FileSpreadsheet, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Comercial', path: '/commercial', icon: Briefcase, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
@@ -129,7 +130,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     ...(hasCompletedInspection ? [{ name: 'Homologação', path: '/homologation', icon: CheckSquare, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] }] : []),
     { name: 'Finalizados', path: '/finished', icon: Archive, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Mensagens', path: '/messages', icon: MessageSquare, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
-    { name: 'Atendimento', path: '/whatsapp', icon: MessageCircle, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Usuários', path: '/users', icon: Users, roles: ['CEO', 'ADMIN'] },
     { name: 'Configurações', path: '/settings', icon: Settings, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
   ];

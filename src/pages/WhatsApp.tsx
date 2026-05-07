@@ -46,6 +46,7 @@ interface Conversation {
   assigned_to: number | null;
   assigned_name: string | null;
   assigned_at: string | null;
+  token?: string;
 }
 
 export default function WhatsApp() {
@@ -246,25 +247,28 @@ export default function WhatsApp() {
     if (!user) return;
     
     if (window.confirm("Deseja assumir este atendimento?")) {
-      const { data, error } = await supabase
-        .from('whatsapp_conversations')
-        .update({
-          status: 'in_progress',
-          assigned_to: user.id,
-          assigned_name: user.name,
-          assigned_at: new Date().toISOString()
-        })
-        .eq('id', conversation.id)
-        .eq('status', 'waiting')
-        .select()
-        .single();
+      try {
+        const response = await fetch('/api/whatsapp/assume', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            conversationId: conversation.id,
+            userId: user.id
+          })
+        });
 
-      if (!error && data) {
-        setSelectedConversation(data);
-        fetchConversations();
-      } else {
-        alert("Não foi possível assumir este atendimento. Ele pode já ter sido assumido por outro agente.");
-        fetchConversations();
+        const result = await response.json();
+
+        if (response.ok) {
+          setSelectedConversation(result);
+          fetchConversations();
+        } else {
+          alert(result.error || "Não foi possível assumir este atendimento.");
+          fetchConversations();
+        }
+      } catch (error) {
+        console.error("Erro ao assumir conversa:", error);
+        alert("Erro de conexão com o servidor.");
       }
     }
   };
@@ -354,9 +358,16 @@ export default function WhatsApp() {
         )}
       >
         <div className="flex justify-between items-start mb-1">
-          <span className="font-bold text-gray-800 truncate">
-            {conv.contact_name || conv.phone}
-          </span>
+          <div className="flex flex-col">
+            <span className="font-bold text-gray-800 truncate">
+              {conv.contact_name || conv.phone}
+            </span>
+            {conv.token && (
+              <span className="text-[10px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 w-fit mt-0.5">
+                {conv.token}
+              </span>
+            )}
+          </div>
           <span className="text-[10px] text-gray-400">
             {format(new Date(conv.last_message_at), 'HH:mm', { locale: ptBR })}
           </span>

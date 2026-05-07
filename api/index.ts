@@ -567,6 +567,60 @@ app.post('/api/messages', authenticateToken, async (req: any, res) => {
   res.json(payload);
 });
 
+// WhatsApp - Assume Conversation
+app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
+  const { conversationId, userId } = req.body;
+
+  try {
+    // 1. Get user name
+    const { data: user } = await supabase.from('users').select('name').eq('id', userId).single();
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // 2. Generate token (6 chars alfanumeric uppercase)
+    const token = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+    // 3. Update conversation
+    const { data: conv, error } = await supabase
+      .from('whatsapp_conversations')
+      .update({
+        status: 'in_progress',
+        assigned_to: userId,
+        assigned_name: user.name,
+        assigned_at: new Date().toISOString(),
+        token: token
+      })
+      .eq('id', conversationId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // 4. Send WhatsApp message
+    const EVOLUTION_URL = process.env.VITE_EVOLUTION_URL;
+    const EVOLUTION_KEY = process.env.VITE_EVOLUTION_KEY;
+    const INSTANCE_NAME = process.env.VITE_EVOLUTION_INSTANCE;
+
+    const response = await fetch(`${EVOLUTION_URL}/message/sendText/${INSTANCE_NAME}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': EVOLUTION_KEY! },
+      body: JSON.stringify({ 
+        number: conv.phone, 
+        text: `✅ Olá! Você está sendo atendido por ${user.name}. Seu código de atendimento (ticket) é: ${token}. Guarde este código para futuros contatos conosco. 😊` 
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Evolution API Error:', await response.text());
+    }
+
+    res.json(conv);
+  } catch (err: any) {
+    console.error("Error assuming conversation:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // Documents
 app.get('/api/documents', authenticateToken, async (req: any, res) => {
   const { data: docs } = await supabase

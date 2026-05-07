@@ -394,9 +394,9 @@ export default function Homologation() {
                   <h3 className="text-lg font-bold mb-3 text-gray-800 flex items-center gap-2">
                     <FileText size={20} className="text-blue-600" /> Documentos do Cliente
                   </h3>
-                  {selectedProject.documents && selectedProject.documents.length > 0 ? (
+                  {projectDocs && projectDocs.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {selectedProject.documents.map((doc: any) => (
+                      {projectDocs.map((doc: any) => (
                         <div key={doc.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-200 transition-all">
                           <div className="flex items-center gap-2 overflow-hidden">
                             <FileText size={16} className="text-blue-500 shrink-0" />
