@@ -623,14 +623,21 @@ app.get('/api/events', authenticateToken, async (req: any, res) => {
 });
 
 app.post('/api/events', authenticateToken, async (req: any, res) => {
-  const { title, description, event_date, is_reminder } = req.body;
-  const { data } = await supabase.from('events').insert({ user_id: req.user.id, title, description, event_date, is_reminder }).select().single();
+  const { title, description, event_date, is_reminder, color } = req.body;
+  const { data } = await supabase.from('events').insert({ 
+    user_id: req.user.id, 
+    title, 
+    description, 
+    event_date, 
+    is_reminder,
+    color: color || 'blue'
+  }).select().single();
   res.json({ id: data.id });
 });
 
 app.put('/api/events/:id', authenticateToken, async (req: any, res) => {
-  const { title, description, event_date, is_reminder } = req.body;
-  await supabase.from('events').update({ title, description, event_date, is_reminder }).eq('id', req.params.id);
+  const { title, description, event_date, is_reminder, color } = req.body;
+  await supabase.from('events').update({ title, description, event_date, is_reminder, color }).eq('id', req.params.id);
   res.json({ success: true });
 });
 

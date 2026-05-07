@@ -23,7 +23,20 @@ interface Event {
   event_date: string;
   is_reminder: boolean;
   completed?: boolean;
+  color?: string;
 }
+
+const EVENT_COLORS = [
+  { id: 'blue',   label: 'Visita',        bg: 'bg-blue-100',   text: 'text-blue-800',   border: 'border-blue-500',   dot: 'bg-blue-500'   },
+  { id: 'green',  label: 'Instalação',    bg: 'bg-green-100',  text: 'text-green-800',  border: 'border-green-500',  dot: 'bg-green-500'  },
+  { id: 'amber',  label: 'Lembrete',      bg: 'bg-amber-100',  text: 'text-amber-800',  border: 'border-amber-500',  dot: 'bg-amber-500'  },
+  { id: 'purple', label: 'Reunião',       bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-500', dot: 'bg-purple-500' },
+  { id: 'red',    label: 'Urgente',       bg: 'bg-red-100',    text: 'text-red-800',    border: 'border-red-500',    dot: 'bg-red-500'    },
+  { id: 'gray',   label: 'Outros',        bg: 'bg-gray-100',   text: 'text-gray-700',   border: 'border-gray-400',   dot: 'bg-gray-400'   },
+];
+
+const getColor = (colorId?: string) =>
+  EVENT_COLORS.find(c => c.id === colorId) ?? EVENT_COLORS[0];
 
 export default function Agenda() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -38,6 +51,7 @@ export default function Agenda() {
     time: '09:00',
     is_reminder: false,
     completed: false,
+    color: 'blue',
   });
 
   useEffect(() => {
@@ -66,6 +80,7 @@ export default function Agenda() {
       time: format(new Date(), 'HH:mm'),
       is_reminder: false,
       completed: false,
+      color: 'blue',
     });
     setShowModal(true);
   };
@@ -80,6 +95,7 @@ export default function Agenda() {
       time: format(parseISO(event.event_date), 'HH:mm'),
       is_reminder: !!event.is_reminder,
       completed: !!event.completed,
+      color: event.color || 'blue',
     });
     setShowModal(true);
   };
@@ -97,6 +113,7 @@ export default function Agenda() {
       description: formData.description,
       event_date: eventDate.toISOString(),
       is_reminder: formData.is_reminder,
+      color: formData.color,
     };
 
     try {
@@ -208,9 +225,7 @@ export default function Agenda() {
                         text-xs p-1 rounded truncate flex items-center gap-1
                         ${event.completed
                           ? 'bg-green-50 text-green-700 border-l-2 border-green-500 line-through opacity-70'
-                          : event.is_reminder
-                            ? 'bg-amber-100 text-amber-800 border-l-2 border-amber-500'
-                            : 'bg-blue-100 text-blue-800 border-l-2 border-blue-500'
+                          : `${getColor(event.color).bg} ${getColor(event.color).text} border-l-2 ${getColor(event.color).border}`
                         }
                       `}
                     >
@@ -291,6 +306,29 @@ export default function Agenda() {
                       Lembrete
                     </span>
                   </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Modalidade / Cor</label>
+                <div className="flex flex-wrap gap-2">
+                  {EVENT_COLORS.map(color => (
+                    <button
+                      key={color.id}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, color: color.id })}
+                      className={`
+                        flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border-2 transition-all
+                        ${formData.color === color.id
+                          ? `${color.bg} ${color.text} ${color.border} scale-105 shadow-sm`
+                          : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-400'
+                        }
+                      `}
+                    >
+                      <span className={`w-2.5 h-2.5 rounded-full ${color.dot}`}></span>
+                      {color.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
