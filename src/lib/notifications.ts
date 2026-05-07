@@ -58,7 +58,7 @@ export async function scheduleAgendaNotifications(events: any[]) {
 
 export async function sendUpdateNotification(aba: string, cliente: string) {
   if (!Capacitor.isNativePlatform()) return;
-
+  const titulos: { [key: string]: string } = {
     technical: '🔧 Aba Técnica atualizada',
     finished: '✅ Obra Finalizada',
     homologation: '📋 Homologação atualizada',
