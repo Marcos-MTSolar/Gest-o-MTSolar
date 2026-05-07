@@ -1,5 +1,4 @@
 import express from 'express';
-import { createServer } from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
@@ -16,18 +15,6 @@ dotenv.config();
 // Moved __dirname into startServer logic to prevent top-level import.meta.url strict errors in CJS.
 
 const app = express();
-export const server = createServer(app);
-
-// Auto-limpeza: remove eventos com mais de 2 meses
-async function limparEventosAntigos() {
-  const limite = new Date();
-  limite.setMonth(limite.getMonth() - 2);
-  await supabase.from('events').delete().lt('event_date', limite.toISOString());
-}
-
-// Roda ao iniciar e depois a cada 24h
-limparEventosAntigos();
-setInterval(limparEventosAntigos, 24 * 60 * 60 * 1000);
 
 const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-in-prod';
@@ -59,19 +46,6 @@ const upload = multer({
   storage,
   limits: { fileSize: 50 * 1024 * 1024 } // 50MB
 });
-
-// Broadcast Helper
-async function broadcast(event: string, payload: any) {
-  try {
-    await supabase.channel('system').send({
-      type: 'broadcast',
-      event,
-      payload
-    });
-  } catch (error) {
-    console.error('Broadcast error:', error);
-  }
-}
 
 // Auth Middleware
 const authenticateToken = (req: any, res: any, next: any) => {
@@ -185,7 +159,7 @@ app.post('/api/users', authenticateToken, async (req: any, res) => {
 
   if (error) return res.status(400).json({ error: error.message });
 
-  broadcast('USER_CREATED', { id: data.id, name, role });
+
   res.json({ id: data.id });
 });
 
@@ -201,7 +175,7 @@ app.put('/api/users/:id', authenticateToken, async (req: any, res) => {
 
   await supabase.from('users').update(updates).eq('id', req.params.id);
 
-  broadcast('USER_UPDATED', { id: req.params.id });
+
   res.json({ success: true });
 });
 
@@ -220,7 +194,7 @@ app.delete('/api/users/:id', authenticateToken, async (req: any, res) => {
 
   if (error) return res.status(500).json({ error: error.message });
 
-  broadcast('USER_DELETED', { id: userId });
+
   res.json({ success: true });
 });
 
@@ -376,7 +350,7 @@ app.delete('/api/projects/:id', authenticateToken, async (req: any, res) => {
   if (project?.client_id) {
     await supabase.from('clients').delete().eq('id', project.client_id);
   }
-  broadcast('PROJECT_DELETED', { id: req.params.id });
+
   res.json({ success: true });
 });
 
@@ -409,7 +383,7 @@ app.put('/api/projects/:id/commercial', authenticateToken, async (req: any, res)
     await supabase.from('projects').update({ status: 'pendente_comercial', updated_at: new Date() }).eq('id', req.params.id);
   }
 
-  broadcast('PROJECT_UPDATED', { id: req.params.id, type: 'commercial' });
+
   res.json({ success: true });
 });
 
@@ -433,7 +407,7 @@ app.put('/api/projects/:id/kit', authenticateToken, async (req: any, res) => {
     // Update main project status
     await supabase.from('projects').update({ ...updatePayload, status: 'kit_definido' }).eq('id', req.params.id);
 
-    broadcast('PROJECT_UPDATED', { id: req.params.id, type: 'kit' });
+
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -484,7 +458,7 @@ app.put('/api/projects/:id/technical', authenticateToken, upload.any(), async (r
     await supabase.from('projects').update({ current_stage: 'homologation', status: 'vistoria_concluida', updated_at: new Date() }).eq('id', req.params.id);
   }
 
-  broadcast('PROJECT_UPDATED', { id: req.params.id, type: 'technical' });
+
   res.json({ success: true });
 });
 
@@ -510,7 +484,7 @@ app.put('/api/projects/:id/installation', authenticateToken, upload.any(), async
     await supabase.from('projects').update({ current_stage: 'homologation', updated_at: new Date() }).eq('id', req.params.id);
   }
 
-  broadcast('PROJECT_UPDATED', { id: req.params.id, type: 'installation' });
+
   res.json({ success: true });
 });
 
@@ -551,7 +525,7 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
     await supabase.from('logs').insert({ user_id: req.user.id, action: 'HOMOLOGATION_SUSPENDED', details: `Checklist reaberto/pendente. Processo de homologaÃ§Ã£o suspenso para o projeto ID ${req.params.id}` });
   }
 
-  broadcast('PROJECT_UPDATED', { id: req.params.id, type: 'homologation' });
+
   res.json({ success: true });
 });
 
@@ -589,7 +563,7 @@ app.post('/api/messages', authenticateToken, async (req: any, res) => {
     sender_role: req.user.role
   };
 
-  broadcast('NEW_MESSAGE', payload);
+
   res.json(payload);
 });
 
@@ -667,7 +641,7 @@ app.delete('/api/events/cleanup', authenticateToken, async (req: any, res) => {
 app.put('/api/events/:id/complete', authenticateToken, async (req: any, res) => {
   const { completed } = req.body;
   await supabase.from('events').update({ completed: !!completed }).eq('id', req.params.id);
-  broadcast('EVENT_UPDATED', { id: req.params.id, completed });
+
   res.json({ success: true });
 });
 
@@ -827,7 +801,7 @@ app.post('/api/stock/withdraw', authenticateToken, async (req: any, res) => {
 
   if (error) return res.status(400).json({ error: error.message });
   
-  broadcast('STOCK_UPDATED', { stock_item_id });
+
   res.json(data);
 });
 
@@ -839,7 +813,7 @@ app.put('/api/stock/:id', authenticateToken, async (req: any, res) => {
     .update({ current_quantity, ideal_quantity, low_stock_threshold, updated_at: new Date() })
     .eq('id', req.params.id);
     
-  broadcast('STOCK_UPDATED', { stock_item_id: req.params.id });
+
   res.json({ success: true });
 });
 
