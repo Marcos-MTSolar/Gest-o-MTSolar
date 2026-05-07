@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import api from '../lib/api';
 import { CheckCircle, AlertTriangle, Camera, Video, X, Trash2 } from 'lucide-react';
+import { sendUpdateNotification } from '../lib/notifications';
 
 export default function Technical() {
   const [projects, setProjects] = useState<any[]>([]);
@@ -93,6 +94,8 @@ export default function Technical() {
       await api.put(`/api/projects/${selectedProject.id}/technical`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
+
+      await sendUpdateNotification('technical', selectedProject?.client_name || 'Cliente');
 
       // Close form immediately for responsive UX
       setSelectedProject(null);

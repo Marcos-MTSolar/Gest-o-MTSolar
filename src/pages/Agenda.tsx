@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
+import { requestNotificationPermission, scheduleAgendaNotifications } from '../lib/notifications';
+import { Capacitor } from '@capacitor/core';
 import {
   format,
   startOfMonth,
@@ -56,12 +58,17 @@ export default function Agenda() {
 
   useEffect(() => {
     fetchEvents();
+    if (Capacitor.isNativePlatform()) {
+      requestNotificationPermission();
+    }
   }, []);
 
   const fetchEvents = async () => {
     try {
       const res = await api.get('/api/events');
-      setEvents(Array.isArray(res.data) ? res.data : []);
+      const data = Array.isArray(res.data) ? res.data : [];
+      setEvents(data);
+      await scheduleAgendaNotifications(data);
     } catch (error) {
       console.error('Error fetching events:', error);
       setEvents([]);

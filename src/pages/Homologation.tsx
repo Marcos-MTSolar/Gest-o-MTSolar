@@ -3,6 +3,7 @@ import api from '../lib/api';
 import { CheckSquare, AlertTriangle, CheckCircle, FileText, ListChecks, Save, Lock, Unlock, Calendar, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { deleteDocsHomologacao } from '../hooks/useHomologacaoDocs';
+import { sendUpdateNotification } from '../lib/notifications';
 
 export default function Homologation() {
   const [projects, setProjects] = useState<any[]>([]);
@@ -52,6 +53,8 @@ export default function Homologation() {
       if (expectedDate !== null) payload.homologation_expected_date = expectedDate;
 
       await api.put(`/api/projects/${id}/homologation`, payload);
+
+      await sendUpdateNotification('homologation', selectedProject?.client_name || 'Cliente');
 
       if (status === 'connection_point_approved') {
         // Exclui documentos do Supabase Storage ao finalizar

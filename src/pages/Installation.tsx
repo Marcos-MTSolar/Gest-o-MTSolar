@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../lib/api';
 import { CheckCircle, AlertTriangle, Camera, X, Trash2 } from 'lucide-react';
+import { sendUpdateNotification } from '../lib/notifications';
 
 const PHOTO_FIELDS = [
   { name: 'photo_modules', label: 'Módulos' },
@@ -120,6 +121,8 @@ export default function Installation() {
       await api.put(`/api/projects/${selectedProject.id}/installation`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+
+      await sendUpdateNotification('finished', selectedProject?.client_name || 'Cliente');
       setSelectedProject(null);
       setPhotoFiles({} as Record<PhotoFieldName, File | null>);
       setPhotoPreviews({} as Record<PhotoFieldName, string | null>);
