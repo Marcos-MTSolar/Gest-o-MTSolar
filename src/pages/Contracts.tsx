@@ -49,7 +49,8 @@ export default function Contracts() {
     
     // Data e Local
     cidade_contrato: 'Jaboatão dos Guararapes',
-    data_contrato: new Date().toISOString().split('T')[0]
+    data_contrato: new Date().toISOString().split('T')[0],
+    genero: 'masculino'
   });
 
   const [kitItems, setKitItems] = useState<KitItem[]>([
@@ -122,7 +123,7 @@ export default function Contracts() {
     addText('CONTRATO DE VENDA E INSTALAÇÃO DE SISTEMA DE GERAÇÃO DE ENERGIA SOLAR FOTOVOLTAICO', { bold: true, align: 'center', size: 12 });
     currentY += 5;
 
-    addText(`Pelo presente instrumento particular de contrato de venda e instalação de sistema de geração de energia solar fotovoltaico, entre partes, a saber, de um lado, ${formData.nome_contratante || '{{ nome_contratante }}'}, portador do CPF/CNPJ: ${formData.cpf_cnpj_contratante || '{{ cpf_cnpj_contratante }}'}, residente em ${formData.endereco_contratante || '{{ endereco_contratante }}'}, CEP ${formData.cep_contratante || '{{ cep_contratante }}'}, ${formData.cidade_estado_contratante || '{{ cidade_estado_contratante }}'}, doravante designado CONTRATANTE.`);
+    addText(`Pelo presente instrumento particular de contrato de venda e instalação de sistema de geração de energia solar fotovoltaico, entre partes, a saber, de um lado, ${formData.nome_contratante || '{{ nome_contratante }}'}, ${g.portador} do CPF/CNPJ: ${formData.cpf_cnpj_contratante || '{{ cpf_cnpj_contratante }}'}, residente em ${formData.endereco_contratante || '{{ endereco_contratante }}'}, CEP ${formData.cep_contratante || '{{ cep_contratante }}'}, ${formData.cidade_estado_contratante || '{{ cidade_estado_contratante }}'}, doravante designad${g.o} CONTRATANTE.`);
 
     addText(`E, de outro lado, a empresa MT SOLAR ENERGIA RENOVAVEL, inscrita no CNPJ sob o nº 51.713.487/0001-90, com sede na Rua Rossini Roosevelt de Albuquerque, nº 10, loja-105, Piedade, Jaboatão dos Guararapes – PE, integrador credenciado ${formData.nome_integrador}, CNPJ nº: ${formData.cnpj_integrador}, neste ato representa por seu sócio, Marcos Aurélio Silva do Nascimento, inscrita no CPF nº 092.375.674-48 e RG: 7.834.135 SDS/PE, adiante denominada CONTRATADA.`);
 
@@ -193,7 +194,7 @@ export default function Contracts() {
 
     addText('CLÁUSULA OITAVA – DA RESCISÃO CONTRATUAL', { bold: true });
     addText('8.1- A eventual rescisão do presente contrato, por culpa ou descumprimento das obrigações por qualquer das partes, acarretará a parte infratora o pagamento de multa penal, fixada em 10% (dez por cento) do valor total do negócio, a outra parte, além de responder por perdas e danos e pagamento dos ônus sucumbenciais, custas e honorários advocatícios.');
-    addText('8.2- Em havendo desistência por parte do CONTRATANTE, que não seja ocasionada por negativa de crédito ou inviabilidade técnica, fica o CONTRATANTE obrigado a pagar à CONTRATADA os custos referentes à vistoria, preparação e execução do projeto até o momento da rescisão, limitado a 10% (dez por cento) do valor total do contrato.');
+    addText(`8.2- Em havendo desistência por parte d${g.o} CONTRATANTE, que não seja ocasionada por negativa de crédito ou inviabilidade técnica, fica ${g.artigo} CONTRATANTE ${g.obrigado} a pagar à CONTRATADA os custos referentes à vistoria, preparação e execução do projeto até o momento da rescisão, limitado a 10% (dez por cento) do valor total do contrato.`);
 
     addText('CLÁUSULA NONA – DIREITO DE IMAGEM', { bold: true });
     addText('9.1- O CONTRATANTE autoriza, de forma gratuita e sem qualquer ônus, a CONTRATADA a utilização de imagem dos serviços desenvolvidos, com o intuito de vinculá-los aos meios de comunicação da CONTRATADA, bem como sites, artigos, matérias jornalísticas etc.');
@@ -242,6 +243,10 @@ export default function Contracts() {
 
   const inputStyle = "w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/50 transition-all focus:bg-white text-sm";
   const labelStyle = "block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1";
+
+  const g = formData.genero === 'feminino'
+    ? { artigo: 'a', portador: 'portadora', obrigado: 'obrigada', designado: 'designada', o: 'a' }
+    : { artigo: 'o', portador: 'portador', obrigado: 'obrigado', designado: 'designado', o: 'o' };
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -294,6 +299,27 @@ export default function Contracts() {
                     className={inputStyle}
                     placeholder="00000-000"
                   />
+                </div>
+                <div>
+                  <label className={labelStyle}>Gênero do Contratante</label>
+                  <div className="flex gap-3">
+                    {[
+                      { val: 'masculino', label: '♂ Masculino' },
+                      { val: 'feminino',  label: '♀ Feminino'  },
+                    ].map(opt => (
+                      <button
+                        key={opt.val}
+                        type="button"
+                        onClick={() => updateForm('genero', opt.val)}
+                        className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all
+                          ${formData.genero === opt.val
+                            ? 'bg-blue-900 text-white border-blue-900'
+                            : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-blue-300'}`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className="md:col-span-2">
                   <label className={labelStyle}>Endereço Completo</label>

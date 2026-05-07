@@ -16,6 +16,18 @@ dotenv.config();
 // Moved __dirname into startServer logic to prevent top-level import.meta.url strict errors in CJS.
 
 const app = express();
+
+// Auto-limpeza: remove eventos com mais de 2 meses
+async function limparEventosAntigos() {
+  const limite = new Date();
+  limite.setMonth(limite.getMonth() - 2);
+  await supabase.from('events').delete().lt('event_date', limite.toISOString());
+}
+
+// Roda ao iniciar e depois a cada 24h
+limparEventosAntigos();
+setInterval(limparEventosAntigos, 24 * 60 * 60 * 1000);
+
 const server = createServer(app);
 
 const PORT = 3000;
@@ -644,6 +656,13 @@ app.put('/api/events/:id', authenticateToken, async (req: any, res) => {
 app.delete('/api/events/:id', authenticateToken, async (req: any, res) => {
   await supabase.from('events').delete().eq('id', req.params.id);
   res.json({ success: true });
+});
+
+app.delete('/api/events/cleanup', authenticateToken, async (req: any, res) => {
+  const limite = new Date();
+  limite.setMonth(limite.getMonth() - 2);
+  const { count } = await supabase.from('events').delete().lt('event_date', limite.toISOString());
+  res.json({ success: true, removidos: count });
 });
 
 app.put('/api/events/:id/complete', authenticateToken, async (req: any, res) => {
