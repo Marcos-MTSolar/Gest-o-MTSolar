@@ -5,6 +5,8 @@
 
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { requestNotificationPermission } from './lib/notifications';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import Layout from './components/Layout';
@@ -42,6 +44,10 @@ function PrivateRoute({ children, roles }: { children: React.ReactNode, roles?: 
 }
 
 export default function App() {
+  useEffect(() => {
+    requestNotificationPermission();
+  }, []);
+
   return (
     <BrowserRouter>
       <AuthProvider>

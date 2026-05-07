@@ -56,7 +56,7 @@ const newCover = `<!-- PÁGINA 1: CAPA DINÂMICA -->
               <span>Rua Rossini Roosevelt de Albuquerque, nº10 - Piedade</span>
             </div>
             <div style="margin-top: 2mm; font-weight: bold; color: #1e3a5f;">
-              (81) 99700-3260 | (81) 99504-3980
+              (81) 99700-3260 | (81) 99951-7110
             </div>
           </div>
         </div>`;

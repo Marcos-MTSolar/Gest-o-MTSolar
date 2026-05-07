@@ -209,7 +209,7 @@ export default function Dashboard() {
             </span>
           </div>
 
-          <div className="p-0 h-96 overflow-y-auto">
+          <div className="p-0 h-96 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
             {todayEvents.length > 0 ? (
               <ul className="divide-y divide-gray-100">
                 {todayEvents.map((ev) => renderEvent(ev, 'bg-amber-100', 'text-amber-800'))}
@@ -233,7 +233,7 @@ export default function Dashboard() {
             </span>
           </div>
 
-          <div className="p-0 h-96 overflow-y-auto">
+          <div className="p-0 h-96 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
             {tomorrowEvents.length > 0 ? (
               <ul className="divide-y divide-gray-100">
                 {tomorrowEvents.map((ev) => renderEvent(ev, 'bg-blue-100', 'text-blue-800'))}
@@ -264,7 +264,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="p-0 h-96 overflow-y-auto">
+          <div className="p-0 h-96 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
             {selectedDateFiltered.length > 0 ? (
               <ul className="divide-y divide-gray-100">
                 {selectedDateFiltered.map((ev) => renderEvent(ev, 'bg-emerald-100', 'text-emerald-800'))}

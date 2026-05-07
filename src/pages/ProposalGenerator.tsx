@@ -68,6 +68,8 @@ interface FormData {
   garantiaEstruturaItem4: string;
   estruturaItem5: string;
   garantiaEstruturaItem5: string;
+  financeBanco: string;
+  tipoEstrutura: 'telhado_ceramico' | 'telhado_metalico' | 'telhado_fibrocimento' | 'solo' | 'telhado_shingle' | 'outro';
 }
 
 interface Results {
@@ -123,6 +125,21 @@ const AVAILABLE_SERVICES = [
   }
 ];
 
+const TABELA_BANCOS = [
+  { banco: 'BV', prazo: '24 meses', taxa: 1.49, carencia: 0 },
+  { banco: 'BV', prazo: '36 meses', taxa: 1.35, carencia: 2 },
+  { banco: 'BV', prazo: '48 meses', taxa: 1.29, carencia: 3 },
+  { banco: 'BV', prazo: '60 meses', taxa: 1.25, carencia: 4 },
+  { banco: 'BV', prazo: '72 meses', taxa: 1.22, carencia: 4 },
+  { banco: 'BV', prazo: '84 meses', taxa: 1.20, carencia: 4 },
+  { banco: 'Santander', prazo: '24 meses', taxa: 1.45, carencia: 0 },
+  { banco: 'Santander', prazo: '36 meses', taxa: 1.32, carencia: 2 },
+  { banco: 'Santander', prazo: '48 meses', taxa: 1.27, carencia: 3 },
+  { banco: 'Santander', prazo: '60 meses', taxa: 1.22, carencia: 4 },
+  { banco: 'Santander', prazo: '72 meses', taxa: 1.19, carencia: 4 },
+  { banco: 'Santander', prazo: '84 meses', taxa: 1.17, carencia: 4 },
+];
+
 
 export default function ProposalGenerator() {
   const { user } = useAuth();
@@ -160,6 +177,7 @@ export default function ProposalGenerator() {
     photos: [],
     kitSupplier: '',
     financeGracePeriod: '0',
+    financeBanco: '',
     estruturaItem1: '',
     garantiaEstruturaItem1: '',
     estruturaItem2: '',
@@ -169,7 +187,8 @@ export default function ProposalGenerator() {
     estruturaItem4: '',
     garantiaEstruturaItem4: '',
     estruturaItem5: '',
-    garantiaEstruturaItem5: ''
+    garantiaEstruturaItem5: '',
+    tipoEstrutura: 'telhado_ceramico'
   });
 
   const [results, setResults] = useState<Results>({
@@ -429,6 +448,14 @@ export default function ProposalGenerator() {
   };
 
   const generatePDF = async () => {
+    const structureTranslations: Record<string, string> = {
+      'telhado_ceramico': 'Telhado Cerâmico',
+      'telhado_metalico': 'Telhado Metálico',
+      'telhado_fibrocimento': 'Telhado Fibrocimento',
+      'solo': 'Solo',
+      'telhado_shingle': 'Telhado Shingle',
+      'outro': 'Outro'
+    };
     const AZUL = '#1e3a5f';
     const AZUL_CLARO = '#d6e4f0';
     const AMARELO = '#f59e0b';
@@ -825,9 +852,14 @@ export default function ProposalGenerator() {
             <!-- KIT DESCRIPTION BADGE -->
             ${formData.kitName ? `
             <div style="background:#1e3a5f;color:#f59e0b;border-radius:6px;
-              padding:3mm 5mm;margin-bottom:4mm;font-size:10pt;font-weight:bold;
+              padding:3mm 5mm;margin-bottom:2mm;font-size:10pt;font-weight:bold;
               text-align:center;letter-spacing:0.5px;">
               ☀️ ${formData.kitName}
+            </div>` : ''}
+
+            ${formData.kitSupplier ? `
+            <div style="text-align:right; font-size:9pt; color:#1e3a5f; font-weight:bold; margin-bottom:2mm;">
+              Distribuidor: ${formData.kitSupplier}
             </div>` : ''}
 
             <!-- GRID MÓDULO + INVERSOR -->
@@ -956,7 +988,7 @@ export default function ProposalGenerator() {
                     </table>
                   ` : `
                     <div style="font-size:9pt;color:#374151;">
-                      Conforme tipo de telhado/solo do projeto</div>
+                      Tipo: ${structureTranslations[formData.tipoEstrutura] || 'Conforme tipo de telhado/solo do projeto'}</div>
                     <div style="font-size:8pt;color:#6b7280;margin-top:1mm;">
                       Inclui todos os materiais necessários para a fixação dos módulos.</div>
                   `}
@@ -993,7 +1025,7 @@ export default function ProposalGenerator() {
                 MT SOLAR — ENERGIA RENOVÁVEL
               </div>
               <div style="font-size:7.5pt;color:#6b7280;">
-                mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99504-3980
+                mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99951-7110
               </div>
             </div>
 
@@ -1148,7 +1180,7 @@ export default function ProposalGenerator() {
               <div style="font-size:8pt;color:#1e3a5f;font-weight:bold;">
                 MT SOLAR — ENERGIA RENOVÁVEL</div>
               <div style="font-size:7.5pt;color:#6b7280;">
-                mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99504-3980</div>
+                mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99951-7110</div>
             </div>
 
           </div>
@@ -1280,13 +1312,28 @@ export default function ProposalGenerator() {
               <span>■ <span style="color:#fca5a5;font-weight:bold;">Período de retorno</span></span>
             </div>
 
+            ${formData.financeBanco ? `
+            <!-- CONDIÇÕES DE FINANCIAMENTO -->
+            <div style="background:#f8fafc;border:1.5px solid #d6e4f0;border-radius:8px;
+              padding:3mm 5mm;margin-top:4mm;">
+              <div style="font-size:9pt;font-weight:bold;color:#1e3a5f;margin-bottom:1mm;text-transform:uppercase;letter-spacing:1px;">
+                🏦 Condições de Financiamento Solar
+              </div>
+              <div style="font-size:10pt;color:#374151;">
+                Banco: <strong>${formData.financeBanco}</strong> | 
+                Taxa: <strong>${formData.financeRate}% a.m.</strong> | 
+                Carência: <strong>${formData.financeGracePeriod} meses</strong>
+              </div>
+            </div>
+            ` : ''}
+
             <!-- RODAPÉ -->
             <div style="border-top:2px solid #1e3a5f;padding-top:3mm;margin-top:4mm;
               display:flex;justify-content:space-between;align-items:center;">
               <div style="font-size:8pt;color:#1e3a5f;font-weight:bold;">
                 MT SOLAR — ENERGIA RENOVÁVEL</div>
               <div style="font-size:7.5pt;color:#6b7280;">
-                mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99504-3980</div>
+                mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99951-7110</div>
             </div>
 
           </div>
@@ -1419,7 +1466,7 @@ export default function ProposalGenerator() {
               <div style="font-size:8pt;color:#1e3a5f;font-weight:bold;">
                 MT SOLAR — ENERGIA RENOVÁVEL</div>
               <div style="font-size:7.5pt;color:#6b7280;">
-                mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99504-3980</div>
+                mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99951-7110</div>
             </div>
 
           </div>
@@ -1506,7 +1553,7 @@ export default function ProposalGenerator() {
                   <div style="font-size:8pt;color:#6b7280;">
                     Rua Rossini Roosevelt de Albuquerque, nº10 - Piedade, Jaboatão dos Guararapes - PE</div>
                   <div style="font-size:8pt;color:#6b7280;">
-                    (81) 99700-3260 | (81) 99504-3980</div>
+                    (81) 99700-3260 | (81) 99951-7110</div>
                 </div>
                 <div style="text-align:right;">
                   <div style="color:#6b7280;font-size:8pt;">Nº da Proposta</div>
@@ -2017,6 +2064,23 @@ export default function ProposalGenerator() {
                 />
                 <p className="text-[10px] text-gray-400">Opcional - se preenchido, aparece na proposta</p>
               </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">Tipo de Estrutura do Sistema *</label>
+                <select
+                  value={formData.tipoEstrutura}
+                  onChange={(e) => updateForm('tipoEstrutura', e.target.value)}
+                  className={inputStyle}
+                >
+                  <option value="telhado_ceramico">Telhado Cerâmico</option>
+                  <option value="telhado_metalico">Telhado Metálico</option>
+                  <option value="telhado_fibrocimento">Telhado Fibrocimento</option>
+                  <option value="telhado_shingle">Telhado Shingle</option>
+                  <option value="solo">Solo</option>
+                  <option value="outro">Outro</option>
+                </select>
+                <p className="text-[10px] text-gray-400">Define o tipo de fixação na proposta</p>
+              </div>
             </div>
 
             {/* Preview Card */}
@@ -2387,6 +2451,50 @@ export default function ProposalGenerator() {
               <h2 className="text-xl font-bold text-gray-800">Simulação de Financiamento</h2>
             </div>
 
+            {/* Painel de Taxas dos Bancos */}
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Calculator size={18} className="text-blue-900" />
+                <h3 className="font-bold text-gray-700">Tabela de Taxas — Financiamento Solar</h3>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {TABELA_BANCOS.map((item, idx) => (
+                  <div 
+                    key={idx}
+                    onClick={() => {
+                      updateForm('financeRate', item.taxa.toString());
+                      updateForm('financeTerm', item.prazo.split(' ')[0]);
+                      updateForm('financeGracePeriod', item.carencia.toString());
+                      updateForm('financeBanco', item.banco);
+                    }}
+                    className={`p-3 rounded-lg border-2 transition-all cursor-pointer hover:shadow-md flex flex-col justify-between ${
+                      formData.financeBanco === item.banco && formData.financeRate === item.taxa.toString() && formData.financeTerm === item.prazo.split(' ')[0]
+                        ? 'border-blue-600 bg-blue-50'
+                        : 'border-white bg-white hover:border-blue-200'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        item.banco === 'BV' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {item.banco}
+                      </span>
+                      <span className="text-blue-900 font-bold">{item.prazo}</span>
+                    </div>
+                    <div className="flex justify-between items-end">
+                      <div className="text-xs text-gray-500">
+                        Carencia: <span className="font-bold">{item.carencia} m</span>
+                      </div>
+                      <div className="text-lg font-black text-blue-900">
+                        {item.taxa}% <span className="text-[10px] font-normal text-gray-500">a.m.</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-1">
                 <label className="text-sm font-medium text-gray-700">Valor a Financiar (R$)</label>
@@ -2450,7 +2558,13 @@ export default function ProposalGenerator() {
               <p className="text-5xl font-black text-amber-400 mb-2">
                 R$ {results.monthlyInstallment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
-              <p className="text-sm opacity-80 mb-4">{formData.financeTerm}x de R$ {results.monthlyInstallment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              <p className="text-sm opacity-80 mb-2">{formData.financeTerm}x de R$ {results.monthlyInstallment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              
+              {formData.financeBanco && (
+                <p className="text-xs font-medium bg-blue-800/50 inline-block px-3 py-1 rounded-full text-amber-200">
+                  Banco: {formData.financeBanco} • Taxa: {formData.financeRate}% a.m. • Carência: {formData.financeGracePeriod} meses
+                </p>
+              )}
               
               <div className="border-t border-blue-800 pt-4 mt-4 grid grid-cols-2 gap-4">
                 <div>

@@ -131,7 +131,9 @@ export default function Homologation() {
         homologation_observations: observationsText,
         homologation_checklist: checklist
       });
-
+      
+      await sendUpdateNotification('homologation', selectedProject.client_name);
+      
       setSaveMessage({ type: 'success', text: 'Dados salvos com sucesso!' });
 
       // Limpa a mensagem após 3 segundos

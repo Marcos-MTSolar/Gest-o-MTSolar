@@ -246,7 +246,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-3 md:p-6">
+        <main id="main-scroll-container" className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-3 md:p-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -261,7 +261,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <p className="text-sm font-bold text-blue-900">MT SOLAR — ENERGIA RENOVÁVEL</p>
                 <p className="text-xs text-gray-600">mtsolar.energia@gmail.com | @mtsolar_</p>
                 <p className="text-xs text-gray-600">Rua Rossini Roosevelt de Albuquerque, nº10 - Piedade, Jaboatão dos Guararapes - PE</p>
-                <p className="text-xs text-gray-600">(81) 99700-3260 | (81) 99504-3980</p>
+                <p className="text-xs text-gray-600">(81) 99700-3260 | (81) 99951-7110</p>
               </div>
               <div className="text-right">
                 <p className="text-xs text-gray-500">Sistema de Gestão</p>
