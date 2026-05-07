@@ -155,8 +155,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        <div className="flex flex-col justify-between h-[calc(100%-5rem)]">
-          <nav className="flex-1 px-2 py-4 space-y-2">
+        <div className="flex flex-col justify-between h-[calc(100%-5rem)] overflow-hidden">
+          <nav className="flex-1 px-2 py-4 space-y-2 overflow-y-auto custom-scrollbar">
             {filteredItems.map((item) => (
               <Link
                 key={item.path}
