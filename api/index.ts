@@ -16,6 +16,7 @@ dotenv.config();
 // Moved __dirname into startServer logic to prevent top-level import.meta.url strict errors in CJS.
 
 const app = express();
+export const server = createServer(app);
 
 // Auto-limpeza: remove eventos com mais de 2 meses
 async function limparEventosAntigos() {
@@ -27,8 +28,6 @@ async function limparEventosAntigos() {
 // Roda ao iniciar e depois a cada 24h
 limparEventosAntigos();
 setInterval(limparEventosAntigos, 24 * 60 * 60 * 1000);
-
-const server = createServer(app);
 
 const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-in-prod';
@@ -873,31 +872,4 @@ app.post('/api/settings/logo', authenticateToken, upload.single('logo'), async (
 });
 
 // Vite Integration
-async function startServer() {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
-
-  if (process.env.NODE_ENV !== 'production') {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
-    app.use(express.static(path.join(__dirname, '../dist')));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(__dirname, '../dist', 'index.html'));
-    });
-  }
-
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
-}
-
-if (process.env.NODE_ENV !== 'production') {
-  startServer();
-}
-
 export default app;
