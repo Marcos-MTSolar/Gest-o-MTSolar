@@ -227,7 +227,6 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
     await supabase.from('technical_data').insert({ project_id: project.id });
   }
 
-  broadcast('CLIENT_CREATED', { id: client.id, name });
   res.json({ id: client.id, project_id: project?.id });
 });
 
