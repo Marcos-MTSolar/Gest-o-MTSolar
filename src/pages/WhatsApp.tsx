@@ -25,6 +25,7 @@ import {
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import api from '../lib/api';
 
 interface Message {
   id: string;
@@ -61,7 +62,8 @@ export default function WhatsApp() {
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState('');
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isSending, setIsSending] = useState(false);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchConversations();
@@ -130,7 +132,9 @@ export default function WhatsApp() {
   }, [messages]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   };
 
   const fetchConversations = async () => {
@@ -248,27 +252,19 @@ export default function WhatsApp() {
     
     if (window.confirm("Deseja assumir este atendimento?")) {
       try {
-        const response = await fetch('/api/whatsapp/assume', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            conversationId: conversation.id,
-            userId: user.id
-          })
+        const res = await api.post('/api/whatsapp/assume', {
+          conversationId: conversation.id,
+          userId: user.id
         });
 
-        const result = await response.json();
-
-        if (response.ok) {
-          setSelectedConversation(result);
-          fetchConversations();
-        } else {
-          alert(result.error || "Não foi possível assumir este atendimento.");
+        if (res.data) {
+          setSelectedConversation(res.data);
           fetchConversations();
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Erro ao assumir conversa:", error);
-        alert("Erro de conexão com o servidor.");
+        alert(error.response?.data?.error || "Não foi possível assumir este atendimento.");
+        fetchConversations();
       }
     }
   };
@@ -509,7 +505,10 @@ export default function WhatsApp() {
             </div>
 
             {/* Mensagens */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#f0f2f5] custom-scrollbar">
+            <div 
+              ref={messagesContainerRef}
+              className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#f0f2f5] custom-scrollbar"
+            >
               {messages.map((msg) => (
                 <div 
                   key={msg.id}
@@ -531,7 +530,6 @@ export default function WhatsApp() {
                   </div>
                 </div>
               ))}
-              <div ref={messagesEndRef} />
             </div>
 
             {/* Campo de Envio */}
