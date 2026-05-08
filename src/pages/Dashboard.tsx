@@ -4,6 +4,8 @@ import { addDays, isSameDay, parseISO, format, differenceInDays } from 'date-fns
 import { ptBR } from 'date-fns/locale';
 import { Calendar as CalendarIcon, Bell, CheckCircle2, RotateCcw, CheckSquare, XCircle, Clock3, Loader2, AlertTriangle, ClipboardList } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { checkAndNotify, createNotificationChannel } from '../lib/notifications';
+
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ activeProjects: 0, pendingInspections: 0, completedProjects: 0, monthlyRevenue: 0 });
@@ -54,7 +56,27 @@ export default function Dashboard() {
         setNeoenergia(res.data);
       }
     });
+    
+    createNotificationChannel();
   }, [fetchEvents]);
+
+  useEffect(() => {
+    if (homologacoes.length > 0 || neoenergia.length > 0) {
+      checkAndNotify(homologacoes, neoenergia);
+    }
+  }, [homologacoes, neoenergia]);
+
+  const sortByOverdue = (list: any[]) => {
+    return [...list].sort((a, b) => {
+      const aOver = !!a.homologation_expected_date || !!a.data_prevista
+        ? new Date((a.homologation_expected_date || a.data_prevista)) < new Date(new Date().toISOString().split('T')[0])
+        : false;
+      const bOver = !!b.homologation_expected_date || !!b.data_prevista
+        ? new Date((b.homologation_expected_date || b.data_prevista)) < new Date(new Date().toISOString().split('T')[0])
+        : false;
+      return (bOver ? 1 : 0) - (aOver ? 1 : 0);
+    });
+  };
 
   const toggleComplete = async (ev: any) => {
     try {
@@ -164,55 +186,41 @@ export default function Dashboard() {
             <p>Nenhum projeto em homologação no momento.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase">Cliente</th>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase">Status Homologação</th>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase">Documentos</th>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase">Previsão</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {homologacoes.map(p => {
-                  const s = statusHomologacao(p.homologation_status);
-                  const isOverdue =
-                    !!p.homologation_expected_date &&
-                    ['technical_analysis', 'waiting_inspection', 'performing_inspection'].includes(p.homologation_status) &&
-                    new Date(p.homologation_expected_date) < new Date(new Date().toISOString().split('T')[0]);
+          <div className="p-4 overflow-y-auto max-h-[420px] space-y-3 pr-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+            {sortByOverdue(homologacoes).map(p => {
+              const s = statusHomologacao(p.homologation_status);
+              const isOverdue =
+                !!p.homologation_expected_date &&
+                ['technical_analysis', 'waiting_inspection', 'performing_inspection'].includes(p.homologation_status) &&
+                new Date(p.homologation_expected_date) < new Date(new Date().toISOString().split('T')[0]);
 
-                  return (
-                    <tr key={p.id} className={`transition-colors ${isOverdue ? 'bg-red-50 hover:bg-red-100 border-red-300' : 'hover:bg-gray-50'}`}>
-                      <td className="px-4 py-3 font-medium text-gray-800">{p.client_name}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${s.color}`}>
-                            {s.label}
-                          </span>
-                          {isOverdue && (
-                            <span className="flex items-center gap-1 bg-red-100 text-red-800 px-2 py-0.5 rounded-full text-[10px] font-bold border border-red-200">
-                              <AlertTriangle size={12} /> PRAZO VENCIDO
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        {p.homologacao_docs_path
-                          ? <span className="flex items-center gap-1 text-green-600 text-xs font-medium"><CheckSquare size={14}/> Enviados</span>
-                          : <span className="flex items-center gap-1 text-red-500 text-xs font-medium"><XCircle size={14}/> Pendente</span>
-                        }
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">
-                        {p.homologation_expected_date
-                          ? new Date(p.homologation_expected_date).toLocaleDateString('pt-BR')
-                          : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+              return (
+                <div key={p.id} className={`p-4 rounded-lg border transition-colors flex items-center justify-between gap-4 ${isOverdue ? 'bg-red-50 border-red-200 hover:bg-red-100' : 'bg-gray-50 border-gray-100 hover:bg-gray-100'}`}>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-bold text-gray-800 truncate">{p.client_name}</h4>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${s.color}`}>
+                        {s.label}
+                      </span>
+                      {isOverdue && (
+                        <span className="flex items-center gap-1 bg-red-100 text-red-800 px-2 py-0.5 rounded-full text-[10px] font-bold border border-red-200">
+                          <AlertTriangle size={12} /> PRAZO VENCIDO
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 text-right shrink-0">
+                    {p.homologacao_docs_path
+                      ? <span className="flex items-center gap-1 text-green-600 text-[10px] font-bold uppercase"><CheckSquare size={12}/> Docs OK</span>
+                      : <span className="flex items-center gap-1 text-red-500 text-[10px] font-bold uppercase"><XCircle size={12}/> Docs Pendentes</span>
+                    }
+                    <span className="text-gray-500 text-[10px] font-bold">
+                      {p.homologation_expected_date ? new Date(p.homologation_expected_date).toLocaleDateString('pt-BR') : '—'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -233,75 +241,62 @@ export default function Dashboard() {
             <p>Nenhum protocolo ativo ou resolvido recentemente.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase">Cliente</th>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase">Protocolo</th>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase">Status</th>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase">Previsão</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {Object.values(
-                  neoenergia.reduce((acc: any, p: any) => {
-                    const key = `${p.client_name}-${p.cpf_cnpj || ''}`;
-                    if (!acc[key] || new Date(p.created_at) > new Date(acc[key].created_at)) {
-                      acc[key] = p;
-                    }
-                    return acc;
-                  }, {})
-                )
-                .filter((p: any) => p.status === 'em_andamento' || p.resolved_at)
-                .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                .map((p: any) => {
-                  const isOverdue =
-                    !!p.data_prevista &&
-                    p.status === 'em_andamento' &&
-                    new Date(p.data_prevista) < new Date(new Date().toISOString().split('T')[0]);
-                  
-                  const isResolved = p.resolved_at !== null;
-                  const daysLeft = isResolved ? 5 - differenceInDays(new Date(), parseISO(p.resolved_at)) : null;
+          <div className="p-4 overflow-y-auto max-h-[420px] space-y-3 pr-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+            {sortByOverdue(
+              Object.values(
+                neoenergia.reduce((acc: any, p: any) => {
+                  const key = `${p.client_name}-${p.cpf_cnpj || ''}`;
+                  if (!acc[key] || new Date(p.created_at) > new Date(acc[key].created_at)) {
+                    acc[key] = p;
+                  }
+                  return acc;
+                }, {})
+              ).filter((p: any) => p.status === 'em_andamento' || p.resolved_at)
+            ).map((p: any) => {
+              const isOverdue =
+                !!p.data_prevista &&
+                p.status === 'em_andamento' &&
+                new Date(p.data_prevista) < new Date(new Date().toISOString().split('T')[0]);
+              
+              const isResolved = p.resolved_at !== null;
+              const daysLeft = isResolved ? 5 - differenceInDays(new Date(), parseISO(p.resolved_at)) : null;
 
-                  return (
-                    <tr key={p.id} className={`transition-colors ${isOverdue ? 'bg-red-50 hover:bg-red-100 border-red-300' : isResolved ? 'bg-green-50 hover:bg-green-100' : 'hover:bg-gray-50'}`}>
-                      <td className="px-4 py-3 font-medium text-gray-800">
-                        <div className="flex flex-col">
-                          <span>{p.client_name}</span>
-                          {p.parent_id && <span className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter">Com Histórico</span>}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-gray-600 font-bold">{p.numero_protocolo || '—'}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
-                            p.status === 'em_andamento' ? 'bg-blue-100 text-blue-800' : 
-                            p.status === 'concluido' ? 'bg-green-100 text-green-800' : 
-                            'bg-gray-100 text-gray-600'
-                          }`}>
-                            {p.status === 'em_andamento' ? 'Em Andamento' : p.status === 'concluido' ? 'Concluído' : p.status}
-                          </span>
-                          {isOverdue && (
-                            <span className="flex items-center gap-1 bg-red-100 text-red-800 px-2 py-0.5 rounded-full text-[10px] font-bold border border-red-200">
-                              <AlertTriangle size={12} /> PRAZO VENCIDO
-                            </span>
-                          )}
-                          {isResolved && (
-                            <span className="text-[10px] font-bold text-green-700 bg-green-200/50 px-2 py-0.5 rounded-full border border-green-200">
-                              RESOLVIDO · {daysLeft}d restantes
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">
-                        {p.data_prevista ? format(parseISO(p.data_prevista), 'dd/MM/yyyy') : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+              return (
+                <div key={p.id} className={`p-4 rounded-lg border transition-colors flex items-center justify-between gap-4 ${isOverdue ? 'bg-red-50 border-red-200 hover:bg-red-100' : isResolved ? 'bg-green-50 border-green-100 hover:bg-green-200' : 'bg-gray-50 border-gray-100 hover:bg-gray-100'}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-col">
+                      <h4 className="font-bold text-gray-800 truncate">{p.client_name}</h4>
+                      {p.parent_id && <span className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter">Com Histórico</span>}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                        p.status === 'em_andamento' ? 'bg-blue-100 text-blue-800' : 
+                        p.status === 'concluido' ? 'bg-green-100 text-green-800' : 
+                        'bg-gray-100 text-gray-600'
+                      }`}>
+                        {p.status === 'em_andamento' ? 'Em Andamento' : p.status === 'concluido' ? 'Concluído' : p.status}
+                      </span>
+                      {isOverdue && (
+                        <span className="flex items-center gap-1 bg-red-100 text-red-800 px-2 py-0.5 rounded-full text-[10px] font-bold border border-red-200">
+                          <AlertTriangle size={12} /> PRAZO VENCIDO
+                        </span>
+                      )}
+                      {isResolved && (
+                        <span className="text-[10px] font-bold text-green-700 bg-green-200/50 px-2 py-0.5 rounded-full border border-green-200">
+                          RESOLVIDO · {daysLeft}d
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 text-right shrink-0">
+                    <span className="text-gray-600 font-bold text-[10px]">{p.numero_protocolo || '—'}</span>
+                    <span className="text-gray-500 text-[10px] font-bold">
+                      {p.data_prevista ? format(parseISO(p.data_prevista), 'dd/MM/yyyy') : '—'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
