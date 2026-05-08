@@ -233,15 +233,14 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
 
     if (projectError) throw projectError;
 
-    if (project) {
       // Inserir dados comerciais unificados
       await supabase.from('commercial_data').insert({ 
         project_id: project.id,
-        proposal_value: proposal_value ? parseFloat(proposal_value) : null,
-        payment_method,
-        kit_supplier,
-        pendencies,
-        notes,
+        proposal_value: proposal_value && !isNaN(parseFloat(proposal_value)) ? parseFloat(proposal_value) : null,
+        payment_method: payment_method || 'cash',
+        kit_supplier: kit_supplier || null,
+        pendencies: pendencies || null,
+        notes: notes || null,
         finance_grace_period: parseInt(finance_grace_period) || 0,
         status: 'pendente_comercial'
       });
@@ -279,19 +278,18 @@ app.get('/api/projects', authenticateToken, async (req: any, res) => {
   // Flatten for frontend compatibility
   const formatted = projects?.map((p: any) => {
     // Supabase may return technical_data as array or direct object for 1:1 unique FK
-    const techData = Array.isArray(p.technical_data)
-      ? p.technical_data[0]
-      : p.technical_data;
-    const commData = Array.isArray(p.commercial_data)
-      ? p.commercial_data[0]
-      : p.commercial_data;
-
+    const commData = Array.isArray(p.commercial_data) ? p.commercial_data[0] : p.commercial_data;
+    const techData = Array.isArray(p.technical_data) ? p.technical_data[0] : p.technical_data;
+    
     return {
       ...p,
       client_name: p.clients?.name || p.client_name,
-      commercial_status: commData?.status,
-      commercial_pendencies: commData?.pendencies,
-      technical_status: techData?.status,
+      commercial_status: commData?.status || 'pending',
+      commercial_pendencies: commData?.pendencies || null,
+      proposal_value: commData?.proposal_value || null,
+      payment_method: commData?.payment_method || null,
+      kit_supplier: commData?.kit_supplier || null,
+      technical_status: techData?.status || 'pending',
       structure_type: techData?.structure_type || null
     };
   });
@@ -317,7 +315,10 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
   const { data: documents } = await supabase.from('documents').select('*').eq('project_id', project.id);
 
   // Flatten
-  const techData = project.technical_data?.[0] || {};
+  // Flatten
+  const techData = (Array.isArray(project.technical_data) ? project.technical_data[0] : project.technical_data) || {};
+  const commData = (Array.isArray(project.commercial_data) ? project.commercial_data[0] : project.commercial_data) || {};
+
   const formatted = {
     ...project,
     client_name: project.clients?.name || project.client_name,
@@ -327,18 +328,18 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
     state: project.clients?.state || null,
 
     // Commercial
-    proposal_value: project.commercial_data?.[0]?.proposal_value,
-    payment_method: project.commercial_data?.[0]?.payment_method,
-    contract_url: project.commercial_data?.[0]?.contract_url,
-    commercial_notes: project.commercial_data?.[0]?.notes,
-    commercial_status: project.commercial_data?.[0]?.status,
-    commercial_pendencies: project.commercial_data?.[0]?.pendencies,
-    include_inspection_photos: project.commercial_data?.[0]?.include_inspection_photos,
-    inspection_photos: project.commercial_data?.[0]?.inspection_photos,
-    kit_supplier: project.commercial_data?.[0]?.kit_supplier,
-    finance_grace_period: project.commercial_data?.[0]?.finance_grace_period,
+    proposal_value: commData.proposal_value,
+    payment_method: commData.payment_method,
+    contract_url: commData.contract_url,
+    commercial_notes: commData.notes,
+    commercial_status: commData.status,
+    commercial_pendencies: commData.pendencies,
+    include_inspection_photos: commData.include_inspection_photos,
+    inspection_photos: commData.inspection_photos,
+    kit_supplier: commData.kit_supplier,
+    finance_grace_period: commData.finance_grace_period,
 
-    // Technical â€” spread tech fields then explicitly override structure_type to ensure it comes from technical_data
+    // Technical
     entrance_pattern: techData.entrance_pattern,
     grounding: techData.grounding,
     roof_structure: techData.roof_structure,
@@ -350,7 +351,6 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
     inspection_media: techData.inspection_media,
     technical_status: techData.status,
     technical_notes: techData.observations,
-    // Always read structure_type from technical_data, NOT from projects table (column doesn't exist there)
     structure_type: techData.structure_type || null,
 
     documents

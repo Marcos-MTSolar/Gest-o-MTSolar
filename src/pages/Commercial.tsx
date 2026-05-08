@@ -174,8 +174,10 @@ export default function Commercial() {
 
   const translateStage = (stage: string) => {
     const stages: { [key: string]: string } = {
-      'pending': 'Pendente',
+      'registration': 'Cadastro',
+      'pending': 'Comercial',
       'inspection': 'Vistoria',
+      'installation': 'Instalação',
       'homologation': 'Homologação',
       'conclusion': 'Conclusão',
       'completed': 'Finalizado'
@@ -188,9 +190,10 @@ export default function Commercial() {
       'pending': 'Pendente',
       'approved': 'Aprovada',
       'rejected': 'Reprovada',
-      'in_progress': 'Em Andamento'
+      'in_progress': 'Em Andamento',
+      'connection_point_approved': 'Ponto de Conexão Aprovado'
     };
-    return statuses[status] || 'Não iniciada';
+    return statuses[status] || 'Aguardando';
   };
 
   return (
@@ -524,7 +527,8 @@ export default function Commercial() {
                   <p className="text-lg font-bold text-gray-800">
                     {selectedProject.payment_method === 'cash' ? 'À Vista' : 
                      selectedProject.payment_method === 'financing' ? 'Financiamento' : 
-                     selectedProject.payment_method === 'card' ? 'Cartão de Crédito' : 'Não informado'}
+                     selectedProject.payment_method === 'card' ? 'Cartão de Crédito' : 
+                     selectedProject.payment_method || 'Não informado'}
                   </p>
                 </div>
 
