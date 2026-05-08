@@ -32,7 +32,7 @@ O sistema visa otimizar a gestão de projetos de energia solar da MT Solar, inte
 - [ ] Validar o fluxo de notificações push no ambiente nativo (Android/iOS) após a renomeação para "Obra".
 
 ## 6. Problemas Resolvidos
-- **Fluxo Comercial Interrompido**: Corrigido o redirecionamento após cadastro de cliente, movendo o usuário automaticamente para a aba "Projetos Pendentes".
+- **Fluxo Comercial Interrompido**: Corrigido o redirecionamento após cadastro de cliente, movendo o usuário automaticamente para a aba "Projetos".
 - **Dados Fragmentados**: Unificação de dados de financiamento e valor de proposta no cadastro inicial.
 - **Limpeza de Dados**: Automação da exclusão de registros de clientes finalizados.
 

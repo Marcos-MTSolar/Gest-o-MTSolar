@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import api from '../lib/api';
 import { Plus, Search, FileText, CheckCircle, Clock, Camera } from 'lucide-react';
 import { sendUpdateNotification } from '../lib/notifications';
@@ -26,7 +26,6 @@ export default function Commercial() {
   const [installationProjects, setInstallationProjects] = useState<any[]>([]);
   const [selectedProposalId, setSelectedProposalId] = useState('');
   const [selectedProposal, setSelectedProposal] = useState<any | null>(null);
-  const submitAction = useRef('pending');
 
   useEffect(() => {
     fetchProjects();
@@ -116,37 +115,25 @@ export default function Commercial() {
     }
   };
 
-  const updateCommercial = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveCommercialChanges = async (action: 'pendente_comercial' | 'proposta_enviada') => {
     if (!selectedProject) return;
-
-    const formData = new FormData(e.target as HTMLFormElement);
-    const proposal_value = formData.get('proposal_value') as string;
-    const payment_method = formData.get('payment_method') as string;
-
-    const action = submitAction.current || 'pendente_comercial';
-
-    if (!proposal_value || !payment_method) {
-      alert("Por favor, preencha o Valor da Proposta e a Forma de Pagamento antes de salvar.");
-      return;
-    }
 
     try {
       const commercialData = {
-        proposal_value,
-        payment_method,
-        notes: formData.get('notes'),
-        pendencies: formData.get('pendencies'),
+        proposal_value: selectedProject.proposal_value,
+        payment_method: selectedProject.payment_method,
+        notes: selectedProject.commercial_notes,
+        pendencies: selectedProject.commercial_pendencies,
         status: action,
         include_inspection_photos: includeInspectionPhotos,
         inspection_photos: inspectionPhotos,
-        kit_supplier: formData.get('kit_supplier'),
-        finance_grace_period: parseInt(formData.get('finance_grace_period') as string) || 0
+        kit_supplier: selectedProject.kit_supplier,
+        finance_grace_period: selectedProject.finance_grace_period || 0
       };
 
       await api.put(`/api/projects/${selectedProject.id}/commercial`, commercialData);
       await sendUpdateNotification('commercial', selectedProject.client_name);
-      alert(action === 'proposta_enviada' ? "Proposta Comercial Aprovada!" : "Dados comerciais salvos como pendente.");
+      alert(action === 'proposta_enviada' ? "Proposta Comercial Aprovada! O projeto seguiu para Vistoria." : "Preferências salvas com sucesso.");
       await fetchProjects();
       setSelectedProject(null);
     } catch (error) {
@@ -341,7 +328,7 @@ export default function Commercial() {
               onClick={() => setActiveTab('projects')}
               className={`px-6 py-3 font-bold transition-colors ${activeTab === 'projects' ? 'border-b-2 border-blue-900 text-blue-900' : 'text-gray-500 hover:text-gray-700'}`}
             >
-              Projetos Pendentes
+              Projetos
             </button>
             <button
               onClick={() => setActiveTab('installation')}
@@ -360,7 +347,7 @@ export default function Commercial() {
           {activeTab === 'projects' ? (
             <div className="grid grid-cols-1 gap-6">
               {projects.length === 0 && (
-                <p className="text-gray-500">Nenhum projeto comercial pendente.</p>
+                <p className="text-gray-500">Nenhum projeto comercial encontrado.</p>
               )}
               {projects.map(p => (
                 <div key={p.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center transition hover:shadow-md">
@@ -398,7 +385,7 @@ export default function Commercial() {
                     }}
                     className={`px-4 py-2 rounded text-white font-medium ${['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-900 hover:bg-blue-800'}`}
                   >
-                    {['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'Ver Detalhes' : 'Gerenciar'}
+                    Ver Detalhes
                   </button>
                 </div>
               ))}
@@ -476,7 +463,7 @@ export default function Commercial() {
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="p-6 border-b flex justify-between items-center bg-gray-50">
             <div>
-              <h2 className="text-xl font-bold text-gray-800">Comercial: {selectedProject.client_name}</h2>
+              <h2 className="text-xl font-bold text-gray-800">Detalhes: {selectedProject.client_name}</h2>
               <p className="text-sm text-gray-500">{selectedProject.title}</p>
             </div>
             <div className="flex gap-2">
@@ -503,7 +490,7 @@ export default function Commercial() {
               >
                 Remover Desistência
               </button>
-              <button onClick={() => setSelectedProject(null)} className="ml-2 bg-gray-200 text-gray-700 px-3 py-1 rounded hover:bg-gray-300 font-medium">Voltar</button>
+              <button onClick={() => setSelectedProject(null)} className="ml-2 bg-gray-200 text-gray-700 px-3 py-1 rounded hover:bg-gray-300 font-medium font-bold">Voltar</button>
             </div>
           </div>
 
@@ -519,52 +506,54 @@ export default function Commercial() {
               </div>
             </div>
 
-            <form onSubmit={updateCommercial} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white border rounded-xl p-6">
+                <h3 className="md:col-span-2 font-bold text-gray-800 flex items-center gap-2 border-b pb-2">
+                  <FileText size={18} className="text-blue-900" /> Informações Comerciais do Fechamento
+                </h3>
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Valor da Proposta (R$)</label>
-                  <input name="proposal_value" defaultValue={selectedProject.proposal_value} className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Forma de Pagamento</label>
-                  <select name="payment_method" defaultValue={selectedProject.payment_method} className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-                    <option value="cash">À Vista</option>
-                    <option value="financing">Financiamento</option>
-                    <option value="card">Cartão de Crédito</option>
-                  </select>
+                  <p className="text-xs font-bold text-gray-400 uppercase">Valor da Proposta</p>
+                  <p className="text-lg font-bold text-gray-800">
+                    {selectedProject.proposal_value ? `R$ ${parseFloat(selectedProject.proposal_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Não informado'}
+                  </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Fornecedor do Kit</label>
-                  <input 
-                    name="kit_supplier" 
-                    defaultValue={selectedProject.kit_supplier} 
-                    className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
-                    placeholder="Ex: Aldo Solar, WEG, etc."
-                  />
+                  <p className="text-xs font-bold text-gray-400 uppercase">Forma de Pagamento</p>
+                  <p className="text-lg font-bold text-gray-800">
+                    {selectedProject.payment_method === 'cash' ? 'À Vista' : 
+                     selectedProject.payment_method === 'financing' ? 'Financiamento' : 
+                     selectedProject.payment_method === 'card' ? 'Cartão de Crédito' : 'Não informado'}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs font-bold text-gray-400 uppercase">Fornecedor do Kit</p>
+                  <p className="text-lg font-bold text-gray-800">{selectedProject.kit_supplier || 'Não informado'}</p>
                 </div>
 
                 {selectedProject.payment_method === 'financing' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Carência do Financiamento (meses)</label>
-                    <input 
-                      name="finance_grace_period" 
-                      type="number"
-                      min="0"
-                      max="24"
-                      defaultValue={selectedProject.finance_grace_period || 0} 
-                      className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
-                    />
+                    <p className="text-xs font-bold text-gray-400 uppercase">Carência (Meses)</p>
+                    <p className="text-lg font-bold text-gray-800">{selectedProject.finance_grace_period || 0} meses</p>
                   </div>
                 )}
+
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Pendências (Restrições para fechar a venda)</label>
-                  <input name="pendencies" defaultValue={selectedProject.commercial_pendencies} placeholder="Ex: Cliente aguardando aprovação de crédito num banco" className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none border-amber-200 bg-amber-50" />
+                  <p className="text-xs font-bold text-amber-600 uppercase">Pendências / Restrições</p>
+                  <p className="text-sm text-amber-900 bg-amber-50 p-3 rounded-lg border border-amber-100 mt-1">
+                    {selectedProject.commercial_pendencies || 'Nenhuma pendência registrada.'}
+                  </p>
                 </div>
+
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Observações Comerciais</label>
-                  <textarea name="notes" defaultValue={selectedProject.commercial_notes} className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" rows={4}></textarea>
+                  <p className="text-xs font-bold text-gray-400 uppercase">Observações Comerciais</p>
+                  <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg border mt-1 whitespace-pre-wrap">
+                    {selectedProject.commercial_notes || 'Sem observações.'}
+                  </p>
                 </div>
+              </div>
 
                 {/* SEÇÃO FOTOS DE VISTORIA */}
                 <div className="md:col-span-2 border-t pt-6 mt-4">
@@ -654,15 +643,23 @@ export default function Commercial() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t">
-                <button type="submit" onClick={() => { submitAction.current = 'pendente_comercial'; }} className="bg-amber-100 text-amber-800 border border-amber-300 px-6 py-3 rounded-lg hover:bg-amber-200 font-bold shadow-sm flex items-center gap-2">
-                  Salvar como Pendente
+              <div className="flex justify-end gap-3 pt-6 border-t mt-6">
+                <button 
+                  onClick={() => handleSaveCommercialChanges('pendente_comercial')} 
+                  className="bg-white text-gray-700 border px-6 py-3 rounded-xl hover:bg-gray-50 font-bold shadow-sm transition-all"
+                >
+                  Salvar Alterações
                 </button>
-                <button type="submit" onClick={() => { submitAction.current = 'proposta_enviada'; }} className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-bold shadow-sm flex items-center gap-2">
-                  <CheckCircle size={20} /> Salvar e Aprovar Proposta
-                </button>
+                {selectedProject.commercial_status !== 'proposta_enviada' && selectedProject.commercial_status !== 'approved' && (
+                  <button 
+                    onClick={() => handleSaveCommercialChanges('proposta_enviada')} 
+                    className="bg-green-600 text-white px-8 py-3 rounded-xl hover:bg-green-700 font-bold shadow-md flex items-center gap-2 transform active:scale-95 transition-all"
+                  >
+                    <CheckCircle size={20} /> Aprovar Proposta Comercial
+                  </button>
+                )}
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
