@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import api from '../lib/api';
-import { addDays, isSameDay, parseISO, format } from 'date-fns';
+import { addDays, isSameDay, parseISO, format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Calendar as CalendarIcon, Bell, CheckCircle2, RotateCcw, CheckSquare, XCircle, Clock3, Loader2, AlertTriangle } from 'lucide-react';
+import { Calendar as CalendarIcon, Bell, CheckCircle2, RotateCcw, CheckSquare, XCircle, Clock3, Loader2, AlertTriangle, ClipboardList } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {
@@ -12,6 +12,7 @@ export default function Dashboard() {
   const [tomorrowEvents, setTomorrowEvents] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [homologacoes, setHomologacoes] = useState<any[]>([]);
+  const [neoenergia, setNeoenergia] = useState<any[]>([]);
   const { user } = useAuth();
 
   const fetchEvents = useCallback(async () => {
@@ -44,6 +45,13 @@ export default function Dashboard() {
         setHomologacoes(res.data.filter((p: any) =>
           ['homologation', 'conclusion', 'completed'].includes(p.current_stage)
         ));
+      }
+    });
+
+    // Fetch Neoenergia Protocols
+    api.get('/api/neoenergia').then(res => {
+      if (Array.isArray(res.data)) {
+        setNeoenergia(res.data);
       }
     });
   }, [fetchEvents]);
@@ -199,6 +207,84 @@ export default function Dashboard() {
                         {p.homologation_expected_date
                           ? new Date(p.homologation_expected_date).toLocaleDateString('pt-BR')
                           : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* PAINEL DE PROTOCOLOS NEOENERGIA */}
+      <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 text-white p-4 flex items-center gap-2">
+          <ClipboardList size={20} className="text-white" />
+          <h2 className="text-lg font-bold">Protocolos Neoenergia (Ativos)</h2>
+          <span className="ml-auto text-sm bg-emerald-700 px-3 py-1 rounded-full text-emerald-100">
+            {neoenergia.filter(p => p.status === 'em_andamento').length} ativo{neoenergia.filter(p => p.status === 'em_andamento').length !== 1 ? 's' : ''}
+          </span>
+        </div>
+
+        {neoenergia.filter(p => p.status === 'em_andamento' || p.resolved_at).length === 0 ? (
+          <div className="p-8 text-center text-gray-400">
+            <ClipboardList size={40} className="mx-auto mb-2 text-gray-200" />
+            <p>Nenhum protocolo ativo ou resolvido recentemente.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-100">
+                <tr>
+                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase">Cliente</th>
+                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase">Protocolo</th>
+                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase">Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase">Previsão</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {neoenergia.filter(p => p.status === 'em_andamento' || p.resolved_at).map(p => {
+                  const isOverdue =
+                    !!p.data_prevista &&
+                    p.status === 'em_andamento' &&
+                    new Date(p.data_prevista) < new Date(new Date().toISOString().split('T')[0]);
+                  
+                  const isResolved = p.resolved_at !== null;
+                  const daysLeft = isResolved ? 5 - differenceInDays(new Date(), parseISO(p.resolved_at)) : null;
+
+                  return (
+                    <tr key={p.id} className={`transition-colors ${isOverdue ? 'bg-red-50 hover:bg-red-100 border-red-300' : isResolved ? 'bg-green-50 hover:bg-green-100' : 'hover:bg-gray-50'}`}>
+                      <td className="px-4 py-3 font-medium text-gray-800">
+                        <div className="flex flex-col">
+                          <span>{p.client_name}</span>
+                          {p.parent_id && <span className="text-[9px] text-gray-400 font-bold uppercase">Histórico</span>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">{p.numero_protocolo || '—'}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
+                            p.status === 'em_andamento' ? 'bg-blue-100 text-blue-800' : 
+                            p.status === 'concluido' ? 'bg-green-100 text-green-800' : 
+                            'bg-gray-100 text-gray-600'
+                          }`}>
+                            {p.status === 'em_andamento' ? 'Em Andamento' : p.status === 'concluido' ? 'Concluído' : p.status}
+                          </span>
+                          {isOverdue && (
+                            <span className="flex items-center gap-1 bg-red-100 text-red-800 px-2 py-0.5 rounded-full text-[10px] font-bold border border-red-200">
+                              <AlertTriangle size={12} /> PRAZO VENCIDO
+                            </span>
+                          )}
+                          {isResolved && (
+                            <span className="text-[10px] font-bold text-green-700 bg-green-200/50 px-2 py-0.5 rounded-full border border-green-200">
+                              RESOLVIDO · {daysLeft}d restantes
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">
+                        {p.data_prevista ? format(parseISO(p.data_prevista), 'dd/MM/yyyy') : '—'}
                       </td>
                     </tr>
                   );

@@ -813,6 +813,132 @@ app.post('/api/service-proposals', authenticateToken, async (req: any, res) => {
   res.json(data);
 });
 
+// Neoenergia Protocols
+app.get('/api/neoenergia', authenticateToken, async (req: any, res) => {
+  try {
+    const { data: protocols, error } = await supabase
+      .from('neoenergia_protocols')
+      .select('*')
+      .or(`resolved_at.is.null,resolved_at.gt.${new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()}`)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json(protocols || []);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/neoenergia', authenticateToken, async (req: any, res) => {
+  const { client_name, cpf_cnpj, phone, address, pendencia, observacoes, numero_protocolo, status, data_prevista } = req.body;
+  try {
+    const { data, error } = await supabase
+      .from('neoenergia_protocols')
+      .insert({
+        client_name,
+        cpf_cnpj,
+        phone,
+        address,
+        pendencia,
+        observacoes,
+        numero_protocolo,
+        status: status || 'em_andamento',
+        data_prevista,
+        updated_at: new Date()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/neoenergia/:id', authenticateToken, async (req: any, res) => {
+  const { pendencia, observacoes, numero_protocolo, status, data_prevista } = req.body;
+  try {
+    const { data, error } = await supabase
+      .from('neoenergia_protocols')
+      .update({
+        pendencia,
+        observacoes,
+        numero_protocolo,
+        status,
+        data_prevista,
+        updated_at: new Date()
+      })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/neoenergia/:id/resolve', authenticateToken, async (req: any, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('neoenergia_protocols')
+      .update({
+        status: 'concluido',
+        resolved_at: new Date(),
+        updated_at: new Date()
+      })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/neoenergia/:id/novo-protocolo', authenticateToken, async (req: any, res) => {
+  const { pendencia, observacoes, numero_protocolo, data_prevista, ...clientData } = req.body;
+  try {
+    const { data, error } = await supabase
+      .from('neoenergia_protocols')
+      .insert({
+        ...clientData,
+        pendencia,
+        observacoes,
+        numero_protocolo,
+        data_prevista,
+        parent_id: req.params.id,
+        status: 'em_andamento',
+        updated_at: new Date()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/neoenergia/:id', authenticateToken, async (req: any, res) => {
+  try {
+    const { error } = await supabase
+      .from('neoenergia_protocols')
+      .delete()
+      .eq('id', req.params.id);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Stats
 app.get('/api/stats', authenticateToken, async (req: any, res) => {
   // Count all projects that are not completed

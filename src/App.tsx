@@ -27,6 +27,7 @@ import Stock from './pages/Stock';
 import ProposalGenerator from './pages/ProposalGenerator';
 import Contracts from './pages/Contracts';
 import WhatsApp from './pages/WhatsApp';
+import NeoenergiaProtocols from './pages/NeoenergiaProtocols';
 
 
 function PrivateRoute({ children, roles }: { children: React.ReactNode, roles?: string[] }) {
@@ -143,6 +144,12 @@ export default function App() {
             <Route path="/agenda" element={
               <PrivateRoute>
                 <Agenda />
+              </PrivateRoute>
+            } />
+
+            <Route path="/neoenergia" element={
+              <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
+                <NeoenergiaProtocols />
               </PrivateRoute>
             } />
             
