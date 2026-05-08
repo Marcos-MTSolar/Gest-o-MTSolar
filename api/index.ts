@@ -592,7 +592,7 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
       .update({
         status: 'in_progress',
         assigned_to: userId,
-        assigned_name: user.name,
+        assigned_name: userName,
         assigned_at: new Date().toISOString(),
         token: token
       })
@@ -612,7 +612,7 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
       headers: { 'Content-Type': 'application/json', 'apikey': EVOLUTION_KEY! },
       body: JSON.stringify({ 
         number: conv.phone, 
-        text: `✅ Olá! Você está sendo atendido por ${user.name}. Seu código de atendimento (ticket) é: ${token}. Guarde este código para futuros contatos conosco. 😊` 
+        text: `✅ Olá! Você está sendo atendido por ${userName}. Seu código de atendimento (ticket) é: ${token}. Guarde este código para futuros contatos conosco. 😊` 
       })
     });
 
