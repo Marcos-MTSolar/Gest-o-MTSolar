@@ -63,6 +63,7 @@ export default function WhatsApp() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const isAdmin = user?.role?.toUpperCase() === 'CEO' || user?.role?.toUpperCase() === 'ADMIN';
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -77,7 +78,7 @@ export default function WhatsApp() {
         // Se a conversa selecionada mudou e no  mais autorizada, desceleciona
         if (selectedConversation && payload.new && (payload.new as any).id === selectedConversation.id) {
           const newConv = payload.new as Conversation;
-          const isAdmin = user?.role === 'CEO' || user?.role === 'ADMIN';
+
           if (newConv.status === 'in_progress' && newConv.assigned_to !== user?.id && !isAdmin) {
             setSelectedConversation(null);
             alert("Este atendimento foi assumido por outro agente.");
@@ -93,7 +94,6 @@ export default function WhatsApp() {
 
   useEffect(() => {
     if (selectedConversation) {
-      const isAdmin = user?.role === 'CEO' || user?.role === 'ADMIN';
       const hasAccess =
         selectedConversation.status === 'waiting' ||
         selectedConversation.status === 'closed' ||
@@ -176,7 +176,7 @@ export default function WhatsApp() {
     e.preventDefault();
     if (!newMessage.trim() || !selectedConversation || !user) return;
 
-    if (selectedConversation.status !== 'in_progress' || selectedConversation.assigned_to !== user.id) {
+    if (selectedConversation.status !== 'in_progress' || (selectedConversation.assigned_to !== user.id && !isAdmin)) {
       alert("Você precisa assumir este atendimento para enviar mensagens.");
       return;
     }
@@ -307,7 +307,7 @@ export default function WhatsApp() {
     }
   };
 
-  const isAdmin = user?.role === 'CEO' || user?.role === 'ADMIN';
+
 
   const allFiltered = conversations.filter(conv =>
     (conv.contact_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -332,7 +332,6 @@ export default function WhatsApp() {
 
   const renderConversationItem = (conv: Conversation) => {
     const isAssignedToOther = conv.status === 'in_progress' && conv.assigned_to !== user?.id;
-    const isAdmin = user?.role === 'CEO' || user?.role === 'ADMIN';
     const isBlocked = isAssignedToOther && !isAdmin;
 
     return (
@@ -534,7 +533,7 @@ export default function WhatsApp() {
 
             {/* Campo de Envio */}
             <div className="p-4 bg-white border-t border-gray-200">
-              {selectedConversation.status === 'in_progress' && selectedConversation.assigned_to === user?.id ? (
+              {selectedConversation.status === 'in_progress' && (selectedConversation.assigned_to === user?.id || isAdmin) ? (
                 <form onSubmit={handleSendMessage} className="flex gap-2">
                   <input 
                     type="text" 

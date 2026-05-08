@@ -572,8 +572,16 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
 
   try {
     // 1. Get user name
-    const { data: user } = await supabase.from('users').select('name').eq('id', userId).single();
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    let userName = 'Usuário';
+    const { data: dbUser } = await supabase.from('users').select('name').eq('id', userId).single();
+    
+    if (dbUser) {
+      userName = dbUser.name;
+    } else if (req.user.role === 'CEO' && userId === req.user.id) {
+      userName = req.user.name || 'CEO User';
+    } else {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
     // 2. Generate token (6 chars alfanumeric uppercase)
     const token = Math.random().toString(36).substring(2, 8).toUpperCase();
