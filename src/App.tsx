@@ -75,7 +75,7 @@ export default function App() {
             } />
 
             <Route path="/contracts" element={
-              <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
+              <PrivateRoute roles={['CEO', 'ADMIN']}>
                 <Contracts />
               </PrivateRoute>
             } />
@@ -130,7 +130,7 @@ export default function App() {
             } />
             
             <Route path="/messages" element={
-              <PrivateRoute>
+              <PrivateRoute roles={['CEO', 'ADMIN', 'TECHNICAL']}>
                 <Messages />
               </PrivateRoute>
             } />
@@ -148,13 +148,13 @@ export default function App() {
             } />
 
             <Route path="/neoenergia" element={
-              <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
+              <PrivateRoute roles={['CEO', 'ADMIN']}>
                 <NeoenergiaProtocols />
               </PrivateRoute>
             } />
             
             <Route path="/settings" element={
-              <PrivateRoute>
+              <PrivateRoute roles={['CEO', 'ADMIN', 'TECHNICAL']}>
                 <Settings />
               </PrivateRoute>
             } />
