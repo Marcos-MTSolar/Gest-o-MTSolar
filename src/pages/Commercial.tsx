@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 
 export default function Commercial() {
-  const [projects, setProjects] = useState<any[]>([]);
+  const [projectsPendentes, setProjectsPendentes] = useState<any[]>([]);
   const [showNewClient, setShowNewClient] = useState(false);
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [newClient, setNewClient] = useState({ 
@@ -21,14 +21,14 @@ export default function Commercial() {
   const [includeInspectionPhotos, setIncludeInspectionPhotos] = useState(false);
   const [inspectionPhotos, setInspectionPhotos] = useState<string[]>([]);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const [activeTab, setActiveTab] = useState<'projects' | 'activeProposals' | 'installation'>('projects');
+  const [activeTab, setActiveTab] = useState<'projectsPendentes' | 'activeProposals' | 'installation'>('projectsPendentes');
   const [activeProposals, setActiveProposals] = useState<any[]>([]);
   const [installationProjects, setInstallationProjects] = useState<any[]>([]);
   const [selectedProposalId, setSelectedProposalId] = useState('');
   const [selectedProposal, setSelectedProposal] = useState<any | null>(null);
 
   useEffect(() => {
-    fetchProjects();
+    fetchProjectsPendentes();
     fetchActiveProposals();
   }, []);
 
@@ -53,14 +53,14 @@ export default function Commercial() {
     alert('Dados da proposta preenchidos no formulário!');
   };
 
-  const fetchProjects = async () => {
+  const fetchProjectsPendentes = async () => {
     try {
       const res = await api.get('/api/projects');
       if (Array.isArray(res.data)) {
         // Show only projects that are still in the commercial stage (pending/not approved) 
         // AND have NOT advanced beyond the commercial stage (current_stage is still 'pending')
         const ADVANCED_STAGES = ['inspection', 'installation', 'homologation', 'conclusion', 'completed'];
-        setProjects(res.data.filter((p: any) =>
+        setProjectsPendentes(res.data.filter((p: any) =>
           !ADVANCED_STAGES.includes(p.current_stage) &&
           p.commercial_status !== 'approved' &&
           p.commercial_status !== 'proposta_enviada'
@@ -72,11 +72,11 @@ export default function Commercial() {
           ['installation', 'homologation', 'conclusion', 'completed'].includes(p.current_stage)
         ));
       } else {
-        setProjects([]);
+        setProjectsPendentes([]);
         setInstallationProjects([]);
       }
     } catch (err) {
-      setProjects([]);
+      setProjectsPendentes([]);
       setInstallationProjects([]);
     }
   };
@@ -104,8 +104,8 @@ export default function Commercial() {
       });
       setSelectedProposalId('');
       setSelectedProposal(null);
-      fetchProjects();
-      setActiveTab('projects');
+      fetchProjectsPendentes();
+      setActiveTab('projectsPendentes');
       alert('Cliente cadastrado com sucesso!');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error: any) {
@@ -134,7 +134,7 @@ export default function Commercial() {
       await api.put(`/api/projects/${selectedProject.id}/commercial`, commercialData);
       await sendUpdateNotification('commercial', selectedProject.client_name);
       alert(action === 'proposta_enviada' ? "Proposta Comercial Aprovada! O projeto seguiu para Vistoria." : "Preferências salvas com sucesso.");
-      await fetchProjects();
+      await fetchProjectsPendentes();
       setSelectedProject(null);
     } catch (error) {
       alert('Erro ao atualizar projeto');
@@ -148,7 +148,7 @@ export default function Commercial() {
       await api.put(`/api/clients/${selectedProject.client_id}`, editClientData);
       setShowEditClient(false);
       alert('Cadastro de cliente atualizado com sucesso!');
-      await fetchProjects();
+      await fetchProjectsPendentes();
       window.scrollTo({ top: 0, behavior: 'smooth' });
       const res = await api.get(`/api/projects/${selectedProject.id}`);
       setSelectedProject(res.data);
@@ -166,7 +166,7 @@ export default function Commercial() {
       await api.delete(`/api/projects/${selectedProject.id}`);
       alert('Projeto removido com sucesso.');
       setSelectedProject(null);
-      await fetchProjects();
+      await fetchProjectsPendentes();
     } catch (error) {
       alert('Erro ao remover projeto');
     }
@@ -180,7 +180,8 @@ export default function Commercial() {
       'installation': 'Instalação',
       'homologation': 'Homologação',
       'conclusion': 'Conclusão',
-      'completed': 'Finalizado'
+      'completed': 'Finalizado',
+      'vistoria_concluida': 'Vistoria Concluída'
     };
     return stages[stage] || stage;
   };
@@ -191,7 +192,8 @@ export default function Commercial() {
       'approved': 'Aprovada',
       'rejected': 'Reprovada',
       'in_progress': 'Em Andamento',
-      'connection_point_approved': 'Ponto de Conexão Aprovado'
+      'connection_point_approved': 'Ponto de Conexão Aprovado',
+      'vistoria_concluida': 'Aprovada'
     };
     return statuses[status] || 'Aguardando';
   };
@@ -328,10 +330,10 @@ export default function Commercial() {
 
           <div className="flex border-b mb-6">
             <button
-              onClick={() => setActiveTab('projects')}
-              className={`px-6 py-3 font-bold transition-colors ${activeTab === 'projects' ? 'border-b-2 border-blue-900 text-blue-900' : 'text-gray-500 hover:text-gray-700'}`}
+              onClick={() => setActiveTab('projectsPendentes')}
+              className={`px-6 py-3 font-bold transition-colors ${activeTab === 'projectsPendentes' ? 'border-b-2 border-blue-900 text-blue-900' : 'text-gray-500 hover:text-gray-700'}`}
             >
-              Projetos
+              Projetos Pendentes
             </button>
             <button
               onClick={() => setActiveTab('installation')}
@@ -347,12 +349,12 @@ export default function Commercial() {
             </button>
           </div>
 
-          {activeTab === 'projects' ? (
+          {activeTab === 'projectsPendentes' ? (
             <div className="grid grid-cols-1 gap-6">
-              {projects.length === 0 && (
+              {projectsPendentes.length === 0 && (
                 <p className="text-gray-500">Nenhum projeto comercial encontrado.</p>
               )}
-              {projects.map(p => (
+              {projectsPendentes.map(p => (
                 <div key={p.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center transition hover:shadow-md">
                   <div>
                     <h3 className="text-lg font-bold text-gray-800">{p.client_name}</h3>

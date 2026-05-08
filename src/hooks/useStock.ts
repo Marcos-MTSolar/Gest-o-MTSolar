@@ -112,7 +112,6 @@ export function useStock() {
 
       // Recarregar em background para garantir sincronia
       fetchItems();
-      return true;
     } catch (err: any) {
       console.error('[StockHook] Exceção capturada no deleteItem:', err);
       throw err;

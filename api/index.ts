@@ -289,7 +289,17 @@ app.get('/api/projects', authenticateToken, async (req: any, res) => {
       payment_method: commData?.payment_method || null,
       kit_supplier: commData?.kit_supplier || null,
       technical_status: techData?.status || 'pending',
-      structure_type: techData?.structure_type || null
+      structure_type: techData?.structure_type || null,
+      photo_modules: techData?.photo_modules || null,
+      photo_inverter: techData?.photo_inverter || null,
+      photo_inverter_label: techData?.photo_inverter_label || null,
+      photo_roof_sealing: techData?.photo_roof_sealing || null,
+      photo_grounding: techData?.photo_grounding || null,
+      photo_ac_voltage: techData?.photo_ac_voltage || null,
+      photo_dc_voltage: techData?.photo_dc_voltage || null,
+      photo_generation_plate: techData?.photo_generation_plate || null,
+      photo_ac_stringbox: techData?.photo_ac_stringbox || null,
+      photo_connection_point: techData?.photo_connection_point || null
     };
   });
 
@@ -478,7 +488,7 @@ app.put('/api/projects/:id/technical', authenticateToken, upload.any(), async (r
 
   // Update project stage when vistoria is finalized â€” goes directly to homologation
   if (status === 'vistoria_concluida') {
-    await supabase.from('projects').update({ current_stage: 'homologation', status: 'vistoria_concluida', updated_at: new Date() }).eq('id', req.params.id);
+    await supabase.from('projects').update({ current_stage: 'installation', status: 'vistoria_concluida', updated_at: new Date() }).eq('id', req.params.id);
   }
 
 
@@ -488,27 +498,46 @@ app.put('/api/projects/:id/technical', authenticateToken, upload.any(), async (r
 
 // Installation Update
 app.put('/api/projects/:id/installation', authenticateToken, upload.any(), async (req: any, res) => {
-  const { pendencies, status } = req.body;
-  const files = req.files as Express.Multer.File[];
+  try {
+    const { pendencies, status } = req.body;
+    const files = req.files as Express.Multer.File[];
 
-  const updates: any = { pendencies, updated_at: new Date() };
+    console.log(`--- PUT /api/projects/${req.params.id}/installation ---`);
+    console.log('Status:', status);
+    console.log('Arquivos recebidos:', files?.length || 0);
 
-  if (files) {
-    for (const f of files) {
-      const url = await uploadFile(f);
-      if (url) updates[f.fieldname] = url;
+    const updates: any = { pendencies, updated_at: new Date() };
+
+    if (files) {
+      for (const f of files) {
+        const url = await uploadFile(f);
+        if (url) updates[f.fieldname] = url;
+      }
     }
+
+    const projectId = parseInt(req.params.id);
+    const { error: techError } = await supabase.from('technical_data').update(updates).eq('project_id', projectId);
+    if (techError) {
+      console.error('Erro ao atualizar technical_data:', techError);
+      return res.status(500).json({ error: techError.message });
+    }
+
+    const { error: projectError } = await supabase.from('projects').update({ installation_status: status, updated_at: new Date() }).eq('id', projectId);
+    if (projectError) {
+      console.error('Erro ao atualizar projects (installation_status):', projectError);
+      return res.status(500).json({ error: projectError.message });
+    }
+
+    if (status === 'approved') {
+      const { error: stageError } = await supabase.from('projects').update({ current_stage: 'homologation', updated_at: new Date() }).eq('id', projectId);
+      if (stageError) console.error('Erro ao atualizar current_stage:', stageError);
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Erro catastrófico na rota de instalação:', err);
+    res.status(500).json({ error: err.message || 'Erro interno no servidor' });
   }
-
-  await supabase.from('technical_data').update(updates).eq('project_id', req.params.id);
-  await supabase.from('projects').update({ installation_status: status, updated_at: new Date() }).eq('id', req.params.id);
-
-  if (status === 'approved') {
-    await supabase.from('projects').update({ current_stage: 'homologation', updated_at: new Date() }).eq('id', req.params.id);
-  }
-
-
-  res.json({ success: true });
 });
 
 // Homologation Update
