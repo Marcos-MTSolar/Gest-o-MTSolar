@@ -244,7 +244,18 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {neoenergia.filter(p => p.status === 'em_andamento' || p.resolved_at).map(p => {
+                {Object.values(
+                  neoenergia.reduce((acc: any, p: any) => {
+                    const key = `${p.client_name}-${p.cpf_cnpj || ''}`;
+                    if (!acc[key] || new Date(p.created_at) > new Date(acc[key].created_at)) {
+                      acc[key] = p;
+                    }
+                    return acc;
+                  }, {})
+                )
+                .filter((p: any) => p.status === 'em_andamento' || p.resolved_at)
+                .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                .map((p: any) => {
                   const isOverdue =
                     !!p.data_prevista &&
                     p.status === 'em_andamento' &&
@@ -258,10 +269,10 @@ export default function Dashboard() {
                       <td className="px-4 py-3 font-medium text-gray-800">
                         <div className="flex flex-col">
                           <span>{p.client_name}</span>
-                          {p.parent_id && <span className="text-[9px] text-gray-400 font-bold uppercase">Histórico</span>}
+                          {p.parent_id && <span className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter">Com Histórico</span>}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{p.numero_protocolo || '—'}</td>
+                      <td className="px-4 py-3 text-gray-600 font-bold">{p.numero_protocolo || '—'}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
