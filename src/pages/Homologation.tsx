@@ -210,16 +210,13 @@ export default function Homologation() {
               <p className="text-gray-500">Nenhum projeto em fase de homologação.</p>
             )}
             {projects.map(p => {
-              const isOverdue = p.homologation_expected_date &&
-                ['technical_analysis','waiting_inspection','performing_inspection']
-                  .includes(p.homologation_status) &&
-                new Date(p.homologation_expected_date) < new Date(new Date()
-                  .toISOString().split('T')[0]);
+              const isOverdue =
+                !!p.homologation_expected_date &&
+                ['technical_analysis', 'waiting_inspection', 'performing_inspection'].includes(p.homologation_status) &&
+                new Date(p.homologation_expected_date) < new Date(new Date().toISOString().split('T')[0]);
 
               return (
-                <div key={p.id} className={`p-6 rounded-xl shadow-sm border transition hover:shadow-md flex justify-between items-center ${
-                  isOverdue ? 'border-red-300 bg-red-50' : 'bg-white border-gray-100'
-                }`}>
+                <div key={p.id} className={`bg-white p-6 rounded-xl shadow-sm border flex justify-between items-center transition hover:shadow-md ${isOverdue ? 'border-red-300 bg-red-50' : 'border-gray-100'}`}>
                   <div className="flex-1 mr-4">
                     <h3 className="text-lg font-bold text-gray-800">{p.client_name}</h3>
                     <p className="text-sm text-gray-500">{p.title}</p>
@@ -242,79 +239,74 @@ export default function Homologation() {
 
                       {/* Exibe a data nas tags da tela inicial */}
                       {p.homologation_expected_date && expectsDateStatus.includes(p.homologation_status) && (
-                        <span className={`ml-2 px-3 py-1 rounded-full text-xs font-medium inline-flex items-center gap-1 border ${
-                          isOverdue 
-                            ? 'bg-red-100 text-red-800 border-red-200' 
-                            : 'bg-purple-100 text-purple-800 border-purple-200'
-                        }`}>
-                          {isOverdue && <AlertTriangle size={14} />}
-                          <Calendar size={12} /> 
-                          {isOverdue && <strong className="mr-1">PRAZO VENCIDO</strong>}
-                          Prev: {new Date(p.homologation_expected_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+                        <span className={`ml-2 px-3 py-1 rounded-full text-xs font-medium inline-flex items-center gap-1 border ${isOverdue ? 'bg-red-100 text-red-800 border-red-200' : 'bg-purple-100 text-purple-800 border-purple-200'}`}>
+                          {isOverdue && <AlertTriangle size={12} />}
+                          {isOverdue ? 'PRAZO VENCIDO · ' : ''}<Calendar size={12} /> Prev: {new Date(p.homologation_expected_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
                         </span>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                  <button
-                    onClick={async () => {
-                      const res = await api.get(`/api/projects/${p.id}`);
-                      setSelectedProject(res.data);
+                    <button
+                      onClick={async () => {
+                        const res = await api.get(`/api/projects/${p.id}`);
+                        setSelectedProject(res.data);
 
-                      const savedObs = res.data.homologation_observations || '';
-                      setObservationsText(savedObs);
+                        const savedObs = res.data.homologation_observations || '';
+                        setObservationsText(savedObs);
 
-                      const savedChecklist = res.data.homologation_checklist;
-                      
-                      // Parse if the backend returns as a string, or use directly if array
-                      let parsedChecklist: any[] = defaultChecklist;
-                      if (Array.isArray(savedChecklist) && savedChecklist.length > 0) {
-                        parsedChecklist = savedChecklist;
-                      } else if (typeof savedChecklist === 'string') {
-                        try {
-                          const arr = JSON.parse(savedChecklist);
-                          if (Array.isArray(arr) && arr.length > 0) {
-                            parsedChecklist = arr;
+                        const savedChecklist = res.data.homologation_checklist;
+                        
+                        // Parse if the backend returns as a string, or use directly if array
+                        let parsedChecklist: any[] = defaultChecklist;
+                        if (Array.isArray(savedChecklist) && savedChecklist.length > 0) {
+                          parsedChecklist = savedChecklist;
+                        } else if (typeof savedChecklist === 'string') {
+                          try {
+                            const arr = JSON.parse(savedChecklist);
+                            if (Array.isArray(arr) && arr.length > 0) {
+                              parsedChecklist = arr;
+                            }
+                          } catch (e) {
+                            console.error('Failed to parse homologation_checklist string', e);
                           }
-                        } catch (e) {
-                          console.error('Failed to parse homologation_checklist string', e);
                         }
-                      }
 
-                      // Merging DB state with default checklist to cover dynamic additions or missing values
-                      const loadedChecklist = defaultChecklist.map(defaultItem => {
-                        const found = parsedChecklist.find((i: any) => i.id === defaultItem.id);
-                        return found ? { ...defaultItem, completed: Boolean(found.completed && found.completed !== 'false') } : defaultItem;
-                      });
+                        // Merging DB state with default checklist to cover dynamic additions or missing values
+                        const loadedChecklist = defaultChecklist.map(defaultItem => {
+                          const found = parsedChecklist.find((i: any) => i.id === defaultItem.id);
+                          return found ? { ...defaultItem, completed: Boolean(found.completed && found.completed !== 'false') } : defaultItem;
+                        });
 
-                      console.log('Checklist merged from DB for project', p.id, ':', loadedChecklist);
-                      setChecklist(loadedChecklist);
+                        console.log('Checklist merged from DB for project', p.id, ':', loadedChecklist);
+                        setChecklist(loadedChecklist);
 
-                      const isComplete = loadedChecklist.every((item: any) => item.completed);
-                      if (isComplete || res.data.homologation_status) {
-                        setActiveTab('process');
-                      } else {
-                        setActiveTab('observations');
-                      }
+                        const isComplete = loadedChecklist.every((item: any) => item.completed);
+                        if (isComplete || res.data.homologation_status) {
+                          setActiveTab('process');
+                        } else {
+                          setActiveTab('observations');
+                        }
 
-                      // Buscar documentos do cliente no Supabase
-                      const { data: docs } = await supabase
-                        .from('documents')
-                        .select('*')
-                        .eq('project_id', p.id);
-                      setProjectDocs(docs || []);
-                    }}
-                    className="bg-blue-900 text-white px-5 py-2.5 rounded-lg hover:bg-blue-800 shadow shadow-blue-900/20 font-medium shrink-0"
-                  >
-                    Gerenciar
-                  </button>
-                  <button
-                    onClick={() => handleDelete(p.id, p.client_name)}
-                    className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Excluir projeto"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                        // Buscar documentos do cliente no Supabase
+                        const { data: docs } = await supabase
+                          .from('documents')
+                          .select('*')
+                          .eq('project_id', p.id);
+                        setProjectDocs(docs || []);
+                      }}
+                      className="bg-blue-900 text-white px-5 py-2.5 rounded-lg hover:bg-blue-800 shadow shadow-blue-900/20 font-medium shrink-0"
+                    >
+                      Gerenciar
+                    </button>
+                    <button
+                      onClick={() => handleDelete(p.id, p.client_name)}
+                      className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Excluir projeto"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </div>
               );
             })}
