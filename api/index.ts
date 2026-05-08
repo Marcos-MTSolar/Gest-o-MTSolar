@@ -245,7 +245,6 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
         status: 'pendente_comercial'
       });
       await supabase.from('technical_data').insert({ project_id: project.id });
-    }
 
     res.json({ id: client.id, project_id: project?.id });
   } catch (error: any) {
