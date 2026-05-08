@@ -79,7 +79,7 @@ export default function WhatsApp() {
         if (selectedConversation && payload.new && (payload.new as any).id === selectedConversation.id) {
           const newConv = payload.new as Conversation;
 
-          if (newConv.status === 'in_progress' && newConv.assigned_to !== user?.id && !isAdmin) {
+          if (newConv.status === 'in_progress' && Number(newConv.assigned_to) !== Number(user?.id) && !isAdmin) {
             setSelectedConversation(null);
             alert("Este atendimento foi assumido por outro agente.");
           }
@@ -97,7 +97,7 @@ export default function WhatsApp() {
       const hasAccess =
         selectedConversation.status === 'waiting' ||
         selectedConversation.status === 'closed' ||
-        selectedConversation.assigned_to === user?.id ||
+        Number(selectedConversation.assigned_to) === Number(user?.id) ||
         isAdmin;
 
       if (!hasAccess) {
@@ -176,7 +176,7 @@ export default function WhatsApp() {
     e.preventDefault();
     if (!newMessage.trim() || !selectedConversation || !user) return;
 
-    if (selectedConversation.status !== 'in_progress' || (selectedConversation.assigned_to !== user.id && !isAdmin)) {
+    if (selectedConversation.status !== 'in_progress' || (Number(selectedConversation.assigned_to) !== Number(user.id) && !isAdmin)) {
       alert("Você precisa assumir este atendimento para enviar mensagens.");
       return;
     }
@@ -206,9 +206,10 @@ export default function WhatsApp() {
         last_message_at: new Date().toISOString()
       }).eq('id', selectedConversation.id);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao enviar mensagem:", error);
-      alert("Falha ao enviar mensagem.");
+      const msg = error?.response?.data?.error || error?.message || "Falha ao enviar mensagem.";
+      alert(msg);
     }
   };
 
@@ -319,19 +320,19 @@ export default function WhatsApp() {
 
   // Meus atendimentos — só os que eu assumi
   const myConversations = allFiltered.filter(
-    c => c.status === 'in_progress' && c.assigned_to === user?.id
+    c => c.status === 'in_progress' && Number(c.assigned_to) === Number(user?.id)
   );
 
   // Outros em atendimento — visível mas bloqueado (exceto CEO/ADMIN que veem tudo)
   const othersConversations = allFiltered.filter(
-    c => c.status === 'in_progress' && c.assigned_to !== user?.id
+    c => c.status === 'in_progress' && Number(c.assigned_to) !== Number(user?.id)
   );
 
   // Encerrados
   const closedConversations = allFiltered.filter(c => c.status === 'closed');
 
   const renderConversationItem = (conv: Conversation) => {
-    const isAssignedToOther = conv.status === 'in_progress' && conv.assigned_to !== user?.id;
+    const isAssignedToOther = conv.status === 'in_progress' && Number(conv.assigned_to) !== Number(user?.id);
     const isBlocked = isAssignedToOther && !isAdmin;
 
     return (
@@ -389,10 +390,10 @@ export default function WhatsApp() {
           {conv.status === 'in_progress' && (
             <span className={cn(
               "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1",
-              conv.assigned_to === user?.id ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-600"
+              Number(conv.assigned_to) === Number(user?.id) ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-600"
             )}>
-              {conv.assigned_to === user?.id ? <Check size={10} /> : <Lock size={10} />}
-              {conv.assigned_to === user?.id ? "Em atendimento" : conv.assigned_name}
+              {Number(conv.assigned_to) === Number(user?.id) ? <Check size={10} /> : <Lock size={10} />}
+              {Number(conv.assigned_to) === Number(user?.id) ? "Em atendimento" : conv.assigned_name}
             </span>
           )}
           {conv.status === 'closed' && (
@@ -533,7 +534,7 @@ export default function WhatsApp() {
 
             {/* Campo de Envio */}
             <div className="p-4 bg-white border-t border-gray-200">
-              {selectedConversation.status === 'in_progress' && (selectedConversation.assigned_to === user?.id || isAdmin) ? (
+              {selectedConversation.status === 'in_progress' && (Number(selectedConversation.assigned_to) === Number(user?.id) || isAdmin) ? (
                 <form onSubmit={handleSendMessage} className="flex gap-2">
                   <input 
                     type="text" 
@@ -652,7 +653,7 @@ export default function WhatsApp() {
                 >
                   <UserPlus size={16} /> Assumir Atendimento
                 </button>
-              ) : selectedConversation.status === 'in_progress' && selectedConversation.assigned_to === user?.id ? (
+              ) : selectedConversation.status === 'in_progress' && (Number(selectedConversation.assigned_to) === Number(user?.id) || isAdmin) ? (
                 <>
                   <button 
                     onClick={() => setShowTransferModal(true)}
