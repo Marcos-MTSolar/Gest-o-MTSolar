@@ -604,7 +604,7 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
         token: token
       })
       .eq('id', conversationId)
-      .select()
+      .select('*')
       .single();
 
     if (error) throw error;

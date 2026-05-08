@@ -4,6 +4,7 @@ const INSTANCE_NAME = import.meta.env.VITE_EVOLUTION_INSTANCE || '';
 
 export const evolutionApi = {
   sendMessage: async (phone: string, message: string) => {
+    console.log('sendMessage called with:', { phone, message, baseUrl: EVOLUTION_URL, instance: INSTANCE_NAME });
     if (!EVOLUTION_URL || !EVOLUTION_KEY || !INSTANCE_NAME) {
       throw new Error(
         `Configuração da Evolution API incompleta. Verifique as variáveis de ambiente:\n` +

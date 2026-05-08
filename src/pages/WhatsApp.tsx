@@ -253,13 +253,20 @@ export default function WhatsApp() {
     
     if (window.confirm("Deseja assumir este atendimento?")) {
       try {
-        const res = await api.post('/api/whatsapp/assume', {
+        await api.post('/api/whatsapp/assume', {
           conversationId: conversation.id,
           userId: user.id
         });
 
-        if (res.data) {
-          setSelectedConversation(res.data);
+        // Buscar conversa atualizada direto do Supabase com todos os campos
+        const { data, error } = await supabase
+          .from('whatsapp_conversations')
+          .select('*')
+          .eq('id', conversation.id)
+          .single();
+
+        if (!error && data) {
+          setSelectedConversation(data);
           fetchConversations();
         }
       } catch (error: any) {
