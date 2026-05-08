@@ -1,20 +1,19 @@
 import React, { useEffect, useState, useRef } from 'react';
 import api from '../lib/api';
-import { Plus, Search, FileText, CheckCircle, Clock, Upload, FileCheck, AlertCircle, Camera } from 'lucide-react';
+import { Plus, Search, FileText, CheckCircle, Clock, Camera } from 'lucide-react';
 import { sendUpdateNotification } from '../lib/notifications';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { DOCS_OBRIGATORIOS, DOCS_OPCIONAIS, uploadIndividualDocs } from '../hooks/useHomologacaoDocs';
-import { Capacitor } from '@capacitor/core';
-import { capturarDocumento } from '../lib/documentCapture';
 
 export default function Commercial() {
   const [projects, setProjects] = useState<any[]>([]);
   const [showNewClient, setShowNewClient] = useState(false);
-  const [newClient, setNewClient] = useState({ name: '', phone: '', email: '', address: '', city: '', state: '', cpf_cnpj: '' });
+  const [isSavingProject, setIsSavingProject] = useState(false);
+  const [newClient, setNewClient] = useState({ 
+    name: '', phone: '', email: '', address: '', city: '', state: '', cpf_cnpj: '',
+    proposal_value: '', payment_method: 'cash', kit_supplier: '', pendencies: '', notes: '', finance_grace_period: 0
+  });
   const { user } = useAuth();
-  const [docFiles, setDocFiles] = useState<{ [docId: string]: File }>({});
-  const [uploadingDocs, setUploadingDocs] = useState(false);
 
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [showEditClient, setShowEditClient] = useState(false);
@@ -22,8 +21,9 @@ export default function Commercial() {
   const [includeInspectionPhotos, setIncludeInspectionPhotos] = useState(false);
   const [inspectionPhotos, setInspectionPhotos] = useState<string[]>([]);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const [activeTab, setActiveTab] = useState<'projects' | 'activeProposals'>('projects');
+  const [activeTab, setActiveTab] = useState<'projects' | 'activeProposals' | 'installation'>('projects');
   const [activeProposals, setActiveProposals] = useState<any[]>([]);
+  const [installationProjects, setInstallationProjects] = useState<any[]>([]);
   const [selectedProposalId, setSelectedProposalId] = useState('');
   const [selectedProposal, setSelectedProposal] = useState<any | null>(null);
   const submitAction = useRef('pending');
@@ -66,27 +66,26 @@ export default function Commercial() {
           p.commercial_status !== 'approved' &&
           p.commercial_status !== 'proposta_enviada'
         ));
+
+        // Filter projects for Installation tab
+        // Aguardando Instalação, Executando, Finalizada
+        setInstallationProjects(res.data.filter((p: any) => 
+          ['installation', 'homologation', 'conclusion', 'completed'].includes(p.current_stage)
+        ));
       } else {
         setProjects([]);
+        setInstallationProjects([]);
       }
     } catch (err) {
       setProjects([]);
+      setInstallationProjects([]);
     }
   };
 
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Valida documentos obrigatórios
-    const docsAusentes = DOCS_OBRIGATORIOS.filter(d => !docFiles[d.id]);
-    if (docsAusentes.length > 0) {
-      alert(`Documentos obrigatórios ausentes:\n${docsAusentes.map(d => `• ${d.label}`).join('\n')}`);
-      return;
-    }
-
-    setUploadingDocs(true);
+    setIsSavingProject(true);
     try {
-      // 1. Cria o cliente
       const clientPayload = {
         ...newClient,
         ...(selectedProposal ? {
@@ -94,34 +93,26 @@ export default function Commercial() {
           proposal_inverter_power: selectedProposal.inverter_power,
           proposal_module_model: selectedProposal.module_model,
           proposal_module_power: selectedProposal.module_power,
+          proposal_value: selectedProposal.total_value?.toString() || newClient.proposal_value
         } : {})
       };
-      const res = await api.post('/api/clients', clientPayload);
-      const projectId = res.data?.project_id || res.data?.id;
-
-      // 2. Faz upload dos arquivos individualmente no Supabase
-      await uploadIndividualDocs(projectId, user?.id || '', docFiles);
-
-      // 3. Salva no projeto que os docs foram enviados (opcional agora que temos individual)
-      await supabase
-        .from('projects')
-        .update({
-          homologacao_docs_uploaded_at: new Date().toISOString()
-        })
-        .eq('id', projectId);
+      await api.post('/api/clients', clientPayload);
 
       setShowNewClient(false);
-      setDocFiles({});
-      setNewClient({ name: '', phone: '', email: '', address: '', city: '', state: '', cpf_cnpj: '' });
+      setNewClient({ 
+        name: '', phone: '', email: '', address: '', city: '', state: '', cpf_cnpj: '',
+        proposal_value: '', payment_method: 'cash', kit_supplier: '', pendencies: '', notes: '', finance_grace_period: 0
+      });
       setSelectedProposalId('');
       setSelectedProposal(null);
       fetchProjects();
-      alert('Cliente cadastrado e documentos enviados com sucesso!');
+      setActiveTab('projects');
+      alert('Cliente cadastrado com sucesso!');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error: any) {
       alert('Erro ao cadastrar cliente: ' + error.message);
     } finally {
-      setUploadingDocs(false);
+      setIsSavingProject(false);
     }
   };
 
@@ -172,7 +163,6 @@ export default function Commercial() {
       alert('Cadastro de cliente atualizado com sucesso!');
       await fetchProjects();
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      // Refetch current project to update headers
       const res = await api.get(`/api/projects/${selectedProject.id}`);
       setSelectedProject(res.data);
     } catch (error) {
@@ -262,139 +252,83 @@ export default function Commercial() {
                   <input placeholder="Endereço" className="border p-2 rounded md:col-span-2" value={newClient.address} onChange={e => setNewClient({ ...newClient, address: e.target.value })} />
                   <input placeholder="Cidade" className="border p-2 rounded" value={newClient.city} onChange={e => setNewClient({ ...newClient, city: e.target.value })} />
                   <input placeholder="Estado" className="border p-2 rounded" value={newClient.state} onChange={e => setNewClient({ ...newClient, state: e.target.value })} />
-
-                  {/* SEÇÃO DOCUMENTOS */}
-                  <div className="md:col-span-2 mt-4">
-                    {/* Grupo 1 - Obrigatórios */}
-                    <div className="flex items-center gap-2 mb-3">
-                      <FileCheck size={18} className="text-blue-900" />
-                      <h3 className="font-bold text-gray-800 text-sm">
-                        Documentos Obrigatórios <span className="text-red-500">*</span>
-                      </h3>
-                    </div>
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex items-start gap-2">
-                      <AlertCircle size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-amber-700">
-                        Estes documentos são obrigatórios para iniciar o processo de homologação.
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-1 gap-2 mb-6">
-                      {DOCS_OBRIGATORIOS.map(doc => (
-                        <div key={doc.id} className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                          docFiles[doc.id] ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-200'
-                        }`}>
-                          <div className="flex items-center gap-2 flex-1">
-                            {docFiles[doc.id]
-                              ? <FileCheck size={16} className="text-green-600" />
-                              : <Upload size={16} className="text-gray-400" />
-                            }
-                            <div>
-                              <p className="text-sm font-medium text-gray-700">{doc.label}</p>
-                              {docFiles[doc.id] && (
-                                <p className="text-xs text-green-600">{docFiles[doc.id].name}</p>
-                              )}
-                            </div>
-                          </div>
-                          <label className="cursor-pointer">
-                            {Capacitor.isNativePlatform() && (
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  const file = await capturarDocumento();
-                                  if (file) setDocFiles(prev => ({ ...prev, [doc.id]: file }));
-                                }}
-                                className="mr-2 text-xs px-3 py-1.5 rounded-lg font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 flex items-center gap-1"
-                              >
-                                <Camera size={14} /> Câmera
-                              </button>
-                            )}
-                            <span className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
-                              docFiles[doc.id]
-                                ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                                : 'bg-blue-900 text-white hover:bg-blue-800'
-                            }`}>
-                              {docFiles[doc.id] ? 'Trocar' : 'Anexar'}
-                            </span>
-                            <input
-                              type="file"
-                              className="hidden"
-                              onChange={e => {
-                                const file = e.target.files?.[0];
-                                if (file) setDocFiles(prev => ({ ...prev, [doc.id]: file }));
-                              }}
-                            />
-                          </label>
-                        </div>
-                      ))}
+                  
+                  <div className="md:col-span-2 mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
+                    <h3 className="md:col-span-2 font-bold text-gray-800 flex items-center gap-2 mb-2">
+                      <FileText size={18} className="text-blue-900" /> Dados Comerciais do Fechamento
+                    </h3>
+                    
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1">VALOR DA PROPOSTA (R$)</label>
+                      <input 
+                        type="number" 
+                        placeholder="0.00" 
+                        className="w-full border p-2 rounded" 
+                        value={newClient.proposal_value} 
+                        onChange={e => setNewClient({ ...newClient, proposal_value: e.target.value })} 
+                      />
                     </div>
 
-                    {/* Grupo 2 - Opcionais */}
-                    <div className="flex items-center gap-2 mb-3">
-                      <FileText size={18} className="text-blue-900" />
-                      <h3 className="font-bold text-gray-800 text-sm">
-                        Documentos Opcionais
-                      </h3>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1">FORMA DE PAGAMENTO</label>
+                      <select 
+                        className="w-full border p-2 rounded bg-white" 
+                        value={newClient.payment_method} 
+                        onChange={e => setNewClient({ ...newClient, payment_method: e.target.value })}
+                      >
+                        <option value="cash">À Vista</option>
+                        <option value="financing">Financiamento</option>
+                        <option value="card">Cartão de Crédito</option>
+                      </select>
                     </div>
-                    <p className="text-xs text-gray-500 mb-3">
-                      Envie se disponível. Podem ser adicionados posteriormente.
-                    </p>
-                    <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-1">
-                      {DOCS_OPCIONAIS.map(doc => (
-                        <div key={doc.id} className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                          docFiles[doc.id] ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-200'
-                        }`}>
-                          <div className="flex items-center gap-2 flex-1">
-                            {docFiles[doc.id]
-                              ? <FileCheck size={16} className="text-green-600" />
-                              : <Upload size={16} className="text-gray-400" />
-                            }
-                            <div>
-                              <p className="text-sm font-medium text-gray-700">{doc.label}</p>
-                              {docFiles[doc.id] && (
-                                <p className="text-xs text-green-600">{docFiles[doc.id].name}</p>
-                              )}
-                            </div>
-                          </div>
-                          <label className="cursor-pointer">
-                            {Capacitor.isNativePlatform() && (
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  const file = await capturarDocumento();
-                                  if (file) setDocFiles(prev => ({ ...prev, [doc.id]: file }));
-                                }}
-                                className="mr-2 text-xs px-3 py-1.5 rounded-lg font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 flex items-center gap-1"
-                              >
-                                <Camera size={14} /> Câmera
-                              </button>
-                            )}
-                            <span className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
-                              docFiles[doc.id]
-                                ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                                : 'bg-blue-900 text-white hover:bg-blue-800'
-                            }`}>
-                              {docFiles[doc.id] ? 'Trocar' : 'Anexar'}
-                            </span>
-                            <input
-                              type="file"
-                              className="hidden"
-                              onChange={e => {
-                                const file = e.target.files?.[0];
-                                if (file) setDocFiles(prev => ({ ...prev, [doc.id]: file }));
-                              }}
-                            />
-                          </label>
-                        </div>
-                      ))}
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1">FORNECEDOR DO KIT</label>
+                      <input 
+                        placeholder="Ex: Aldo, WEG..." 
+                        className="w-full border p-2 rounded" 
+                        value={newClient.kit_supplier} 
+                        onChange={e => setNewClient({ ...newClient, kit_supplier: e.target.value })} 
+                      />
+                    </div>
+
+                    {newClient.payment_method === 'financing' && (
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">CARÊNCIA (MESES)</label>
+                        <input 
+                          type="number" 
+                          className="w-full border p-2 rounded" 
+                          value={newClient.finance_grace_period} 
+                          onChange={e => setNewClient({ ...newClient, finance_grace_period: parseInt(e.target.value) || 0 })} 
+                        />
+                      </div>
+                    )}
+
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-bold text-gray-500 mb-1 text-amber-700">PENDÊNCIAS / RESTRIÇÕES PARA FECHAR VENDA</label>
+                      <input 
+                        placeholder="O que falta para concluir o fechamento?" 
+                        className="w-full border p-2 rounded bg-amber-50 border-amber-200" 
+                        value={newClient.pendencies} 
+                        onChange={e => setNewClient({ ...newClient, pendencies: e.target.value })} 
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-bold text-gray-500 mb-1">OBSERVAÇÕES ADICIONAIS</label>
+                      <textarea 
+                        placeholder="Notas internas..." 
+                        className="w-full border p-2 rounded h-20" 
+                        value={newClient.notes} 
+                        onChange={e => setNewClient({ ...newClient, notes: e.target.value })} 
+                      />
                     </div>
                   </div>
 
-                  <div className="md:col-span-2 flex justify-end gap-2 mt-4">
-                    <button type="button" onClick={() => { setShowNewClient(false); setSelectedProposalId(''); setSelectedProposal(null); }} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
-                    <button type="submit" disabled={uploadingDocs} className="px-4 py-2 bg-blue-900 text-white rounded hover:bg-blue-800 disabled:opacity-50 flex items-center gap-2">
-                      {uploadingDocs ? (
-                        <><span className="animate-spin">â³</span> Enviando...</>
-                      ) : 'Salvar e Enviar Documentos'}
+                  <div className="md:col-span-2 flex justify-end gap-2 mt-6">
+                    <button type="button" onClick={() => { setShowNewClient(false); setSelectedProposalId(''); setSelectedProposal(null); }} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded font-medium">Cancelar</button>
+                    <button type="submit" disabled={isSavingProject} className="px-6 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50 font-bold shadow-md">
+                      {isSavingProject ? 'Salvando...' : 'Finalizar Cadastro'}
                     </button>
                   </div>
                 </form>
@@ -408,6 +342,12 @@ export default function Commercial() {
               className={`px-6 py-3 font-bold transition-colors ${activeTab === 'projects' ? 'border-b-2 border-blue-900 text-blue-900' : 'text-gray-500 hover:text-gray-700'}`}
             >
               Projetos Pendentes
+            </button>
+            <button
+              onClick={() => setActiveTab('installation')}
+              className={`px-6 py-3 font-bold transition-colors ${activeTab === 'installation' ? 'border-b-2 border-blue-900 text-blue-900' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Instalação
             </button>
             <button
               onClick={() => setActiveTab('activeProposals')}
@@ -459,6 +399,49 @@ export default function Commercial() {
                     className={`px-4 py-2 rounded text-white font-medium ${['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-900 hover:bg-blue-800'}`}
                   >
                     {['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'Ver Detalhes' : 'Gerenciar'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : activeTab === 'installation' ? (
+            <div className="grid grid-cols-1 gap-6">
+              {installationProjects.length === 0 && (
+                <p className="text-gray-500">Nenhum projeto em fase de instalação.</p>
+              )}
+              {installationProjects.map(p => (
+                <div key={p.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center transition hover:shadow-md">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-800">{p.client_name}</h3>
+                    <p className="text-sm text-gray-500">{p.title}</p>
+                    
+                    <div className="flex gap-2 mt-2">
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        p.installation_status === 'approved' || p.current_stage === 'completed'
+                          ? 'bg-green-100 text-green-700' 
+                          : p.installation_status === 'executing'
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {p.installation_status === 'approved' || p.current_stage === 'completed'
+                          ? 'Finalizada' 
+                          : p.installation_status === 'executing'
+                          ? 'Executando'
+                          : 'Aguardando Instalação'}
+                      </span>
+                      <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600">
+                        {translateStage(p.current_stage)}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const res = await api.get(`/api/projects/${p.id}`);
+                      const data = res.data;
+                      setSelectedProject(data);
+                    }}
+                    className="px-4 py-2 rounded bg-blue-900 hover:bg-blue-800 text-white font-medium"
+                  >
+                    Ver Detalhes
                   </button>
                 </div>
               ))}

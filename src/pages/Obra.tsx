@@ -28,7 +28,7 @@ type PhotoFieldName =
   | 'photo_ac_stringbox'
   | 'photo_connection_point';
 
-export default function Installation() {
+export default function Obra() {
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState<'photos' | 'pendencies'>('photos');
@@ -125,9 +125,9 @@ export default function Installation() {
       setPhotoFiles({} as Record<PhotoFieldName, File | null>);
       setPhotoPreviews({} as Record<PhotoFieldName, string | null>);
       fetchProjects();
-      alert('Obra finalizada registrada com sucesso!');
+      alert('Obra registrada com sucesso!');
     } catch {
-      setError('Erro ao atualizar obra finalizada. Tente novamente.');
+      setError('Erro ao atualizar obra. Tente novamente.');
     }
   };
 
@@ -200,7 +200,7 @@ export default function Installation() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Obra Finalizada</h1>
+      <h1 className="text-2xl font-bold text-gray-800 mb-6">Obra</h1>
 
       {selectedProject ? (
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -320,7 +320,7 @@ export default function Installation() {
                   type="submit"
                   className={`px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-bold shadow-sm flex items-center gap-2 ${activeTab === 'pendencies' ? 'flex' : 'hidden'}`}
                 >
-                  <CheckCircle size={18} /> Finalizar Obra
+                  <CheckCircle size={18} /> Salvar Obra
                 </button>
               </div>
             </div>
@@ -329,7 +329,7 @@ export default function Installation() {
       ) : (
         <div className="grid grid-cols-1 gap-6">
           {projects.length === 0 && (
-            <p className="text-gray-500">Nenhum projeto pendente de finalização de obra.</p>
+            <p className="text-gray-500">Nenhum projeto pendente de obra.</p>
           )}
           {projects.map(p => (
             <div key={p.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">

@@ -60,7 +60,7 @@ export const sendUpdateNotification = async (aba: string, cliente: string) => {
   if (!Capacitor.isNativePlatform()) return;
   const titulos: { [key: string]: string } = {
     technical: '🔧 Aba Técnica atualizada',
-    finished: '✅ Obra Finalizada',
+    finished: '✅ Obra',
     homologation: '📋 Homologação atualizada',
     commercial: '💼 Aba Comercial atualizada',
   };

@@ -205,7 +205,10 @@ app.get('/api/clients', authenticateToken, async (req: any, res) => {
 });
 
 app.post('/api/clients', authenticateToken, async (req: any, res) => {
-  const { name, phone, email, address, city, state, cpf_cnpj } = req.body;
+  const { 
+    name, phone, email, address, city, state, cpf_cnpj,
+    proposal_value, payment_method, kit_supplier, pendencies, notes, finance_grace_period 
+  } = req.body;
 
   try {
     const { data: client, error } = await supabase
@@ -219,14 +222,29 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
     // Initial Project
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .insert({ client_id: client.id, title: `Projeto Solar - ${name}`, status: 'pending' })
+      .insert({ 
+        client_id: client.id, 
+        client_name: name, // Persiste o nome para histórico
+        title: `Projeto Solar - ${name}`, 
+        status: 'pending' 
+      })
       .select()
       .single();
 
     if (projectError) throw projectError;
 
     if (project) {
-      await supabase.from('commercial_data').insert({ project_id: project.id });
+      // Inserir dados comerciais unificados
+      await supabase.from('commercial_data').insert({ 
+        project_id: project.id,
+        proposal_value: proposal_value ? parseFloat(proposal_value) : null,
+        payment_method,
+        kit_supplier,
+        pendencies,
+        notes,
+        finance_grace_period: parseInt(finance_grace_period) || 0,
+        status: 'pendente_comercial'
+      });
       await supabase.from('technical_data').insert({ project_id: project.id });
     }
 
@@ -270,7 +288,7 @@ app.get('/api/projects', authenticateToken, async (req: any, res) => {
 
     return {
       ...p,
-      client_name: p.clients?.name,
+      client_name: p.clients?.name || p.client_name,
       commercial_status: commData?.status,
       commercial_pendencies: commData?.pendencies,
       technical_status: techData?.status,
@@ -302,11 +320,11 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
   const techData = project.technical_data?.[0] || {};
   const formatted = {
     ...project,
-    client_name: project.clients?.name,
-    phone: project.clients?.phone,
-    address: project.clients?.address,
-    city: project.clients?.city,
-    state: project.clients?.state,
+    client_name: project.clients?.name || project.client_name,
+    phone: project.clients?.phone || null,
+    address: project.clients?.address || null,
+    city: project.clients?.city || null,
+    state: project.clients?.state || null,
 
     // Commercial
     proposal_value: project.commercial_data?.[0]?.proposal_value,
@@ -522,7 +540,27 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
   }
 
   if (homologation_status === 'connection_point_approved') {
-    await supabase.from('projects').update({ current_stage: 'completed', status: 'completed', updated_at: new Date() }).eq('id', req.params.id);
+    // Busca o client_id antes de atualizar o projeto
+    const { data: projData } = await supabase.from('projects').select('client_id, client_name').eq('id', req.params.id).single();
+    
+    // Atualiza o projeto para finalizado
+    await supabase.from('projects').update({ 
+      current_stage: 'completed', 
+      status: 'completed', 
+      updated_at: new Date() 
+    }).eq('id', req.params.id);
+
+    // ExclusÃ£o automÃ¡tica dos dados sensÃ­veis do cliente (LGPD/SeguranÃ§a)
+    if (projData?.client_id) {
+      console.log(`Finalizando projeto ${req.params.id}. Removendo dados do cliente ${projData.client_id}`);
+      
+      // Para evitar erros de FK em outras tabelas que possam existir, 
+      // podemos opcionalmente desvincular o projeto do cliente antes de deletar
+      await supabase.from('projects').update({ client_id: null }).eq('id', req.params.id);
+      
+      const { error: delError } = await supabase.from('clients').delete().eq('id', projData.client_id);
+      if (delError) console.error('Erro ao deletar cliente finalizado:', delError);
+    }
   } else if (homologation_status === 'technical_analysis' && project?.homologation_status !== 'technical_analysis') {
     // Log the automatic transition
     await supabase.from('logs').insert({ user_id: req.user.id, action: 'HOMOLOGATION_STARTED', details: `Checklist concluÃ­do. Processo de homologaÃ§Ã£o iniciado para o projeto ID ${req.params.id}` });

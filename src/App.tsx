@@ -15,7 +15,7 @@ import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
 import Commercial from './pages/Commercial';
 import Technical from './pages/Technical';
-import Installation from './pages/Installation';
+import Obra from './pages/Obra';
 import Messages from './pages/Messages';
 import Agenda from './pages/Agenda';
 import Settings from './pages/Settings';
@@ -93,9 +93,9 @@ export default function App() {
               </PrivateRoute>
             } />
 
-            <Route path="/installation" element={
+            <Route path="/obra" element={
               <PrivateRoute roles={['CEO', 'ADMIN', 'TECHNICAL']}>
-                <Installation />
+                <Obra />
               </PrivateRoute>
             } />
 

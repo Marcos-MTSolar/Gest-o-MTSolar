@@ -126,7 +126,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: 'Comercial', path: '/commercial', icon: Briefcase, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Contratos', path: '/contracts', icon: FileSignature, roles: ['CEO', 'ADMIN'] },
     { name: 'Técnica', path: '/technical', icon: Wrench, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
-    { name: 'Obra Finalizada', path: '/installation', icon: Hammer, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
+    { name: 'Obra', path: '/obra', icon: Hammer, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
     { name: 'Kit Solar', path: '/kit-purchase', icon: ShoppingCart, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
     { name: 'Estoque', path: '/estoque', icon: Package, roles: ['CEO', 'ADMIN'] },
     ...(hasCompletedInspection ? [{ name: 'Homologação', path: '/homologation', icon: CheckSquare, roles: ['CEO', 'ADMIN', 'TECHNICAL'] }] : []),

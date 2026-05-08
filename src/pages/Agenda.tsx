@@ -231,13 +231,13 @@ export default function Agenda() {
                       className={`
                         text-xs p-1 rounded truncate flex items-center gap-1
                         ${event.completed
-                          ? 'bg-green-50 text-green-700 border-l-2 border-green-500 line-through opacity-70'
+                          ? 'bg-gray-50 text-[#9CA3AF] border-l-2 border-[#9CA3AF] line-through opacity-80'
                           : `${getColor(event.color).bg} ${getColor(event.color).text} border-l-2 ${getColor(event.color).border}`
                         }
                       `}
                     >
                       {event.completed
-                        ? <CheckCircle2 size={10} />
+                        ? <CheckCircle2 size={10} className="text-[#9CA3AF]" />
                         : event.is_reminder
                           ? <Bell size={10} />
                           : null
@@ -279,7 +279,7 @@ export default function Agenda() {
                 <input
                   type="text"
                   required
-                  className={`w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none ${formData.completed ? 'line-through text-gray-400' : ''}`}
+                  className={`w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none ${formData.completed ? 'line-through text-[#9CA3AF]' : ''}`}
                   value={formData.title}
                   onChange={e => setFormData({ ...formData, title: e.target.value })}
                   placeholder="Reunião, Visita, etc."

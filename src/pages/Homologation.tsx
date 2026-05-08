@@ -2,8 +2,11 @@ import React, { useEffect, useState, Component } from 'react';
 import api from '../lib/api';
 import { CheckSquare, AlertTriangle, CheckCircle, FileText, ListChecks, Save, Lock, Unlock, Calendar, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { deleteDocsHomologacao } from '../hooks/useHomologacaoDocs';
+import { deleteDocsHomologacao, DOCS_OBRIGATORIOS, DOCS_OPCIONAIS, uploadIndividualDocs } from '../hooks/useHomologacaoDocs';
 import { sendUpdateNotification } from '../lib/notifications';
+import { Capacitor } from '@capacitor/core';
+import { capturarDocumento } from '../lib/documentCapture';
+import { Upload, Camera, FileCheck } from 'lucide-react';
 
 export default function Homologation() {
   const [projects, setProjects] = useState<any[]>([]);
@@ -20,6 +23,8 @@ export default function Homologation() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [docFiles, setDocFiles] = useState<{ [docId: string]: File }>({});
+  const [uploadingDocs, setUploadingDocs] = useState(false);
 
   const defaultChecklist = [
     { id: 'docs_ok', label: 'Documentação do cliente verificada e completa', completed: false },
@@ -116,6 +121,35 @@ export default function Homologation() {
     } catch (error) {
       console.error(error);
       alert('Erro ao atualizar status da homologação');
+    }
+  };
+
+  const handleUploadDocs = async () => {
+    if (!selectedProject) return;
+    if (Object.keys(docFiles).length === 0) {
+      alert('Selecione ao menos um arquivo para enviar.');
+      return;
+    }
+
+    setUploadingDocs(true);
+    try {
+      // 1. Faz upload dos arquivos individualmente no Supabase
+      const { user } = (await supabase.auth.getUser()).data;
+      await uploadIndividualDocs(selectedProject.id, user?.id || '', docFiles);
+
+      // 2. Atualiza a lista de documentos na tela
+      const { data: docs } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('project_id', selectedProject.id);
+      setProjectDocs(docs || []);
+
+      setDocFiles({});
+      alert('Documentos enviados com sucesso!');
+    } catch (error: any) {
+      alert('Erro ao enviar documentos: ' + error.message);
+    } finally {
+      setUploadingDocs(false);
     }
   };
 
@@ -400,37 +434,104 @@ export default function Homologation() {
                 </div>
 
                 {/* Seção de Documentos do Cliente */}
-                <div className="mt-6">
-                  <h3 className="text-lg font-bold mb-3 text-gray-800 flex items-center gap-2">
-                    <FileText size={20} className="text-blue-600" /> Documentos do Cliente
-                  </h3>
-                  {projectDocs && projectDocs.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {projectDocs.map((doc: any) => (
-                        <div key={doc.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-200 transition-all">
-                          <div className="flex items-center gap-2 overflow-hidden">
-                            <FileText size={16} className="text-blue-500 shrink-0" />
-                            <div className="overflow-hidden">
-                              <p className="text-xs font-bold text-gray-700 truncate">{doc.title || 'Documento'}</p>
-                              <p className="text-[10px] text-gray-400 truncate">{new Date(doc.created_at).toLocaleDateString('pt-BR')}</p>
+                  {/* Seção de Upload de Documentos */}
+                  <div className="mt-6 border-t pt-6">
+                    <h3 className="text-lg font-bold mb-3 text-gray-800 flex items-center gap-2">
+                      <Upload size={20} className="text-blue-600" /> Enviar Novos Documentos
+                    </h3>
+                    <div className="space-y-2 mb-4">
+                      {[...DOCS_OBRIGATORIOS, ...DOCS_OPCIONAIS].map(doc => (
+                        <div key={doc.id} className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                          docFiles[doc.id] ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-200 shadow-sm'
+                        }`}>
+                          <div className="flex items-center gap-2 flex-1">
+                            {docFiles[doc.id]
+                              ? <FileCheck size={16} className="text-green-600" />
+                              : <Upload size={16} className="text-gray-400" />
+                            }
+                            <div>
+                              <p className="text-sm font-medium text-gray-700">{doc.label}</p>
+                              {docFiles[doc.id] && (
+                                <p className="text-xs text-green-600 font-bold">{docFiles[doc.id].name}</p>
+                              )}
                             </div>
                           </div>
-                          <a
-                            href={doc.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 p-1.5 hover:bg-blue-50 rounded-md transition-colors"
-                            title="Baixar documento"
-                          >
-                            <FileText size={16} />
-                          </a>
+                          <div className="flex gap-2">
+                            {Capacitor.isNativePlatform() && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const file = await capturarDocumento();
+                                  if (file) setDocFiles(prev => ({ ...prev, [doc.id]: file }));
+                                }}
+                                className="text-xs px-3 py-1.5 rounded-lg font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 flex items-center gap-1"
+                              >
+                                <Camera size={14} /> Foto
+                              </button>
+                            )}
+                            <label className="cursor-pointer">
+                              <span className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                                docFiles[doc.id]
+                                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                  : 'bg-blue-900 text-white hover:bg-blue-800'
+                              }`}>
+                                {docFiles[doc.id] ? 'Trocar' : 'Anexar'}
+                              </span>
+                              <input
+                                type="file"
+                                className="hidden"
+                                onChange={e => {
+                                  const file = e.target.files?.[0];
+                                  if (file) setDocFiles(prev => ({ ...prev, [doc.id]: file }));
+                                }}
+                              />
+                            </label>
+                          </div>
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <p className="text-sm text-gray-400 italic">Nenhum documento disponível para este projeto.</p>
-                  )}
-                </div>
+                    {Object.keys(docFiles).length > 0 && (
+                      <button
+                        onClick={handleUploadDocs}
+                        disabled={uploadingDocs}
+                        className="w-full bg-green-600 text-white font-bold py-3 rounded-xl hover:bg-green-700 transition-all shadow-md flex items-center justify-center gap-2"
+                      >
+                        {uploadingDocs ? 'Enviando...' : `Enviar ${Object.keys(docFiles).length} documento(s)`}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="mt-8 border-t pt-6">
+                    <h3 className="text-lg font-bold mb-3 text-gray-800 flex items-center gap-2">
+                      <FileText size={20} className="text-blue-600" /> Arquivos na Nuvem (Supabase)
+                    </h3>
+                    {projectDocs && projectDocs.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {projectDocs.map((doc: any) => (
+                          <div key={doc.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-200 transition-all">
+                            <div className="flex items-center gap-2 overflow-hidden">
+                              <FileText size={16} className="text-blue-500 shrink-0" />
+                              <div className="overflow-hidden">
+                                <p className="text-xs font-bold text-gray-700 truncate">{doc.title || 'Documento'}</p>
+                                <p className="text-[10px] text-gray-400 truncate">{new Date(doc.created_at).toLocaleDateString('pt-BR')}</p>
+                              </div>
+                            </div>
+                            <a
+                              href={doc.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 p-1.5 hover:bg-blue-50 rounded-md transition-colors"
+                              title="Baixar documento"
+                            >
+                              <FileText size={16} />
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400 italic">Nenhum documento disponível na nuvem para este projeto.</p>
+                    )}
+                  </div>
               </div>
             </div>
           ) : (

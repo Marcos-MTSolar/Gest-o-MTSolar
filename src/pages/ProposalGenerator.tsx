@@ -58,6 +58,7 @@ interface FormData {
   photos: string[];
   kitSupplier: string;
   financeGracePeriod: string;
+  financeDownPayment: string;
   estruturaItem1: string;
   garantiaEstruturaItem1: string;
   estruturaItem2: string;
@@ -177,6 +178,7 @@ export default function ProposalGenerator() {
     photos: [],
     kitSupplier: '',
     financeGracePeriod: '0',
+    financeDownPayment: '',
     financeBanco: '',
     estruturaItem1: '',
     garantiaEstruturaItem1: '',
@@ -426,7 +428,9 @@ export default function ProposalGenerator() {
     const annualSavings = monthlySavings * 12;
     const fiveYearSavings = annualSavings * 5;
     const paybackMonths = monthlySavings > 0 ? salePrice / monthlySavings : 0;
-    const financeValue = parseFloat(formData.financeValue || salePrice.toString());
+    
+    const downPayment = parseFloat(formData.financeDownPayment || '0');
+    const financeValue = parseFloat(formData.financeValue || (salePrice - downPayment).toString());
     const financeTerm = parseFloat(formData.financeTerm || '60');
     const financeRate = parseFloat(formData.financeRate || '1.5') / 100;
 
@@ -1317,12 +1321,15 @@ export default function ProposalGenerator() {
             <div style="background:#f8fafc;border:1.5px solid #d6e4f0;border-radius:8px;
               padding:3mm 5mm;margin-top:4mm;">
               <div style="font-size:9pt;font-weight:bold;color:#1e3a5f;margin-bottom:1mm;text-transform:uppercase;letter-spacing:1px;">
-                🏦 Condições de Financiamento Solar
+                🏦 Simulação de Financiamento Solar
               </div>
-              <div style="font-size:10pt;color:#374151;">
+              <div style="font-size:10pt;color:#374151;line-height:1.4;">
                 Banco: <strong>${formData.financeBanco}</strong> | 
                 Taxa: <strong>${formData.financeRate}% a.m.</strong> | 
-                Carência: <strong>${formData.financeGracePeriod} meses</strong>
+                Carência: <strong>${formData.financeGracePeriod} meses</strong><br/>
+                Investimento: <strong>R$ ${results.salePrice.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong> |
+                Entrada: <strong>R$ ${parseFloat(formData.financeDownPayment || '0').toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong><br/>
+                Parcelas: <strong style="color:#1e3a5f;font-size:11pt;">${formData.financeTerm}x de R$ ${results.monthlyInstallment.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
               </div>
             </div>
             ` : ''}
@@ -2495,7 +2502,23 @@ export default function ProposalGenerator() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">Valor de Entrada (R$)</label>
+                <input 
+                  type="number" 
+                  value={formData.financeDownPayment}
+                  onChange={(e) => {
+                    const entry = e.target.value;
+                    const saleP = results.salePrice;
+                    updateForm('financeDownPayment', entry);
+                    updateForm('financeValue', (saleP - parseFloat(entry || '0')).toFixed(2));
+                  }}
+                  className={inputStyle}
+                  placeholder="0.00"
+                />
+              </div>
+
               <div className="space-y-1">
                 <label className="text-sm font-medium text-gray-700">Valor a Financiar (R$)</label>
                 <input 
