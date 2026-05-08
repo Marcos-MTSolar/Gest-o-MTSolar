@@ -209,37 +209,53 @@ export default function Homologation() {
             {projects.length === 0 && (
               <p className="text-gray-500">Nenhum projeto em fase de homologação.</p>
             )}
-            {projects.map(p => (
-              <div key={p.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center transition hover:shadow-md">
-                <div className="flex-1 mr-4">
-                  <h3 className="text-lg font-bold text-gray-800">{p.client_name}</h3>
-                  <p className="text-sm text-gray-500">{p.title}</p>
+            {projects.map(p => {
+              const isOverdue = p.homologation_expected_date &&
+                ['technical_analysis','waiting_inspection','performing_inspection']
+                  .includes(p.homologation_status) &&
+                new Date(p.homologation_expected_date) < new Date(new Date()
+                  .toISOString().split('T')[0]);
 
-                  {/* Snippet de Observações na View Externa */}
-                  {typeof p.homologation_observations === 'string' && p.homologation_observations.trim() !== '' && (
-                    <div className="mt-2 text-sm text-gray-600 bg-amber-50/50 p-2.5 rounded-lg border border-amber-100/50 flex items-start gap-2 max-w-2xl">
-                      <FileText size={16} className="text-amber-500 mt-0.5 shrink-0" />
-                      <span className="line-clamp-2 italic">"{p.homologation_observations}"</span>
-                    </div>
-                  )}
+              return (
+                <div key={p.id} className={`p-6 rounded-xl shadow-sm border transition hover:shadow-md flex justify-between items-center ${
+                  isOverdue ? 'border-red-300 bg-red-50' : 'bg-white border-gray-100'
+                }`}>
+                  <div className="flex-1 mr-4">
+                    <h3 className="text-lg font-bold text-gray-800">{p.client_name}</h3>
+                    <p className="text-sm text-gray-500">{p.title}</p>
 
-                  <div className="mt-3">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1 ${p.homologation_status === 'connection_point_approved' ? 'bg-green-100 text-green-800 border border-green-200' :
-                      p.homologation_status === 'rejected' ? 'bg-red-100 text-red-800 border border-red-200' :
-                        !p.homologation_status ? 'bg-gray-100 text-gray-600 border border-gray-200' : 'bg-blue-100 text-blue-800 border border-blue-200'
-                      }`}>
-                      {statusOptions.find(o => o.value === p.homologation_status)?.label || 'Aguardando Checklist de Pré-Homologação'}
-                    </span>
-
-                    {/* Exibe a data nas tags da tela inicial */}
-                    {p.homologation_expected_date && expectsDateStatus.includes(p.homologation_status) && (
-                      <span className="ml-2 px-3 py-1 rounded-full text-xs font-medium inline-flex items-center gap-1 bg-purple-100 text-purple-800 border border-purple-200">
-                        <Calendar size={12} /> Prev: {new Date(p.homologation_expected_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
-                      </span>
+                    {/* Snippet de Observações na View Externa */}
+                    {typeof p.homologation_observations === 'string' && p.homologation_observations.trim() !== '' && (
+                      <div className="mt-2 text-sm text-gray-600 bg-amber-50/50 p-2.5 rounded-lg border border-amber-100/50 flex items-start gap-2 max-w-2xl">
+                        <FileText size={16} className="text-amber-500 mt-0.5 shrink-0" />
+                        <span className="line-clamp-2 italic">"{p.homologation_observations}"</span>
+                      </div>
                     )}
+
+                    <div className="mt-3">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1 ${p.homologation_status === 'connection_point_approved' ? 'bg-green-100 text-green-800 border border-green-200' :
+                        p.homologation_status === 'rejected' ? 'bg-red-100 text-red-800 border border-red-200' :
+                          !p.homologation_status ? 'bg-gray-100 text-gray-600 border border-gray-200' : 'bg-blue-100 text-blue-800 border border-blue-200'
+                        }`}>
+                        {statusOptions.find(o => o.value === p.homologation_status)?.label || 'Aguardando Checklist de Pré-Homologação'}
+                      </span>
+
+                      {/* Exibe a data nas tags da tela inicial */}
+                      {p.homologation_expected_date && expectsDateStatus.includes(p.homologation_status) && (
+                        <span className={`ml-2 px-3 py-1 rounded-full text-xs font-medium inline-flex items-center gap-1 border ${
+                          isOverdue 
+                            ? 'bg-red-100 text-red-800 border-red-200' 
+                            : 'bg-purple-100 text-purple-800 border-purple-200'
+                        }`}>
+                          {isOverdue && <AlertTriangle size={14} />}
+                          <Calendar size={12} /> 
+                          {isOverdue && <strong className="mr-1">PRAZO VENCIDO</strong>}
+                          Prev: {new Date(p.homologation_expected_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
                   <button
                     onClick={async () => {
                       const res = await api.get(`/api/projects/${p.id}`);

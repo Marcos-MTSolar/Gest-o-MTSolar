@@ -38,6 +38,14 @@ export default function Contracts() {
     potencia_kwp: '',
     endereco_instalacao: '',
     
+    // Garantias do Sistema
+    garantia_modulos_fabricacao: '20',
+    garantia_modulos_eficiencia: '30',
+    garantia_modulos_percentual: '80',
+    garantia_inversores: '12',
+    garantia_estrutura: '12',
+    garantia_instalacao: '01 ano',
+
     // Pagamento
     valor_total: '',
     valor_extenso: '',
@@ -125,7 +133,7 @@ export default function Contracts() {
 
     addText(`Pelo presente instrumento particular de contrato de venda e instalação de sistema de geração de energia solar fotovoltaico, entre partes, a saber, de um lado, ${formData.nome_contratante || '{{ nome_contratante }}'}, ${g.portador} do CPF/CNPJ: ${formData.cpf_cnpj_contratante || '{{ cpf_cnpj_contratante }}'}, residente em ${formData.endereco_contratante || '{{ endereco_contratante }}'}, CEP ${formData.cep_contratante || '{{ cep_contratante }}'}, ${formData.cidade_estado_contratante || '{{ cidade_estado_contratante }}'}, doravante designad${g.o} CONTRATANTE.`);
 
-    addText(`E, de outro lado, a empresa MT SOLAR ENERGIA RENOVAVEL, inscrita no CNPJ sob o nº 51.713.487/0001-90, com sede na Rua Rossini Roosevelt de Albuquerque, nº 10, loja-105, Piedade, Jaboatão dos Guararapes – PE, integrador credenciado ${formData.nome_integrador}, CNPJ nº: ${formData.cnpj_integrador}, neste ato representa por seu sócio, Marcos Aurélio Silva do Nascimento, inscrita no CPF nº 092.375.674-48 e RG: 7.834.135 SDS/PE, adiante denominada CONTRATADA.`);
+    addText(`E, de outro lado, a empresa MT SOLAR ENERGIA RENOVAVEL, inscrita no CNPJ sob o nº 51.713.487/0001-90, com sede na Rua Rossini Roosevelt de Albuquerque, nº 10, sala 103, Piedade, Jaboatão dos Guararapes – PE, integrador credenciado ${formData.nome_integrador}, CNPJ nº: ${formData.cnpj_integrador}, neste ato representa por seu sócio, Marcos Aurélio Silva do Nascimento, inscrita no CPF nº 092.375.674-48 e RG: 7.834.135 SDS/PE, adiante denominada CONTRATADA.`);
 
     addText('As partes acima identificadas têm, entre si, justas e acertadas o presente contrato, que se regerá pelas cláusulas seguintes:');
 
@@ -210,10 +218,10 @@ export default function Contracts() {
 
     addText('CLÁUSULA DÉCIMA PRIMEIRA – GARANTIAS E SEGURO', { bold: true });
     addText('As garantias do sistema solar fotovoltaico são:');
-    addText('- Módulos: 20 anos contra defeito de fabricação e 30 anos contra queda de eficiência de até 80%;');
-    addText('- Inversores: 12 anos contra defeito de fabricação;');
-    addText('- Estrutura Metálica: 12 anos;');
-    addText('- Serviço de Instalação: 01 ano.');
+    addText(`- Módulos: ${formData.garantia_modulos_fabricacao} anos contra defeito de fabricação e ${formData.garantia_modulos_eficiencia} anos contra queda de eficiência de até ${formData.garantia_modulos_percentual}%;`);
+    addText(`- Inversores: ${formData.garantia_inversores} anos contra defeito de fabricação;`);
+    addText(`- Estrutura Metálica: ${formData.garantia_estrutura} anos;`);
+    addText(`- Serviço de Instalação: ${formData.garantia_instalacao}.`);
     addText('- A garantia não cobre incidentes naturais como descargas elétricas, tempestades e mau uso;');
     addText('- A garantia é do fabricante, tendo a CONTRATADA o dever de viabilizar a troca de eventual problema, observando sempre as disposições da cláusula sétima;');
     addText('- A não observação das instruções de instalação constantes no manual dos fabricantes, ou a utilização indevida dos produtos, anulam as garantias e podem incorrer em riscos à segurança física e material.');
@@ -461,6 +469,73 @@ export default function Contracts() {
                     </button>
                   </div>
                 ))}
+              </div>
+            </section>
+
+            {/* Garantias do Sistema */}
+            <section className="bg-white rounded-2xl p-8 shadow-sm border border-gray-200">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-10 h-10 bg-blue-100 text-blue-900 rounded-xl flex items-center justify-center">
+                  <Check size={20} />
+                </div>
+                <h2 className="text-lg font-bold text-gray-800 uppercase tracking-tight">Garantias do Sistema</h2>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className={labelStyle}>Módulos: Fabricaçâo (Anos)</label>
+                  <input 
+                    value={formData.garantia_modulos_fabricacao} 
+                    onChange={e => updateForm('garantia_modulos_fabricacao', e.target.value)}
+                    className={inputStyle}
+                    placeholder="Ex: 20"
+                  />
+                </div>
+                <div>
+                  <label className={labelStyle}>Módulos: Eficiência (Anos)</label>
+                  <input 
+                    value={formData.garantia_modulos_eficiencia} 
+                    onChange={e => updateForm('garantia_modulos_eficiencia', e.target.value)}
+                    className={inputStyle}
+                    placeholder="Ex: 30"
+                  />
+                </div>
+                <div>
+                  <label className={labelStyle}>Módulos: % Eficiência Mínima</label>
+                  <input 
+                    value={formData.garantia_modulos_percentual} 
+                    onChange={e => updateForm('garantia_modulos_percentual', e.target.value)}
+                    className={inputStyle}
+                    placeholder="Ex: 80"
+                  />
+                </div>
+                <div>
+                  <label className={labelStyle}>Inversores (Anos)</label>
+                  <input 
+                    value={formData.garantia_inversores} 
+                    onChange={e => updateForm('garantia_inversores', e.target.value)}
+                    className={inputStyle}
+                    placeholder="Ex: 12"
+                  />
+                </div>
+                <div>
+                  <label className={labelStyle}>Estrutura Metálica (Anos)</label>
+                  <input 
+                    value={formData.garantia_estrutura} 
+                    onChange={e => updateForm('garantia_estrutura', e.target.value)}
+                    className={inputStyle}
+                    placeholder="Ex: 12"
+                  />
+                </div>
+                <div>
+                  <label className={labelStyle}>Serviço de Instalação</label>
+                  <input 
+                    value={formData.garantia_instalacao} 
+                    onChange={e => updateForm('garantia_instalacao', e.target.value)}
+                    className={inputStyle}
+                    placeholder="Ex: 01 ano"
+                  />
+                </div>
               </div>
             </section>
 
