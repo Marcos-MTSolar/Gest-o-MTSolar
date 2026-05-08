@@ -595,12 +595,12 @@ export default function Commercial() {
                             isUploadingPhoto ? 'bg-gray-100 border-gray-300' : 'bg-white border-blue-300 hover:bg-blue-50 hover:border-blue-400'
                           }`}>
                             {isUploadingPhoto ? (
-                              <span className="animate-spin text-blue-900">â³</span>
+                              <span className="animate-spin text-blue-900">...</span>
                             ) : (
                               <>
                                 <Plus size={24} className="text-blue-500 mb-1" />
                                 <span className="text-[10px] font-bold text-blue-600 uppercase tracking-tight">Adicionar Foto</span>
-                                <span className="text-[9px] text-gray-400 mt-1">{inspectionPhotos.length}/5 fotos</span>
+                                <span className="text-[9px] text-gray-400 mt-1">{inspectionPhotos.length} / 5 fotos</span>
                               </>
                             )}
                             <input 
@@ -640,8 +640,6 @@ export default function Commercial() {
                       </p>
                     </div>
                   )}
-                </div>
-              </div>
 
               <div className="flex justify-end gap-3 pt-6 border-t mt-6">
                 <button 
