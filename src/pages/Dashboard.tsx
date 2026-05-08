@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import api from '../lib/api';
 import { addDays, isSameDay, parseISO, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Calendar as CalendarIcon, Bell, CheckCircle2, RotateCcw, CheckSquare, XCircle, Clock3, Loader2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Bell, CheckCircle2, RotateCcw, CheckSquare, XCircle, Clock3, Loader2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {
@@ -169,13 +169,25 @@ export default function Dashboard() {
               <tbody className="divide-y divide-gray-50">
                 {homologacoes.map(p => {
                   const s = statusHomologacao(p.homologation_status);
+                  const isOverdue =
+                    !!p.homologation_expected_date &&
+                    ['technical_analysis', 'waiting_inspection', 'performing_inspection'].includes(p.homologation_status) &&
+                    new Date(p.homologation_expected_date) < new Date(new Date().toISOString().split('T')[0]);
+
                   return (
-                    <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={p.id} className={`transition-colors ${isOverdue ? 'bg-red-50 hover:bg-red-100 border-red-300' : 'hover:bg-gray-50'}`}>
                       <td className="px-4 py-3 font-medium text-gray-800">{p.client_name}</td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${s.color}`}>
-                          {s.label}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${s.color}`}>
+                            {s.label}
+                          </span>
+                          {isOverdue && (
+                            <span className="flex items-center gap-1 bg-red-100 text-red-800 px-2 py-0.5 rounded-full text-[10px] font-bold border border-red-200">
+                              <AlertTriangle size={12} /> PRAZO VENCIDO
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         {p.homologacao_docs_path
