@@ -9,6 +9,12 @@ export const evolutionApi = {
       headers: { 'Content-Type': 'application/json', 'apikey': EVOLUTION_KEY },
       body: JSON.stringify({ number: phone, text: message })
     });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Erro Evolution API: ${response.status} - ${text}`);
+    }
+
     return response.json();
   },
 
@@ -16,6 +22,12 @@ export const evolutionApi = {
     const response = await fetch(`${EVOLUTION_URL}/instance/connect/${INSTANCE_NAME}`, {
       headers: { 'apikey': EVOLUTION_KEY }
     });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Erro Evolution API: ${response.status} - ${text}`);
+    }
+
     return response.json();
   }
 };

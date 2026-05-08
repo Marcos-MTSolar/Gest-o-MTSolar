@@ -118,9 +118,7 @@ export default function Installation() {
     }
 
     try {
-      await api.put(`/api/projects/${selectedProject.id}/installation`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      await api.put(`/api/projects/${selectedProject.id}/installation`, formData);
 
       await sendUpdateNotification('finished', selectedProject?.client_name || 'Cliente');
       setSelectedProject(null);

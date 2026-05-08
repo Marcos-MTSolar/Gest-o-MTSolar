@@ -91,9 +91,7 @@ export default function Technical() {
     formData.set('status', action);
 
     try {
-      await api.put(`/api/projects/${selectedProject.id}/technical`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      await api.put(`/api/projects/${selectedProject.id}/technical`, formData);
 
       await sendUpdateNotification('technical', selectedProject?.client_name || 'Cliente');
 

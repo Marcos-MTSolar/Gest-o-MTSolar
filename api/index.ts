@@ -207,27 +207,34 @@ app.get('/api/clients', authenticateToken, async (req: any, res) => {
 app.post('/api/clients', authenticateToken, async (req: any, res) => {
   const { name, phone, email, address, city, state, cpf_cnpj } = req.body;
 
-  const { data: client, error } = await supabase
-    .from('clients')
-    .insert({ name, phone, email, address, city, state, cpf_cnpj, created_by: req.user.id })
-    .select()
-    .single();
+  try {
+    const { data: client, error } = await supabase
+      .from('clients')
+      .insert({ name, phone, email, address, city, state, cpf_cnpj, created_by: req.user.id })
+      .select()
+      .single();
 
-  if (error) return res.status(400).json({ error: error.message });
+    if (error) throw error;
 
-  // Initial Project
-  const { data: project } = await supabase
-    .from('projects')
-    .insert({ client_id: client.id, title: `Projeto Solar - ${name}`, status: 'pending' })
-    .select()
-    .single();
+    // Initial Project
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .insert({ client_id: client.id, title: `Projeto Solar - ${name}`, status: 'pending' })
+      .select()
+      .single();
 
-  if (project) {
-    await supabase.from('commercial_data').insert({ project_id: project.id });
-    await supabase.from('technical_data').insert({ project_id: project.id });
+    if (projectError) throw projectError;
+
+    if (project) {
+      await supabase.from('commercial_data').insert({ project_id: project.id });
+      await supabase.from('technical_data').insert({ project_id: project.id });
+    }
+
+    res.json({ id: client.id, project_id: project?.id });
+  } catch (error: any) {
+    console.error("Erro ao cadastrar cliente:", error);
+    res.status(500).json({ error: error?.message || "Erro interno ao cadastrar cliente" });
   }
-
-  res.json({ id: client.id, project_id: project?.id });
 });
 
 app.put('/api/clients/:id', authenticateToken, async (req: any, res) => {
@@ -647,13 +654,21 @@ app.get('/api/documents', authenticateToken, async (req: any, res) => {
 app.post('/api/documents', authenticateToken, upload.single('file'), async (req: any, res) => {
   const { project_id, title, type } = req.body;
   const file = req.file;
-  if (!file) return res.status(400).json({ error: 'No file uploaded' });
 
-  const url = await uploadFile(file);
-  if (!url) return res.status(500).json({ error: 'Upload failed' });
+  try {
+    if (!file) return res.status(400).json({ error: 'No file uploaded' });
 
-  await supabase.from('documents').insert({ project_id, title, url, type: type || 'other', uploaded_by: req.user.id });
-  res.json({ success: true });
+    const url = await uploadFile(file);
+    if (!url) return res.status(500).json({ error: 'Upload failed' });
+
+    const { error } = await supabase.from('documents').insert({ project_id, title, url, type: type || 'other', uploaded_by: req.user.id });
+    if (error) throw error;
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("Erro ao fazer upload de documento:", error);
+    res.status(500).json({ error: error?.message || "Erro interno ao salvar documento" });
+  }
 });
 
 app.delete('/api/documents/:id', authenticateToken, async (req: any, res) => {

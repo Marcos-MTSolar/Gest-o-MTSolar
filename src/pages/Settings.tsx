@@ -44,9 +44,7 @@ export default function Settings() {
 
     setUploading(true);
     try {
-      const res = await api.post('/api/settings/logo', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const res = await api.post('/api/settings/logo', formData);
       setLogoUrl(res.data.url);
       alert('Logomarca atualizada com sucesso!');
     } catch (error) {

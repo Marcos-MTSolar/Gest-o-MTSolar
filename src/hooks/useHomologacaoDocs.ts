@@ -57,9 +57,7 @@ export async function uploadIndividualDocs(
     formData.append('title', docLabel);
     formData.append('type', docId);
 
-    await api.post('/api/documents', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
+    await api.post('/api/documents', formData);
   }
 }
 
