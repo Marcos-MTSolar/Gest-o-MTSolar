@@ -660,7 +660,8 @@ export default function Commercial() {
             </div>
           </div>
         </div>
-      )}
+      </div>
+    )}
 
       {/* Edit Client Modal */}
       {showEditClient && selectedProject && (
