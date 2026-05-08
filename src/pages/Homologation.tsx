@@ -316,8 +316,8 @@ export default function Homologation() {
                     <Trash2 size={18} />
                   </button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       ) : (
