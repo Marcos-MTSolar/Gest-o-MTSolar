@@ -2722,7 +2722,7 @@ export default function ProposalGenerator() {
                       <th className="px-6 py-4 border-b">Data</th>
                       <th className="px-6 py-4 border-b">Cliente</th>
                       <th className="px-6 py-4 border-b text-center">Margem</th>
-                      <th className="px-6 py-4 border-b text-right">Valor do Kit</th>
+                      <th className="px-6 py-4 border-b text-right">Custo do Kit</th>
                       <th className="px-6 py-4 border-b text-center">Nº Proposta</th>
                       <th className="px-6 py-4 border-b text-center">Expira em</th>
                       <th className="px-6 py-4 border-b text-center">Ações</th>
