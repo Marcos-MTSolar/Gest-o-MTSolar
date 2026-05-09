@@ -103,7 +103,8 @@ export default function Technical() {
       // Refresh list after a short delay to allow DB to propagate
       setTimeout(() => { fetchProjects(); }, 400);
     } catch (error: any) {
-      setSaveError(error?.response?.data?.error || 'Erro ao salvar vistoria. Tente novamente.');
+      const errorMsg = error?.response?.data?.error;
+      setSaveError(typeof errorMsg === 'string' ? errorMsg : 'Erro ao salvar vistoria. Tente novamente.');
     }
   };
 

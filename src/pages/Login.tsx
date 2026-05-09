@@ -35,7 +35,8 @@ export default function Login() {
       if (err.response?.headers['content-type']?.includes('text/html')) {
         setError('Erro de conexão: O backend não está rodando ou a URL da API está incorreta.');
       } else {
-        setError(err.response?.data?.error || 'Falha no login');
+        const errorMsg = err.response?.data?.error;
+        setError(typeof errorMsg === 'string' ? errorMsg : 'Falha no login');
       }
     }
   };

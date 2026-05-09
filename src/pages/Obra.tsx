@@ -140,7 +140,8 @@ export default function Obra() {
         status: err.response?.status,
         message: err.message
       });
-      setError(`Erro ao atualizar obra: ${err.response?.data?.error || err.message}. Tente novamente.`);
+      const errorMsg = err.response?.data?.error;
+      setError(`Erro ao atualizar obra: ${typeof errorMsg === 'string' ? errorMsg : err.message}. Tente novamente.`);
     }
   };
 

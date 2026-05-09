@@ -4,5 +4,8 @@
       "path": "/api/propostas/expiradas",
       "schedule": "0 3 * * *"
     }
+  ],
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.ts" }
   ]
 }
