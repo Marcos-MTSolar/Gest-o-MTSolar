@@ -474,65 +474,6 @@ export default function ProposalGenerator() {
     const saleP = results.salePrice || (Number(formData.kitCost) * (1 + Number(formData.marginPercent)/100));
 
     // Função interna para upload de PDF simplificado para o histórico
-    const uploadPDF = async () => {
-      try {
-        const { jsPDF } = await import('jspdf');
-        const doc = new jsPDF();
-        
-        doc.setFontSize(22);
-        doc.setTextColor(AZUL);
-        doc.text('MT Solar — Proposta Comercial', 20, 25);
-        doc.setDrawColor(AMARELO);
-        doc.setLineWidth(1);
-        doc.line(20, 30, 190, 30);
-        doc.setFontSize(14);
-        doc.setTextColor(CINZA);
-        doc.text(`Nº: ${proposalNumber}`, 20, 45);
-        doc.text(`Data: ${dataGerada}`, 20, 55);
-        doc.setTextColor(AZUL);
-        doc.setFontSize(16);
-        doc.text('Dados do Cliente', 20, 75);
-        doc.setFontSize(12);
-        doc.setTextColor('#333');
-        doc.text(`Nome: ${formData.clientName}`, 20, 85);
-        doc.text(`Cidade: ${formData.clientCity} - ${formData.clientState}`, 20, 95);
-        doc.setTextColor(AZUL);
-        doc.setFontSize(16);
-        doc.text('Resumo do Sistema', 20, 115);
-        doc.setFontSize(12);
-        doc.setTextColor('#333');
-        doc.text(`Potência: ${formData.kitPower} kWp`, 20, 125);
-        doc.text(`Kit: ${formData.kitName}`, 20, 135);
-        doc.text(`Valor Final: R$ ${saleP.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 20, 145);
-
-        const pdfBlob = doc.output('blob');
-        const fileName = `${proposalNumber}-${Date.now()}.pdf`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('propostas')
-          .upload(fileName, pdfBlob, { contentType: 'application/pdf', upsert: true });
-
-        if (uploadError) {
-          console.error('Erro no upload do PDF ao Supabase:', uploadError);
-          return null;
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('propostas')
-          .getPublicUrl(fileName);
-
-        return publicUrl;
-      } catch (err) {
-        console.error('Erro no upload automático do PDF:', err);
-        return null;
-      }
-    };
-
-    // Trigger upload in background
-    uploadPDF().then(url => {
-      saveToHistory(proposalNumber, url || undefined);
-    });
-
     // Cálculos para a Página 4
     const monthlyBillVal = Number(formData.monthlyBill) || 450;
     const energyRateVal = Number(formData.energyRate) || 0.85;
@@ -1641,6 +1582,48 @@ export default function ProposalGenerator() {
     newWindow.document.write(htmlContent);
     newWindow.document.close();
     setTimeout(() => { newWindow.print(); }, 2000);
+
+    // Função para upload de PDF completo em background
+    const uploadFullPDF = async (html: string) => {
+      try {
+        const { jsPDF } = await import('jspdf');
+        const doc = new jsPDF('p', 'mm', 'a4');
+        
+        // Extrair apenas o conteúdo do body para o jsPDF.html
+        const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+        const content = bodyMatch ? bodyMatch[1] : html;
+
+        await doc.html(content, {
+          x: 0,
+          y: 0,
+          width: 210,
+          windowWidth: 800,
+          autoPaging: 'slice'
+        });
+
+        const pdfBlob = doc.output('blob');
+        const fileName = `${proposalNumber}-${Date.now()}.pdf`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('propostas')
+          .upload(fileName, pdfBlob, { contentType: 'application/pdf', upsert: true });
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('propostas')
+          .getPublicUrl(fileName);
+
+        return publicUrl;
+      } catch (err) {
+        console.error('Erro no upload do PDF completo:', err);
+        return null;
+      }
+    };
+
+    uploadFullPDF(htmlContent).then(url => {
+      saveToHistory(proposalNumber, url || undefined);
+    });
 
     // Retornar para tela inicial da proposta
     setActiveTab('dados');

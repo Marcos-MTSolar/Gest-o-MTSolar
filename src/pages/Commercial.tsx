@@ -415,7 +415,7 @@ export default function Commercial() {
                           : 'bg-amber-100 text-amber-700'
                       }`}>
                         {p.installation_status === 'approved' || p.current_stage === 'completed'
-                          ? 'Finalizada' 
+                          ? 'Obra Finalizada' 
                           : p.installation_status === 'executing'
                           ? 'Executando'
                           : 'Aguardando Instalação'}
