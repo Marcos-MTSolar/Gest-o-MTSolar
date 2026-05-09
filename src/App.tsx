@@ -57,7 +57,7 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             
             <Route path="/" element={
-              <PrivateRoute>
+              <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL']}>
                 <Dashboard />
               </PrivateRoute>
             } />
@@ -136,13 +136,13 @@ export default function App() {
             } />
 
             <Route path="/whatsapp" element={
-              <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL']}>
+              <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
                 <WhatsApp />
               </PrivateRoute>
             } />
 
             <Route path="/agenda" element={
-              <PrivateRoute>
+              <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL']}>
                 <Agenda />
               </PrivateRoute>
             } />
@@ -154,7 +154,7 @@ export default function App() {
             } />
             
             <Route path="/settings" element={
-              <PrivateRoute roles={['CEO', 'ADMIN', 'TECHNICAL']}>
+              <PrivateRoute roles={['CEO', 'ADMIN']}>
                 <Settings />
               </PrivateRoute>
             } />

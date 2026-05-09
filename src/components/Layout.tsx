@@ -119,7 +119,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const menuItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
-    { name: 'Atendimento', path: '/whatsapp', icon: MessageCircle, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
+    { name: 'Atendimento', path: '/whatsapp', icon: MessageCircle, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Agenda', path: '/agenda', icon: Calendar, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Protocolos Neoenergia', path: '/neoenergia', icon: ClipboardList, roles: ['CEO', 'ADMIN'] },
     { name: 'Gerador de Proposta', path: '/proposal-generator', icon: FileSpreadsheet, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
@@ -127,13 +127,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: 'Contratos', path: '/contracts', icon: FileSignature, roles: ['CEO', 'ADMIN'] },
     { name: 'Técnica', path: '/technical', icon: Wrench, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
     { name: 'Obra', path: '/obra', icon: Hammer, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
-    { name: 'Kit Solar', path: '/kit-purchase', icon: ShoppingCart, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
+    { name: 'Kit Solar', path: '/kit-purchase', icon: ShoppingCart, roles: ['CEO', 'ADMIN'] },
     { name: 'Estoque', path: '/estoque', icon: Package, roles: ['CEO', 'ADMIN'] },
-    ...(hasCompletedInspection ? [{ name: 'Homologação', path: '/homologation', icon: CheckSquare, roles: ['CEO', 'ADMIN', 'TECHNICAL'] }] : []),
-    { name: 'Finalizados', path: '/finished', icon: Archive, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
+    ...(hasCompletedInspection ? [{ name: 'Homologação', path: '/homologation', icon: CheckSquare, roles: ['CEO', 'ADMIN'] }] : []),
+    { name: 'Finalizados', path: '/finished', icon: Archive, roles: ['CEO', 'ADMIN'] },
     { name: 'Mensagens', path: '/messages', icon: MessageSquare, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
     { name: 'Usuários', path: '/users', icon: Users, roles: ['CEO', 'ADMIN'] },
-    { name: 'Configurações', path: '/settings', icon: Settings, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
+    { name: 'Configurações', path: '/settings', icon: Settings, roles: ['CEO', 'ADMIN'] },
   ];
 
   const filteredItems = menuItems.filter(item => !item.roles || item.roles.includes(user?.role || ''));

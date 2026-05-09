@@ -1,78 +1,76 @@
 # RESUMO MESTRE — Gestão MT Solar
-*Atualizado em: 08/05/2026*
+*Atualizado em: 09/05/2026*
 
 ## 1. Objetivo Principal do Projeto
 Sistema ERP/CRM completo para empresas de energia solar, cobrindo todo o 
 ciclo operacional: captação do cliente → proposta comercial → vistoria 
 técnica → homologação junto à concessionária → instalação/obra → finalização.
-Inclui módulo de atendimento via WhatsApp, agenda, contratos, estoque e 
-gerador de propostas com PDF.
+Inclui módulo de atendimento via WhatsApp, agenda, contratos, estoque,
+gerador de propostas com PDF, histórico de propostas e controle de permissões por cargo.
 
 ## 2. Decisões Técnicas Tomadas
-- Cadastro do cliente unificado com dados de gerenciamento comercial 
-  (Valor da Proposta, Forma de Pagamento, Fornecedor do Kit, Pendências, Observações).
-- Removida aba/modal duplicada de "Gerenciar" — substituída por "Ver Detalhes" em modo leitura.
+- Cadastro do cliente unificado com dados de gerenciamento comercial.
+- Removida aba/modal duplicada de "Gerenciar" — substituída por "Ver Detalhes" (modo leitura).
 - Documentos do cliente movidos do cadastro para a página de Homologação.
-- Dados comerciais excluídos do banco ao mover projeto para "Finalizados".
+- Dados comerciais e fotos de obra excluídos do banco/storage ao mover projeto para "Finalizados".
 - Página "Obra Finalizada" renomeada para "Obra" em todo o sistema.
 - Aba da Área Comercial nomeada como "Projetos Pendentes" (nome definitivo).
-- Nova aba "Instalação" na Área Comercial com status: Aguardando Instalação / Executando / Finalizada.
-- Status da aba Instalação sincronizado com as páginas Technical.tsx e Obra.tsx.
-- Status exibidos ao usuário sempre em português (nunca valores brutos do banco).
+- Nova aba "Instalação" na Área Comercial com 3 status: Aguardando / Executando / Finalizada.
+- Status da aba Instalação sincronizado com Technical.tsx e Obra.tsx.
+- Status sempre exibidos em português (nunca valores brutos do banco).
+- Fotos de obra salvas no Supabase Storage (bucket: obras-fotos), excluídas ao finalizar projeto.
+- Proposta comercial salva no Supabase Storage (bucket: propostas) com validade de 7 dias.
+- Limpeza automática de propostas expiradas via Vercel Cron Job (diário às 03h).
+- Role TÉCNICO: acesso restrito a Dashboard, Agenda, Técnica, Obra e Mensagens.
 - Build local obrigatório antes de qualquer commit.
 
 ## 3. Regras e Padrões Definidos
-- Status do banco NUNCA exibidos crus — sempre mapear para label em português.
-- Mapeamento de status obrigatório:
-  - registration → "Cadastro"
-  - pending → "Pendente"  
-  - approved → "Aprovado"
-  - in_progress → "Em Andamento"
-  - completed → "Concluído"
-  - (demais status seguem o mesmo padrão)
-- Build local (`npm run build`) deve passar antes de qualquer commit.
-- Dados comerciais do projeto são excluídos do banco ao finalizar o projeto.
-- A aba "Instalação" reflete status atualizado pelas páginas Técnica e Obra em tempo real.
-- Eventos "Atendido" na Agenda: texto com line-through em cor #9CA3AF (cinza neutro).
-- `api/index.ts` deve ser mantido sem erros de sintaxe — sempre validar com `tsc --noEmit`.
+- Status do banco NUNCA exibidos crus — sempre mapear para label em português:
+  - registration → "Cadastro" | pending → "Pendente" | approved → "Aprovado"
+  - in_progress → "Em Andamento" | completed → "Concluído"
+- Fotos de obra: salvas no Supabase Storage, excluídas ao finalizar projeto.
+- Proposta comercial: disponível para download por 7 dias, excluída do storage após expiração.
+- Role TÉCNICO acessa apenas: Dashboard, Agenda, Técnica, Obra, Mensagens.
+- Eventos "Atendido" na Agenda: line-through com cor #9CA3AF.
+- `api/index.ts` sempre validado com `npx tsc --noEmit` antes de commit.
+- `npm run build` deve passar localmente antes de qualquer commit/push.
 
 ## 4. Estrutura de Arquivos Criada ou Alterada
-- `src/pages/Commercial.tsx` — cadastro unificado, remoção de duplicidade, 
-   aba Instalação, renomeações, correção de "Ver Detalhes"
+- `src/pages/Commercial.tsx` — cadastro unificado, "Ver Detalhes", aba Instalação, renomeações
 - `src/pages/Technical.tsx` — status de vistoria sincronizado com aba Instalação
-- `src/pages/Obra.tsx` — correção do erro "Erro ao atualizar obra", 
-   sincronização de status com aba Instalação
-- `src/pages/ProposalGenerator.tsx` — valor da parcela de financiamento no PDF
-- `src/pages/Homologation.tsx` — recebe documentos que antes ficavam no cadastro
-- `src/pages/Agenda.tsx` — line-through com cor #9CA3AF para eventos atendidos
-- `src/App.tsx` — rotas atualizadas (Obra Finalizada → Obra)
-- `api/index.ts` — correções de sintaxe TypeScript e robustecimento de rotas
+- `src/pages/Obra.tsx` — correção erro salvamento, fotos no Supabase Storage
+- `src/pages/ProposalGenerator.tsx` — histórico de propostas com download e expiração de 7 dias
+- `src/pages/Homologation.tsx` — recebe documentos do cadastro do cliente
+- `src/pages/Agenda.tsx` — line-through cor #9CA3AF para eventos atendidos
+- `src/pages/FinishedProjects.tsx` — exclui fotos de obra e dados comerciais ao finalizar
+- `src/App.tsx` — rotas atualizadas + restrições de acesso por role (Técnico restrito)
+- `src/components/Layout.tsx` — menu filtrado por role (Técnico vê apenas 5 páginas)
+- `api/index.ts` — rotas de upload de proposta e limpeza de arquivos expirados
+- `vercel.json` — Cron Job diário para limpeza de propostas expiradas
 - `RESUMO_MESTRE_ATUALIZACOES.md` — este arquivo
 
 ## 5. Pendências
-- Validar se exclusão de dados ao mover para "Finalizados" funciona corretamente no banco.
-- Confirmar que upload de fotos no Supabase Storage conclui antes do salvamento da obra.
-- Testar geração de PDF da proposta com valor da parcela incluído.
+- Validar exclusão de dados/fotos ao mover para "Finalizados" no banco e storage.
+- Testar Cron Job de expiração de propostas em ambiente de produção (Vercel).
+- Confirmar que upload de fotos no Storage conclui antes do salvamento dos dados da obra.
 - Avaliar modularização do `api/index.ts` (atualmente +1000 linhas).
 - Avaliar lazy loading para reduzir chunk de 1.491 kB no build.
 
 ## 6. Problemas Resolvidos
-- Erro de build "Unterminated regular expression" em Commercial.tsx (linha 664).
-- Erros de build JSX inválido em Commercial.tsx (linhas 663/688).
-- Erros TypeScript em api/index.ts (linhas 250-255): client, project, res não encontrados.
-- Modal/aba duplicada de "Gerenciar" removida.
-- Dados comerciais não apareciam em "Ver Detalhes" — corrigido mapeamento e query.
-- Status exibido como valor bruto `registration` — corrigido com mapeamento de labels.
-- Campo "Vistoria Técnica" em "Ver Detalhes" não atualizava — corrigido sincronismo.
-- Erro "Erro ao atualizar obra" ao salvar em Obra.tsx — corrigido com try/catch e logs.
-- Status "Aguardando Instalação" não atualizava na aba Instalação — corrigido.
+- Erro build "Unterminated regular expression" — Commercial.tsx linha 664.
+- Erros build JSX inválido — Commercial.tsx linhas 663/688.
+- Erros TypeScript — api/index.ts linhas 250-255.
+- Erro "Erro ao atualizar obra" ao salvar em Obra.tsx — corrigido com logging e mapeamento.
+- Problema do Técnico acessando WhatsApp e Configurações — corrigido com restrição de roles.
+- Propostas perdidas após geração — agora salvas no histórico por 7 dias.
 
 ## 7. Restrições Importantes
-- O sistema depende 100% da Evolution API para WhatsApp — monitorar logs de erro.
-- `api/index.ts` com +1000 linhas é um ponto de risco — qualquer edição exige validação TypeScript.
+- Sistema depende 100% da Evolution API para WhatsApp — monitorar logs.
+- `api/index.ts` com +1000 linhas — qualquer edição exige validação TypeScript.
 - Sempre executar `cap sync` após alterações no frontend para refletir no APK Android.
 - Dados enviados ao Gemini passam por servidores externos — não expor dados sensíveis.
 - Deploy na Vercel é automático via push no branch main — nunca commitar sem build local.
+- Vercel Cron Jobs requerem configuração correta no `vercel.json`.
 
 ## 8. Tecnologias Utilizadas
 - **Frontend:** React 19, Vite, TypeScript, Tailwind CSS 4
@@ -86,4 +84,4 @@ gerador de propostas com PDF.
 - **Ícones:** lucide-react
 - **Animações:** Framer Motion
 - **HTTP:** Axios
-- **Deploy:** Vercel (CI/CD automático via GitHub)
+- **Deploy:** Vercel (CI/CD automático via GitHub + Cron Jobs)

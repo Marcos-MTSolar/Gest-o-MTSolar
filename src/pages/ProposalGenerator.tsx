@@ -229,11 +229,10 @@ export default function ProposalGenerator() {
     }
   }, [activeTab]);
 
-  const saveToHistory = async (proposalNumber: string) => {
+  const saveToHistory = async (proposalNumber: string, url_arquivo?: string) => {
     try {
       const kitCostNum = Number(formData.kitCost) || 0;
       const marginNum = parseFloat(formData.marginPercent) || 0;
-      const salePrice = results.salePrice || (kitCostNum * (1 + marginNum / 100));
 
       if (!formData.clientName || kitCostNum === 0) {
         console.warn('saveToHistory: dados insuficientes para salvar no histórico.');
@@ -243,8 +242,9 @@ export default function ProposalGenerator() {
       await api.post('/api/proposal-history', {
         client_name: formData.clientName,
         margin: marginNum,
-        kit_value: kitCostNum, // <-- agora salva o CUSTO real do kit
-        proposal_number: proposalNumber
+        kit_value: kitCostNum,
+        proposal_number: proposalNumber,
+        url_arquivo: url_arquivo
       });
 
       // Também salva na tabela de propostas detalhadas para preenchimento automático
@@ -470,6 +470,64 @@ export default function ProposalGenerator() {
     const validade = new Date();
     validade.setDate(validade.getDate() + 7);
     const dataValidade = validade.toLocaleDateString('pt-BR');
+
+    // Função interna para upload de PDF simplificado para o histórico
+    const uploadPDF = async () => {
+      try {
+        const { jsPDF } = await import('jspdf');
+        const doc = new jsPDF();
+        
+        doc.setFontSize(22);
+        doc.setTextColor(AZUL);
+        doc.text('MT Solar — Proposta Comercial', 20, 25);
+        
+        doc.setDrawColor(AMARELO);
+        doc.setLineWidth(1);
+        doc.line(20, 30, 190, 30);
+        
+        doc.setFontSize(14);
+        doc.setTextColor(CINZA);
+        doc.text(`Nº: ${proposalNumber}`, 20, 45);
+        doc.text(`Data: ${dataGerada}`, 20, 55);
+        
+        doc.setTextColor(AZUL);
+        doc.setFontSize(16);
+        doc.text('Dados do Cliente', 20, 75);
+        doc.setFontSize(12);
+        doc.setTextColor('#333');
+        doc.text(`Nome: ${formData.clientName}`, 20, 85);
+        doc.text(`Cidade: ${formData.clientCity} - ${formData.clientState}`, 20, 95);
+        
+        doc.setTextColor(AZUL);
+        doc.setFontSize(16);
+        doc.text('Resumo do Sistema', 20, 115);
+        doc.setFontSize(12);
+        doc.setTextColor('#333');
+        doc.text(`Potência: ${formData.kitPower} kWp`, 20, 125);
+        doc.text(`Kit: ${formData.kitName}`, 20, 135);
+        doc.text(`Valor Final: R$ ${saleP.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 20, 145);
+        
+        const pdfBlob = doc.output('blob');
+        const file = new File([pdfBlob], `${proposalNumber}.pdf`, { type: 'application/pdf' });
+        
+        const uploadFormData = new FormData();
+        uploadFormData.append('pdf', file);
+        
+        const res = await api.post('/api/proposals/upload', uploadFormData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        
+        return res.data.url;
+      } catch (err) {
+        console.error('Erro no upload automático do PDF:', err);
+        return null;
+      }
+    };
+
+    // Trigger upload in background
+    uploadPDF().then(url => {
+      saveToHistory(proposalNumber, url || undefined);
+    });
 
     // Cálculos para a Página 4
     const monthlyBillVal = Number(formData.monthlyBill) || 450;
@@ -2678,10 +2736,9 @@ export default function ProposalGenerator() {
                     <tr className="bg-gray-50 text-gray-600 uppercase text-[10px] font-bold tracking-wider">
                       <th className="px-6 py-4 border-b">Data</th>
                       <th className="px-6 py-4 border-b">Cliente</th>
-                      <th className="px-6 py-4 border-b text-center">Margem</th>
-                      <th className="px-6 py-4 border-b text-right">Custo do Kit</th>
-                      <th className="px-6 py-4 border-b">Nº Proposta</th>
-                      <th className="px-6 py-4 border-b">Gerado por</th>
+                      <th className="px-6 py-4 border-b text-center">Nº Proposta</th>
+                      <th className="px-6 py-4 border-b text-center">Expira em</th>
+                      <th className="px-6 py-4 border-b text-center">Status</th>
                       <th className="px-6 py-4 border-b text-center">Ações</th>
                     </tr>
                   </thead>
@@ -2693,34 +2750,58 @@ export default function ProposalGenerator() {
                         </td>
                       </tr>
                     ) : (
-                      history.map((item) => (
-                        <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap text-gray-600">
-                            {new Date(item.created_at).toLocaleDateString('pt-BR')} 
-                            <span className="text-[10px] ml-2 opacity-50">{new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-                          </td>
-                          <td className="px-6 py-4 font-bold text-gray-800">{item.client_name}</td>
-                          <td className="px-6 py-4 text-center">
-                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-md text-xs font-bold">
-                              {item.margin}%
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-right font-black text-blue-900">
-                            R$ {Number(item.kit_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="px-6 py-4 text-gray-500 font-mono text-xs">{item.proposal_number || '—'}</td>
-                          <td className="px-6 py-4 text-gray-500">{item.created_by || '—'}</td>
-                          <td className="px-6 py-4 text-center">
-                            <button
-                              onClick={() => deleteHistory(item.id)}
-                              className="text-red-500 hover:text-red-700 text-xs font-bold px-3 py-1 rounded-lg border border-red-200 hover:bg-red-50 transition-colors"
-                              title="Excluir registro"
-                            >
-                              Excluir
-                            </button>
-                          </td>
-                        </tr>
-                      ))
+                      history.map((item) => {
+                        const expDate = new Date(item.data_expiracao);
+                        const today = new Date();
+                        const diffTime = expDate.getTime() - today.getTime();
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        const isExpired = diffDays <= 0;
+
+                        return (
+                          <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                              {new Date(item.created_at).toLocaleDateString('pt-BR')} 
+                              <span className="text-[10px] ml-2 opacity-50">{new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                            </td>
+                            <td className="px-6 py-4 font-bold text-gray-800">{item.client_name}</td>
+                            <td className="px-6 py-4 text-center font-mono text-xs">{item.proposal_number || '—'}</td>
+                            <td className="px-6 py-4 text-center">
+                              {isExpired ? (
+                                <span className="text-red-500 font-bold">Expirado</span>
+                              ) : (
+                                <span className="text-amber-600 font-bold">{diffDays} dias</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              {isExpired ? (
+                                <span className="bg-gray-100 text-gray-400 px-2 py-1 rounded text-[10px] font-bold uppercase">Indisponível</span>
+                              ) : (
+                                <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-[10px] font-bold uppercase">Disponível</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-center flex justify-center gap-2">
+                              {item.url_arquivo && !isExpired && (
+                                <a 
+                                  href={item.url_arquivo} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="bg-blue-600 text-white p-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+                                  title="Baixar PDF"
+                                >
+                                  <FileDown size={16} />
+                                </a>
+                              )}
+                              <button
+                                onClick={() => deleteHistory(item.id)}
+                                className="text-red-500 hover:text-red-700 p-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition-colors"
+                                title="Excluir registro"
+                              >
+                                <Plus size={16} className="rotate-45" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>

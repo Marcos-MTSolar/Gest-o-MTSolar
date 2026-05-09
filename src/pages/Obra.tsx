@@ -118,7 +118,14 @@ export default function Obra() {
     }
 
     try {
-      await api.put(`/api/projects/${selectedProject.id}/installation`, formData);
+      console.log('Enviando atualização de obra:', {
+        projectId: selectedProject.id,
+        pendencies,
+        photoCount: Object.values(photoFiles).filter(f => !!f).length
+      });
+
+      const response = await api.put(`/api/projects/${selectedProject.id}/installation`, formData);
+      console.log('Resposta do servidor:', response.data);
 
       await sendUpdateNotification('finished', selectedProject?.client_name || 'Cliente');
       setSelectedProject(null);
@@ -126,8 +133,14 @@ export default function Obra() {
       setPhotoPreviews({} as Record<PhotoFieldName, string | null>);
       fetchProjects();
       alert('Obra registrada com sucesso!');
-    } catch {
-      setError('Erro ao atualizar obra. Tente novamente.');
+    } catch (err: any) {
+      console.error('Erro detalhado ao atualizar obra:', {
+        error: err,
+        response: err.response?.data,
+        status: err.response?.status,
+        message: err.message
+      });
+      setError(`Erro ao atualizar obra: ${err.response?.data?.error || err.message}. Tente novamente.`);
     }
   };
 

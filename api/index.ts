@@ -60,21 +60,21 @@ const authenticateToken = (req: any, res: any, next: any) => {
 };
 
 // Helper to upload file to Supabase Storage
-async function uploadFile(file: Express.Multer.File): Promise<string | null> {
+async function uploadFile(file: Express.Multer.File, bucket: string = 'uploads'): Promise<string | null> {
   try {
     const filename = `${Date.now()}-${file.originalname}`;
     const { data, error } = await supabase.storage
-      .from('uploads')
+      .from(bucket)
       .upload(filename, file.buffer, {
         contentType: file.mimetype,
       });
 
     if (error) {
-      console.error('Supabase Storage Upload Error:', error);
+      console.error(`Supabase Storage Upload Error (Bucket: ${bucket}):`, error);
       return null;
     }
 
-    const { data: publicUrlData } = supabase.storage.from('uploads').getPublicUrl(filename);
+    const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(filename);
     return publicUrlData.publicUrl;
   } catch (e) {
     console.error('Upload helper error:', e);
@@ -362,6 +362,19 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
     technical_notes: techData.observations,
     structure_type: techData.structure_type || null,
 
+    // Obra / Installation
+    pendencies: techData.pendencies || '',
+    photo_modules: techData.photo_modules,
+    photo_inverter: techData.photo_inverter,
+    photo_inverter_label: techData.photo_inverter_label,
+    photo_roof_sealing: techData.photo_roof_sealing,
+    photo_grounding: techData.photo_grounding,
+    photo_ac_voltage: techData.photo_ac_voltage,
+    photo_dc_voltage: techData.photo_dc_voltage,
+    photo_generation_plate: techData.photo_generation_plate,
+    photo_ac_stringbox: techData.photo_ac_stringbox,
+    photo_connection_point: techData.photo_connection_point,
+
     documents
   };
 
@@ -501,38 +514,59 @@ app.put('/api/projects/:id/installation', authenticateToken, upload.any(), async
   try {
     const { pendencies, status } = req.body;
     const files = req.files as Express.Multer.File[];
+    const idParam = req.params.id;
 
-    console.log(`--- PUT /api/projects/${req.params.id}/installation ---`);
-    console.log('Status:', status);
-    console.log('Arquivos recebidos:', files?.length || 0);
+    console.log(`--- [DEBUG] PUT /api/projects/${idParam}/installation ---`);
+    console.log('Body:', { pendencies, status });
+    console.log('Files:', files?.map(f => ({ fieldname: f.fieldname, size: f.size })));
+
+    if (!idParam || idParam === 'undefined') {
+      console.error('ID do projeto não fornecido ou inválido');
+      return res.status(400).json({ error: 'ID do projeto inválido' });
+    }
+
+    const projectId = parseInt(idParam);
+    if (isNaN(projectId)) {
+      console.error('ID do projeto não é um número:', idParam);
+      return res.status(400).json({ error: 'ID do projeto deve ser um número' });
+    }
 
     const updates: any = { pendencies, updated_at: new Date() };
 
-    if (files) {
+    if (files && files.length > 0) {
       for (const f of files) {
-        const url = await uploadFile(f);
-        if (url) updates[f.fieldname] = url;
+        console.log(`Fazendo upload de: ${f.fieldname} para bucket obras-fotos`);
+        const url = await uploadFile(f, 'obras-fotos');
+        if (url) {
+          updates[f.fieldname] = url;
+          console.log(`Upload concluído: ${f.fieldname} -> ${url}`);
+        } else {
+          console.error(`Falha no upload do arquivo: ${f.fieldname}`);
+        }
       }
     }
 
-    const projectId = parseInt(req.params.id);
+    console.log('Executando update em technical_data com:', updates);
     const { error: techError } = await supabase.from('technical_data').update(updates).eq('project_id', projectId);
     if (techError) {
       console.error('Erro ao atualizar technical_data:', techError);
-      return res.status(500).json({ error: techError.message });
+      return res.status(500).json({ error: `Erro no Banco (technical_data): ${techError.message}` });
     }
 
+    console.log('Atualizando status do projeto para:', status);
     const { error: projectError } = await supabase.from('projects').update({ installation_status: status, updated_at: new Date() }).eq('id', projectId);
     if (projectError) {
       console.error('Erro ao atualizar projects (installation_status):', projectError);
-      return res.status(500).json({ error: projectError.message });
+      return res.status(500).json({ error: `Erro no Banco (projects): ${projectError.message}` });
     }
 
     if (status === 'approved') {
+      console.log('Status "approved" detectado. Movendo para homologation.');
       const { error: stageError } = await supabase.from('projects').update({ current_stage: 'homologation', updated_at: new Date() }).eq('id', projectId);
       if (stageError) console.error('Erro ao atualizar current_stage:', stageError);
     }
 
+    console.log('--- [DEBUG] Fim da rota de instalação: SUCESSO ---');
     res.json({ success: true });
   } catch (err: any) {
     console.error('Erro catastrófico na rota de instalação:', err);
@@ -567,29 +601,65 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
     console.log('Update executado com sucesso no bd!');
   }
 
-  if (homologation_status === 'connection_point_approved') {
-    // Busca o client_id antes de atualizar o projeto
-    const { data: projData } = await supabase.from('projects').select('client_id, client_name').eq('id', req.params.id).single();
-    
-    // Atualiza o projeto para finalizado
-    await supabase.from('projects').update({ 
-      current_stage: 'completed', 
-      status: 'completed', 
-      updated_at: new Date() 
-    }).eq('id', req.params.id);
+    if (homologation_status === 'connection_point_approved') {
+      // Busca o client_id e as fotos antes de atualizar o projeto
+      const { data: projData } = await supabase.from('projects').select('client_id, client_name').eq('id', req.params.id).single();
+      
+      // Busca fotos da obra para exclusão
+      const { data: techData } = await supabase.from('technical_data').select('*').eq('project_id', req.params.id).single();
 
-    // ExclusÃ£o automÃ¡tica dos dados sensÃ­veis do cliente (LGPD/SeguranÃ§a)
-    if (projData?.client_id) {
-      console.log(`Finalizando projeto ${req.params.id}. Removendo dados do cliente ${projData.client_id}`);
-      
-      // Para evitar erros de FK em outras tabelas que possam existir, 
-      // podemos opcionalmente desvincular o projeto do cliente antes de deletar
-      await supabase.from('projects').update({ client_id: null }).eq('id', req.params.id);
-      
-      const { error: delError } = await supabase.from('clients').delete().eq('id', projData.client_id);
-      if (delError) console.error('Erro ao deletar cliente finalizado:', delError);
-    }
-  } else if (homologation_status === 'technical_analysis' && project?.homologation_status !== 'technical_analysis') {
+      // Atualiza o projeto para finalizado
+      await supabase.from('projects').update({ 
+        current_stage: 'completed', 
+        status: 'completed', 
+        updated_at: new Date() 
+      }).eq('id', req.params.id);
+
+      // Exclusão automática dos arquivos físicos no Supabase Storage
+      if (techData) {
+        const photoFields = [
+          'photo_modules', 'photo_inverter', 'photo_inverter_label', 'photo_roof_sealing',
+          'photo_grounding', 'photo_ac_voltage', 'photo_dc_voltage', 'photo_generation_plate',
+          'photo_ac_stringbox', 'photo_connection_point'
+        ];
+        
+        const filesToDelete: string[] = [];
+        for (const field of photoFields) {
+          const url = techData[field];
+          if (url && typeof url === 'string') {
+            // Extrai o nome do arquivo da URL (ex: "12345-foto.jpg")
+            const parts = url.split('/');
+            const filename = parts[parts.length - 1];
+            if (filename) filesToDelete.push(filename);
+          }
+        }
+
+        if (filesToDelete.length > 0) {
+          console.log(`Excluindo ${filesToDelete.length} fotos do bucket obras-fotos para o projeto ${req.params.id}`);
+          try {
+            const { error: storageError } = await supabase.storage.from('obras-fotos').remove(filesToDelete);
+            if (storageError) console.error('Erro ao excluir arquivos do storage:', storageError);
+          } catch (e) {
+            console.error('Erro catastrófico ao tentar excluir arquivos:', e);
+          }
+        }
+
+        // Limpa as referências no banco de dados (technical_data)
+        const resetPhotos: any = {};
+        photoFields.forEach(f => resetPhotos[f] = null);
+        await supabase.from('technical_data').update(resetPhotos).eq('project_id', req.params.id);
+      }
+
+      // Exclusão automática dos dados sensíveis do cliente (LGPD/SeguranÃ§a)
+      if (projData?.client_id) {
+        console.log(`Finalizando projeto ${req.params.id}. Removendo dados do cliente ${projData.client_id}`);
+        
+        await supabase.from('projects').update({ client_id: null }).eq('id', req.params.id);
+        
+        const { error: delError } = await supabase.from('clients').delete().eq('id', projData.client_id);
+        if (delError) console.error('Erro ao deletar cliente finalizado:', delError);
+      }
+    } else if (homologation_status === 'technical_analysis' && project?.homologation_status !== 'technical_analysis') {
     // Log the automatic transition
     await supabase.from('logs').insert({ user_id: req.user.id, action: 'HOMOLOGATION_STARTED', details: `Checklist concluÃ­do. Processo de homologaÃ§Ã£o iniciado para o projeto ID ${req.params.id}` });
   } else if ((homologation_status === null || homologation_status === '') && project?.homologation_status === 'technical_analysis') {
@@ -836,10 +906,31 @@ app.post('/api/proposals', authenticateToken, async (req: any, res) => {
   res.json(data);
 });
 
+// Novo endpoint para upload de PDF da proposta
+app.post('/api/proposals/upload', authenticateToken, upload.single('pdf'), async (req: any, res) => {
+  try {
+    const file = req.file;
+    if (!file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+
+    const url = await uploadFile(file, 'propostas');
+    if (!url) return res.status(500).json({ error: 'Falha no upload do arquivo' });
+
+    res.json({ url });
+  } catch (err) {
+    console.error('Erro no upload de proposta:', err);
+    res.status(500).json({ error: 'Erro interno no upload' });
+  }
+});
+
 app.post('/api/proposal-history', authenticateToken, async (req: any, res) => {
-  const { client_name, margin, kit_value, proposal_number } = req.body;
+  const { client_name, margin, kit_value, proposal_number, url_arquivo } = req.body;
   const created_by = req.user?.name || req.user?.email || 'Desconhecido';
   
+  // Define data de expiração para 7 dias a partir de agora
+  const data_geracao = new Date();
+  const data_expiracao = new Date();
+  data_expiracao.setDate(data_geracao.getDate() + 7);
+
   const { data, error } = await supabase
     .from('proposal_history')
     .insert([{ 
@@ -847,6 +938,9 @@ app.post('/api/proposal-history', authenticateToken, async (req: any, res) => {
       margin, 
       kit_value, 
       proposal_number, 
+      url_arquivo,
+      data_geracao: data_geracao.toISOString(),
+      data_expiracao: data_expiracao.toISOString(),
       created_by 
     }])
     .select()
@@ -1111,6 +1205,46 @@ app.post('/api/settings/logo', authenticateToken, upload.single('logo'), async (
 
   await supabase.from('settings').upsert({ key: 'logo_url', value: url });
   res.json({ url });
+});
+
+// Cleanup expired proposals
+app.delete('/api/propostas/expiradas', async (req, res) => {
+  try {
+    console.log('Iniciando limpeza de propostas expiradas...');
+    const { data: expired, error: fetchError } = await supabase
+      .from('proposal_history')
+      .select('id, url_arquivo')
+      .lt('data_expiracao', new Date().toISOString());
+    
+    if (fetchError) {
+      console.error('Erro ao buscar propostas expiradas:', fetchError);
+      return res.status(500).json({ error: 'Erro ao buscar propostas' });
+    }
+
+    if (expired && expired.length > 0) {
+      const filesToDelete = expired
+        .map(p => p.url_arquivo?.split('/').pop())
+        .filter(Boolean) as string[];
+
+      if (filesToDelete.length > 0) {
+        console.log(`Deletando ${filesToDelete.length} arquivos do storage bucket 'propostas'`);
+        const { error: storageError } = await supabase.storage.from('propostas').remove(filesToDelete);
+        if (storageError) console.error('Erro ao deletar arquivos do storage:', storageError);
+      }
+
+      const { error: deleteError } = await supabase.from('proposal_history').delete().in('id', expired.map(p => p.id));
+      if (deleteError) console.error('Erro ao deletar registros do banco:', deleteError);
+      
+      console.log(`Limpeza concluída. ${expired.length} propostas removidas.`);
+      res.json({ message: `Sucesso! ${expired.length} propostas expiradas foram removidas.` });
+    } else {
+      console.log('Nenhuma proposta expirada encontrada.');
+      res.json({ message: 'Nenhuma proposta expirada para remover.' });
+    }
+  } catch (err) {
+    console.error('Erro catastrófico na limpeza de propostas:', err);
+    res.status(500).json({ error: 'Falha interna na limpeza de propostas' });
+  }
 });
 
 // Vite Integration
