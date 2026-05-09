@@ -5,7 +5,8 @@
       "schedule": "0 3 * * *"
     }
   ],
-  "rewrites": [
-    { "src": "/api/(.*)", "dest": "/api/index.ts" }
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/index.ts" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
