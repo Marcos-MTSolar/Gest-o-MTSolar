@@ -5,8 +5,8 @@
       "schedule": "0 3 * * *"
     }
   ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/index.ts" },
-    { "src": "/(.*)", "dest": "/index.html" }
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/index.ts" },
+    { "source": "/((?!assets|public|favicon).*)", "destination": "/index.html" }
   ]
 }
