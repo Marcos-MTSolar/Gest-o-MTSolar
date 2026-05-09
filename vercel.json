@@ -6,6 +6,6 @@
     }
   ],
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index.ts" }
+    { "src": "/api/(.*)", "dest": "/api/index.ts" }
   ]
 }

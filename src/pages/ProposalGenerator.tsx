@@ -482,16 +482,13 @@ export default function ProposalGenerator() {
         doc.setFontSize(22);
         doc.setTextColor(AZUL);
         doc.text('MT Solar — Proposta Comercial', 20, 25);
-        
         doc.setDrawColor(AMARELO);
         doc.setLineWidth(1);
         doc.line(20, 30, 190, 30);
-        
         doc.setFontSize(14);
         doc.setTextColor(CINZA);
         doc.text(`Nº: ${proposalNumber}`, 20, 45);
         doc.text(`Data: ${dataGerada}`, 20, 55);
-        
         doc.setTextColor(AZUL);
         doc.setFontSize(16);
         doc.text('Dados do Cliente', 20, 75);
@@ -499,7 +496,6 @@ export default function ProposalGenerator() {
         doc.setTextColor('#333');
         doc.text(`Nome: ${formData.clientName}`, 20, 85);
         doc.text(`Cidade: ${formData.clientCity} - ${formData.clientState}`, 20, 95);
-        
         doc.setTextColor(AZUL);
         doc.setFontSize(16);
         doc.text('Resumo do Sistema', 20, 115);
@@ -508,18 +504,24 @@ export default function ProposalGenerator() {
         doc.text(`Potência: ${formData.kitPower} kWp`, 20, 125);
         doc.text(`Kit: ${formData.kitName}`, 20, 135);
         doc.text(`Valor Final: R$ ${saleP.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 20, 145);
-        
+
         const pdfBlob = doc.output('blob');
-        const file = new File([pdfBlob], `${proposalNumber}.pdf`, { type: 'application/pdf' });
-        
-        const uploadFormData = new FormData();
-        uploadFormData.append('pdf', file);
-        
-        const res = await api.post('/api/proposals/upload', uploadFormData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        
-        return res.data.url;
+        const fileName = `${proposalNumber}-${Date.now()}.pdf`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('propostas')
+          .upload(fileName, pdfBlob, { contentType: 'application/pdf', upsert: true });
+
+        if (uploadError) {
+          console.error('Erro no upload do PDF ao Supabase:', uploadError);
+          return null;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('propostas')
+          .getPublicUrl(fileName);
+
+        return publicUrl;
       } catch (err) {
         console.error('Erro no upload automático do PDF:', err);
         return null;
@@ -1639,7 +1641,6 @@ export default function ProposalGenerator() {
     newWindow.document.write(htmlContent);
     newWindow.document.close();
     setTimeout(() => { newWindow.print(); }, 2000);
-    saveToHistory(proposalNumber);
 
     // Retornar para tela inicial da proposta
     setActiveTab('dados');
