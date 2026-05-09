@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../lib/api';
-import { CheckCircle, AlertTriangle, Camera, X, Trash2 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { CheckCircle, AlertTriangle, Camera, X, Trash2, Loader2 } from 'lucide-react';
 import { sendUpdateNotification } from '../lib/notifications';
 
 const PHOTO_FIELDS = [
@@ -34,6 +35,7 @@ export default function Obra() {
   const [activeTab, setActiveTab] = useState<'photos' | 'pendencies'>('photos');
   const [pendencies, setPendencies] = useState('');
   const [error, setError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Track selected files per photo field in state
   const [photoFiles, setPhotoFiles] = useState<Record<PhotoFieldName, File | null>>(
@@ -89,6 +91,7 @@ export default function Obra() {
     if (!selectedProject) return;
 
     setError('');
+    setIsSaving(true);
 
     // Check which required photos are missing (no new file selected and no existing URL)
     const missingPhotos = PHOTO_FIELDS.filter(({ name }) => {
@@ -102,29 +105,51 @@ export default function Obra() {
         `Faltam ${missingPhotos.length} foto(s) obrigatória(s). Vá para "Pendências / Obs" e justifique a falta.`
       );
       setActiveTab('pendencies');
+      setIsSaving(false);
       return;
     }
 
-    // Build FormData manually with state-tracked files
-    const formData = new FormData();
-    formData.append('status', 'approved');
-    formData.append('pendencies', pendencies);
-
-    for (const { name } of PHOTO_FIELDS) {
-      const file = photoFiles[name];
-      if (file) {
-        formData.append(name, file);
-      }
-    }
-
     try {
-      console.log('Enviando atualização de obra:', {
+      const photoUrls: Record<string, string> = {};
+
+      // 1. Upload new photos directly to Supabase Storage
+      for (const { name } of PHOTO_FIELDS) {
+        const file = photoFiles[name];
+        if (file) {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${selectedProject.id}/${name}-${Date.now()}.${fileExt}`;
+          
+          const { data, error: uploadError } = await supabase.storage
+            .from('obras-fotos')
+            .upload(fileName, file, { upsert: true });
+
+          if (uploadError) {
+            console.error(`Erro ao subir ${name}:`, uploadError);
+            throw new Error(`Falha no upload da foto: ${name}`);
+          }
+
+          const { data: publicUrlData } = supabase.storage
+            .from('obras-fotos')
+            .getPublicUrl(fileName);
+          
+          photoUrls[name] = publicUrlData.publicUrl;
+        }
+      }
+
+      // 2. Save metadata and URLs via API
+      console.log('Enviando atualização de obra (JSON):', {
         projectId: selectedProject.id,
         pendencies,
-        photoCount: Object.values(photoFiles).filter(f => !!f).length
+        newPhotoCount: Object.keys(photoUrls).length
       });
 
-      const response = await api.put(`/api/projects/${selectedProject.id}/installation`, formData);
+      const payload = {
+        status: 'approved',
+        pendencies,
+        ...photoUrls
+      };
+
+      const response = await api.put(`/api/projects/${selectedProject.id}/installation`, payload);
       console.log('Resposta do servidor:', response.data);
 
       await sendUpdateNotification('finished', selectedProject?.client_name || 'Cliente');
@@ -134,14 +159,11 @@ export default function Obra() {
       fetchProjects();
       alert('Obra registrada com sucesso!');
     } catch (err: any) {
-      console.error('Erro detalhado ao atualizar obra:', {
-        error: err,
-        response: err.response?.data,
-        status: err.response?.status,
-        message: err.message
-      });
-      const errorMsg = err.response?.data?.error;
-      setError(`Erro ao atualizar obra: ${typeof errorMsg === 'string' ? errorMsg : err.message}. Tente novamente.`);
+      console.error('Erro detalhado ao atualizar obra:', err);
+      const errorMsg = err.response?.data?.error || err.message;
+      setError(`Erro ao atualizar obra: ${typeof errorMsg === 'string' ? errorMsg : 'Erro desconhecido'}. Tente novamente.`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -332,9 +354,14 @@ export default function Obra() {
 
                 <button
                   type="submit"
-                  className={`px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-bold shadow-sm flex items-center gap-2 ${activeTab === 'pendencies' ? 'flex' : 'hidden'}`}
+                  disabled={isSaving}
+                  className={`px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-bold shadow-sm flex items-center gap-2 ${activeTab === 'pendencies' ? 'flex' : 'hidden'} ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
                 >
-                  <CheckCircle size={18} /> Salvar Obra
+                  {isSaving ? (
+                    <><Loader2 size={18} className="animate-spin" /> Salvando...</>
+                  ) : (
+                    <><CheckCircle size={18} /> Salvar Obra</>
+                  )}
                 </button>
               </div>
             </div>

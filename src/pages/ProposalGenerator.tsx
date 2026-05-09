@@ -471,6 +471,8 @@ export default function ProposalGenerator() {
     validade.setDate(validade.getDate() + 7);
     const dataValidade = validade.toLocaleDateString('pt-BR');
 
+    const saleP = results.salePrice || (Number(formData.kitCost) * (1 + Number(formData.marginPercent)/100));
+
     // Função interna para upload de PDF simplificado para o histórico
     const uploadPDF = async () => {
       try {
@@ -540,7 +542,6 @@ export default function ProposalGenerator() {
     const maxVal = Math.max(consumoMensal, ...geracaoMes) + 100;
 
     // Cálculos para a Página 5
-    const saleP = results.salePrice || (Number(formData.kitCost) * (1 + Number(formData.marginPercent)/100));
     const annualSav = results.annualSavings;
     const reajusteAnual = 0.10; // 10% ao ano
     const paybackMeses = results.paybackMonths;
@@ -2736,9 +2737,10 @@ export default function ProposalGenerator() {
                     <tr className="bg-gray-50 text-gray-600 uppercase text-[10px] font-bold tracking-wider">
                       <th className="px-6 py-4 border-b">Data</th>
                       <th className="px-6 py-4 border-b">Cliente</th>
+                      <th className="px-6 py-4 border-b text-center">Margem</th>
+                      <th className="px-6 py-4 border-b text-right">Valor do Kit</th>
                       <th className="px-6 py-4 border-b text-center">Nº Proposta</th>
                       <th className="px-6 py-4 border-b text-center">Expira em</th>
-                      <th className="px-6 py-4 border-b text-center">Status</th>
                       <th className="px-6 py-4 border-b text-center">Ações</th>
                     </tr>
                   </thead>
@@ -2764,6 +2766,14 @@ export default function ProposalGenerator() {
                               <span className="text-[10px] ml-2 opacity-50">{new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
                             </td>
                             <td className="px-6 py-4 font-bold text-gray-800">{item.client_name}</td>
+                            <td className="px-6 py-4 text-center">
+                              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-md text-xs font-bold">
+                                {item.margin}%
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-right font-black text-blue-900">
+                              R$ {Number(item.kit_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
                             <td className="px-6 py-4 text-center font-mono text-xs">{item.proposal_number || '—'}</td>
                             <td className="px-6 py-4 text-center">
                               {isExpired ? (
@@ -2772,15 +2782,8 @@ export default function ProposalGenerator() {
                                 <span className="text-amber-600 font-bold">{diffDays} dias</span>
                               )}
                             </td>
-                            <td className="px-6 py-4 text-center">
-                              {isExpired ? (
-                                <span className="bg-gray-100 text-gray-400 px-2 py-1 rounded text-[10px] font-bold uppercase">Indisponível</span>
-                              ) : (
-                                <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-[10px] font-bold uppercase">Disponível</span>
-                              )}
-                            </td>
                             <td className="px-6 py-4 text-center flex justify-center gap-2">
-                              {item.url_arquivo && !isExpired && (
+                              {item.url_arquivo && !isExpired ? (
                                 <a 
                                   href={item.url_arquivo} 
                                   target="_blank" 
@@ -2790,6 +2793,8 @@ export default function ProposalGenerator() {
                                 >
                                   <FileDown size={16} />
                                 </a>
+                              ) : (
+                                <span className="text-[10px] text-gray-400 italic">PDF não disponível</span>
                               )}
                               <button
                                 onClick={() => deleteHistory(item.id)}

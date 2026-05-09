@@ -509,16 +509,14 @@ app.put('/api/projects/:id/technical', authenticateToken, upload.any(), async (r
 });
 
 
-// Installation Update
-app.put('/api/projects/:id/installation', authenticateToken, upload.any(), async (req: any, res) => {
+// Installation Update - Receives metadata and URLs from frontend to avoid 413 error
+app.put('/api/projects/:id/installation', authenticateToken, async (req: any, res) => {
   try {
-    const { pendencies, status } = req.body;
-    const files = req.files as Express.Multer.File[];
+    const { pendencies, status, ...photoUrls } = req.body;
     const idParam = req.params.id;
 
     console.log(`--- [DEBUG] PUT /api/projects/${idParam}/installation ---`);
-    console.log('Body:', { pendencies, status });
-    console.log('Files:', files?.map(f => ({ fieldname: f.fieldname, size: f.size })));
+    console.log('Body:', { pendencies, status, photoCount: Object.keys(photoUrls).length });
 
     if (!idParam || idParam === 'undefined') {
       console.error('ID do projeto não fornecido ou inválido');
@@ -531,20 +529,11 @@ app.put('/api/projects/:id/installation', authenticateToken, upload.any(), async
       return res.status(400).json({ error: 'ID do projeto deve ser um número' });
     }
 
-    const updates: any = { pendencies, updated_at: new Date() };
-
-    if (files && files.length > 0) {
-      for (const f of files) {
-        console.log(`Fazendo upload de: ${f.fieldname} para bucket obras-fotos`);
-        const url = await uploadFile(f, 'obras-fotos');
-        if (url) {
-          updates[f.fieldname] = url;
-          console.log(`Upload concluído: ${f.fieldname} -> ${url}`);
-        } else {
-          console.error(`Falha no upload do arquivo: ${f.fieldname}`);
-        }
-      }
-    }
+    const updates: any = { 
+      pendencies, 
+      ...photoUrls,
+      updated_at: new Date() 
+    };
 
     console.log('Executando update em technical_data com:', updates);
     const { error: techError } = await supabase.from('technical_data').update(updates).eq('project_id', projectId);
