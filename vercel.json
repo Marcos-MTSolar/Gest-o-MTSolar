@@ -7,6 +7,6 @@
   ],
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/index.ts" },
-    { "source": "/((?!assets|public|favicon).*)", "destination": "/index.html" }
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

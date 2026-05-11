@@ -112,11 +112,13 @@ gerador de propostas com PDF, histórico de propostas e controle de permissões 
 - **[PERFORMANCE]** Implementado **Lazy Loading** (React.lazy + Suspense) em todas as rotas do `App.tsx`.
 - **[RESULTADO]** Tamanho do chunk principal reduzido de **1.49 MB** para **623 KB** (redução de ~58%), melhorando drasticamente o tempo de carregamento inicial.
 
-### 📦 Geração de APK de Produção (v1.1)
-- **Status**: Preparação concluída.
+### 📦 Geração de APK de Produção (v1.2) - ASSINADO
+- **Status**: Concluído e assinado em 11/05/2026.
 - **Mudanças**:
-  - `versionCode 2`, `versionName "1.1"`.
+  - `versionCode 3`, `versionName "1.2"`.
   - `minifyEnabled true` (Otimização Proguard).
-  - `server.url` configurado para produção.
-  - Permissões de Câmera e Armazenamento adicionadas.
-- **Ação Requerida**: Executar `cd android && ./gradlew assembleRelease` em ambiente com Java configurado.
+  - `server.url`: https://gestao-mtsolar.vercel.app
+  - Assinatura: Realizada com `mtsolar.jks` (alias: `mtsolar`).
+- **Arquivo Assinado**: `android/app/build/outputs/apk/release/app-release.apk`
+
+
