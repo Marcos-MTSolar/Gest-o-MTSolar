@@ -1,12 +1,16 @@
 {
+  "version": 2,
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.ts" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
   "crons": [
     {
-      "path": "/api/propostas/expiradas",
+      "path": "/api/cleanup-proposals",
       "schedule": "0 3 * * *"
     }
-  ],
-  "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/index.ts" },
-    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
