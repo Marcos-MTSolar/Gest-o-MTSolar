@@ -21,8 +21,9 @@ interface Equipment {
   name: string;
   quantity: number;
   power: number; // In Watts
-  powerMode: 'W' | 'BTU';
+  powerMode: 'W' | 'BTU' | 'CV';
   btuValue?: string;
+  cvValue?: string;
   hoursPerDay: number;
   daysPerWeek: number;
 }
@@ -38,7 +39,10 @@ const PREDEFINED_EQUIPMENT = [
   { name: 'Computador desktop', power: 300, category: 'Escritório' },
   { name: 'Notebook', power: 65, category: 'Escritório' },
   { name: 'Lâmpada LED', power: 10, category: 'Iluminação' },
-  { name: 'Bomba d\'água', power: 750, category: 'Diversos' },
+  { name: "Bomba d'água 1 CV", power: 735.5, category: 'Diversos' },
+  { name: "Bomba d'água 2 CV", power: 1471, category: 'Diversos' },
+  { name: "Bomba d'água 3 CV", power: 2206.5, category: 'Diversos' },
+  { name: "Motor elétrico 1 CV", power: 735.5, category: 'Diversos' },
   { name: 'Ar-condicionado', power: 0, category: 'Climatização', isBTU: true }
 ];
 
@@ -177,6 +181,14 @@ export default function EnergyCalculator() {
     }
   };
 
+  const handleCVChange = (id: string, cvValue: string) => {
+    const value = parseFloat(cvValue) || 0;
+    updateEquipment(id, { 
+      cvValue, 
+      power: value * 735.499 
+    });
+  };
+
   const goToProposal = () => {
     if (!results) return;
     navigate('/proposal-generator', {
@@ -255,11 +267,11 @@ export default function EnergyCalculator() {
                 <div className="w-full lg:w-72">
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-sm font-semibold text-gray-700">Potência</label>
-                    <div className="flex bg-gray-100 p-1 rounded-lg text-xs font-bold">
+                    <div className="flex bg-gray-100 p-1 rounded-lg text-[10px] font-bold">
                       <button
                         onClick={() => updateEquipment(equip.id, { powerMode: 'W' })}
                         className={cn(
-                          "px-3 py-1 rounded-md transition-all",
+                          "px-2 py-1 rounded-md transition-all",
                           equip.powerMode === 'W' ? "bg-white shadow-sm text-blue-900" : "text-gray-500"
                         )}
                       >
@@ -268,16 +280,25 @@ export default function EnergyCalculator() {
                       <button
                         onClick={() => updateEquipment(equip.id, { powerMode: 'BTU' })}
                         className={cn(
-                          "px-3 py-1 rounded-md transition-all",
+                          "px-2 py-1 rounded-md transition-all",
                           equip.powerMode === 'BTU' ? "bg-white shadow-sm text-blue-900" : "text-gray-500"
                         )}
                       >
                         BTU
                       </button>
+                      <button
+                        onClick={() => updateEquipment(equip.id, { powerMode: 'CV' })}
+                        className={cn(
+                          "px-2 py-1 rounded-md transition-all",
+                          equip.powerMode === 'CV' ? "bg-white shadow-sm text-blue-900" : "text-gray-500"
+                        )}
+                      >
+                        CV
+                      </button>
                     </div>
                   </div>
                   
-                  {equip.powerMode === 'W' ? (
+                  {equip.powerMode === 'W' && (
                     <div className="relative">
                       <input
                         type="number"
@@ -288,7 +309,9 @@ export default function EnergyCalculator() {
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">W</span>
                     </div>
-                  ) : (
+                  )}
+                  
+                  {equip.powerMode === 'BTU' && (
                     <select
                       value={equip.btuValue || ''}
                       onChange={(e) => handleBTUChange(equip.id, e.target.value)}
@@ -299,6 +322,23 @@ export default function EnergyCalculator() {
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
                     </select>
+                  )}
+
+                  {equip.powerMode === 'CV' && (
+                    <div className="space-y-1">
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={equip.cvValue || ''}
+                          onChange={(e) => handleCVChange(equip.id, e.target.value)}
+                          placeholder="0.0"
+                          className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none pr-10"
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">CV</span>
+                      </div>
+                      <p className="text-[10px] text-gray-400 pl-1">1 CV ≈ 735,5 W</p>
+                    </div>
                   )}
                 </div>
 
