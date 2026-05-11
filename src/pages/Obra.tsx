@@ -113,9 +113,12 @@ export default function Obra() {
       const photoUrls: Record<string, string> = {};
 
       // 1. Upload new photos directly to Supabase Storage
-      for (const { name } of PHOTO_FIELDS) {
-        const file = photoFiles[name];
+      console.log(`Iniciando upload de ${Object.keys(photoFiles).length} fotos para o projeto ${selectedProject.id}...`);
+      
+      for (const { name, label } of PHOTO_FIELDS) {
+        const file = photoFiles[name as PhotoFieldName];
         if (file) {
+          console.log(`Fazendo upload: ${label} (${name})...`);
           const fileExt = file.name.split('.').pop();
           const fileName = `${selectedProject.id}/${name}-${Date.now()}.${fileExt}`;
           
@@ -124,8 +127,8 @@ export default function Obra() {
             .upload(fileName, file, { upsert: true });
 
           if (uploadError) {
-            console.error(`Erro ao subir ${name}:`, uploadError);
-            throw new Error(`Falha no upload da foto: ${name}`);
+            console.error(`[UPLOAD ERROR] Falha ao subir ${label}:`, uploadError);
+            throw new Error(`Erro crítico no Storage: Não foi possível enviar a foto "${label}". O salvamento foi cancelado para evitar perda de dados.`);
           }
 
           const { data: publicUrlData } = supabase.storage
@@ -133,8 +136,11 @@ export default function Obra() {
             .getPublicUrl(fileName);
           
           photoUrls[name] = publicUrlData.publicUrl;
+          console.log(`Upload concluído: ${label}`);
         }
       }
+      
+      console.log('Todos os uploads concluídos com sucesso. Prosseguindo com o salvamento no banco de dados...');
 
       // 2. Save metadata and URLs via API
       console.log('Enviando atualização de obra (JSON):', {

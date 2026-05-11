@@ -3,31 +3,34 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { requestNotificationPermission } from './lib/notifications';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import Layout from './components/Layout';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Users from './pages/Users';
-import Commercial from './pages/Commercial';
-import Technical from './pages/Technical';
-import Obra from './pages/Obra';
-import Messages from './pages/Messages';
-import Agenda from './pages/Agenda';
-import Settings from './pages/Settings';
-import Documents from './pages/Documents';
-import KitPurchase from './pages/KitPurchase';
-import Homologation from './pages/Homologation';
-import FinishedProjects from './pages/FinishedProjects';
-import Stock from './pages/Stock';
-import ProposalGenerator from './pages/ProposalGenerator';
-import Contracts from './pages/Contracts';
-import WhatsApp from './pages/WhatsApp';
-import NeoenergiaProtocols from './pages/NeoenergiaProtocols';
+import { Loader2 } from 'lucide-react';
+
+// Lazy load pages
+const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Users = lazy(() => import('./pages/Users'));
+const Commercial = lazy(() => import('./pages/Commercial'));
+const Technical = lazy(() => import('./pages/Technical'));
+const Obra = lazy(() => import('./pages/Obra'));
+const Messages = lazy(() => import('./pages/Messages'));
+const Agenda = lazy(() => import('./pages/Agenda'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Documents = lazy(() => import('./pages/Documents'));
+const KitPurchase = lazy(() => import('./pages/KitPurchase'));
+const Homologation = lazy(() => import('./pages/Homologation'));
+const FinishedProjects = lazy(() => import('./pages/FinishedProjects'));
+const Stock = lazy(() => import('./pages/Stock'));
+const ProposalGenerator = lazy(() => import('./pages/ProposalGenerator'));
+const Contracts = lazy(() => import('./pages/Contracts'));
+const WhatsApp = lazy(() => import('./pages/WhatsApp'));
+const NeoenergiaProtocols = lazy(() => import('./pages/NeoenergiaProtocols'));
 
 
 function PrivateRoute({ children, roles }: { children: React.ReactNode, roles?: string[] }) {
@@ -53,114 +56,121 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <SocketProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            
-            <Route path="/" element={
-              <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL']}>
-                <Dashboard />
-              </PrivateRoute>
-            } />
-            
-            <Route path="/users" element={
-              <PrivateRoute roles={['CEO', 'ADMIN']}>
-                <Users />
-              </PrivateRoute>
-            } />
-            
-            <Route path="/commercial" element={
-              <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
-                <Commercial />
-              </PrivateRoute>
-            } />
+          <Suspense fallback={
+            <div className="flex flex-col items-center justify-center h-screen bg-gray-50">
+              <Loader2 className="w-12 h-12 text-blue-900 animate-spin mb-4" />
+              <p className="text-gray-600 font-medium animate-pulse">Carregando MT Solar...</p>
+            </div>
+          }>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              
+              <Route path="/" element={
+                <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL']}>
+                  <Dashboard />
+                </PrivateRoute>
+              } />
+              
+              <Route path="/users" element={
+                <PrivateRoute roles={['CEO', 'ADMIN']}>
+                  <Users />
+                </PrivateRoute>
+              } />
+              
+              <Route path="/commercial" element={
+                <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
+                  <Commercial />
+                </PrivateRoute>
+              } />
 
-            <Route path="/contracts" element={
-              <PrivateRoute roles={['CEO', 'ADMIN']}>
-                <Contracts />
-              </PrivateRoute>
-            } />
-            
-            <Route path="/proposal-generator" element={
-              <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
-                <ProposalGenerator />
-              </PrivateRoute>
-            } />
+              <Route path="/contracts" element={
+                <PrivateRoute roles={['CEO', 'ADMIN']}>
+                  <Contracts />
+                </PrivateRoute>
+              } />
+              
+              <Route path="/proposal-generator" element={
+                <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
+                  <ProposalGenerator />
+                </PrivateRoute>
+              } />
 
-            
-            <Route path="/technical" element={
-              <PrivateRoute roles={['CEO', 'ADMIN', 'TECHNICAL']}>
-                <Technical />
-              </PrivateRoute>
-            } />
+              
+              <Route path="/technical" element={
+                <PrivateRoute roles={['CEO', 'ADMIN', 'TECHNICAL']}>
+                  <Technical />
+                </PrivateRoute>
+              } />
 
-            <Route path="/obra" element={
-              <PrivateRoute roles={['CEO', 'ADMIN', 'TECHNICAL']}>
-                <Obra />
-              </PrivateRoute>
-            } />
+              <Route path="/obra" element={
+                <PrivateRoute roles={['CEO', 'ADMIN', 'TECHNICAL']}>
+                  <Obra />
+                </PrivateRoute>
+              } />
 
-            <Route path="/documents" element={
-              <PrivateRoute roles={['CEO', 'ADMIN']}>
-                <Documents />
-              </PrivateRoute>
-            } />
+              <Route path="/documents" element={
+                <PrivateRoute roles={['CEO', 'ADMIN']}>
+                  <Documents />
+                </PrivateRoute>
+              } />
 
-            <Route path="/kit-purchase" element={
-              <PrivateRoute roles={['CEO', 'ADMIN']}>
-                <KitPurchase />
-              </PrivateRoute>
-            } />
+              <Route path="/kit-purchase" element={
+                <PrivateRoute roles={['CEO', 'ADMIN']}>
+                  <KitPurchase />
+                </PrivateRoute>
+              } />
 
-            <Route path="/estoque" element={
-              <PrivateRoute roles={['CEO', 'ADMIN']}>
-                <Stock />
-              </PrivateRoute>
-            } />
+              <Route path="/estoque" element={
+                <PrivateRoute roles={['CEO', 'ADMIN']}>
+                  <Stock />
+                </PrivateRoute>
+              } />
 
-            <Route path="/homologation" element={
-              <PrivateRoute roles={['CEO', 'ADMIN']}>
-                <Homologation />
-              </PrivateRoute>
-            } />
+              <Route path="/homologation" element={
+                <PrivateRoute roles={['CEO', 'ADMIN']}>
+                  <Homologation />
+                </PrivateRoute>
+              } />
 
-            <Route path="/finished" element={
-              <PrivateRoute roles={['CEO', 'ADMIN']}>
-                <FinishedProjects />
-              </PrivateRoute>
-            } />
-            
-            <Route path="/messages" element={
-              <PrivateRoute roles={['CEO', 'ADMIN', 'TECHNICAL']}>
-                <Messages />
-              </PrivateRoute>
-            } />
+              <Route path="/finished" element={
+                <PrivateRoute roles={['CEO', 'ADMIN']}>
+                  <FinishedProjects />
+                </PrivateRoute>
+              } />
+              
+              <Route path="/messages" element={
+                <PrivateRoute roles={['CEO', 'ADMIN', 'TECHNICAL']}>
+                  <Messages />
+                </PrivateRoute>
+              } />
 
-            <Route path="/whatsapp" element={
-              <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
-                <WhatsApp />
-              </PrivateRoute>
-            } />
+              <Route path="/whatsapp" element={
+                <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
+                  <WhatsApp />
+                </PrivateRoute>
+              } />
 
-            <Route path="/agenda" element={
-              <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL']}>
-                <Agenda />
-              </PrivateRoute>
-            } />
+              <Route path="/agenda" element={
+                <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL']}>
+                  <Agenda />
+                </PrivateRoute>
+              } />
 
-            <Route path="/neoenergia" element={
-              <PrivateRoute roles={['CEO', 'ADMIN']}>
-                <NeoenergiaProtocols />
-              </PrivateRoute>
-            } />
-            
-            <Route path="/settings" element={
-              <PrivateRoute roles={['CEO', 'ADMIN']}>
-                <Settings />
-              </PrivateRoute>
-            } />
+              <Route path="/neoenergia" element={
+                <PrivateRoute roles={['CEO', 'ADMIN']}>
+                  <NeoenergiaProtocols />
+                </PrivateRoute>
+              } />
+              
+              <Route path="/settings" element={
+                <PrivateRoute roles={['CEO', 'ADMIN']}>
+                  <Settings />
+                </PrivateRoute>
+              } />
 
-            <Route path="*" element={<Navigate to="/" />} />
-          </Routes>
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+          </Suspense>
         </SocketProvider>
       </AuthProvider>
     </BrowserRouter>

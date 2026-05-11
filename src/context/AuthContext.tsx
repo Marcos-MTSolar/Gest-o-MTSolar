@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import api from '../lib/api';
+import { registerPushNotifications } from '../lib/notifications';
 
 interface User {
   id: number;
@@ -27,6 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const res = await api.get('/api/auth/me');
         setUser(res.data);
+        registerPushNotifications();
       } catch (error) {
         // Not authenticated or token invalid
         localStorage.removeItem('token');
@@ -40,6 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = (token: string, userData: User) => {
     localStorage.setItem('token', token);
     setUser(userData);
+    registerPushNotifications();
   };
 
   const logout = async () => {

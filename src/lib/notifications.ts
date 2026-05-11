@@ -1,145 +1,149 @@
+import { PushNotifications } from '@capacitor/push-notifications';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
+import api from './api';
 
-export async function requestNotificationPermission() {
-  if (!Capacitor.isNativePlatform()) return;
-  const { display } = await LocalNotifications.requestPermissions();
-  return display === 'granted';
-}
-
-export async function scheduleAgendaNotifications(events: any[]) {
-  if (!Capacitor.isNativePlatform()) return;
-
-  // Cancela todas as notificações de agenda antigas
-  const pending = await LocalNotifications.getPending();
-  const agendaIds = pending.notifications
-    .filter(n => n.id >= 1000 && n.id < 2000)
-    .map(n => ({ id: n.id }));
-  if (agendaIds.length > 0) await LocalNotifications.cancel({ notifications: agendaIds });
-
-  const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
-
-  // Filtra eventos de hoje
-  const todayEvents = events.filter(e => e.event_date?.startsWith(todayStr) && !e.completed);
-  if (todayEvents.length === 0) return;
-
-  const resumo = todayEvents.map(e => `• ${e.title}`).join('\n');
-  const corpo = `Você tem ${todayEvents.length} compromisso(s) hoje:\n${resumo}`;
-
-  // Horários: 06:30, 07:30 e 09:30
-  const horarios = [
-    { hora: 6, minuto: 30, id: 1001 },
-    { hora: 7, minuto: 30, id: 1002 },
-    { hora: 9, minuto: 30, id: 1003 },
-  ];
-
-  const notificacoes = horarios.map(h => {
-    const data = new Date();
-    data.setHours(h.hora, h.minuto, 0, 0);
-    // Se o horário já passou hoje, não agenda
-    if (data <= new Date()) return null;
-    return {
-      id: h.id,
-      title: '📅 Agenda do Dia — MT Solar',
-      body: corpo,
-      schedule: { at: data },
-      sound: 'default',
-      smallIcon: 'ic_notification',
-      actionTypeId: '',
-      extra: null,
-    };
-  }).filter(Boolean) as any[];
-
-  if (notificacoes.length > 0) {
-    await LocalNotifications.schedule({ notifications: notificacoes });
+export const registerPushNotifications = async () => {
+  if (Capacitor.getPlatform() === 'web') {
+    return;
   }
-}
 
-export const sendUpdateNotification = async (aba: string, cliente: string) => {
-  if (!Capacitor.isNativePlatform()) return;
-  const titulos: { [key: string]: string } = {
-    technical: '🔧 Aba Técnica atualizada',
-    finished: '✅ Obra',
-    homologation: '📋 Homologação atualizada',
-    commercial: '💼 Aba Comercial atualizada',
+  let permStatus = await PushNotifications.checkPermissions();
+
+  if (permStatus.receive === 'prompt') {
+    permStatus = await PushNotifications.requestPermissions();
+  }
+
+  if (permStatus.receive !== 'granted') {
+    console.warn('User denied permissions for push notifications');
+    return;
+  }
+
+  await PushNotifications.register();
+
+  PushNotifications.addListener('registration', async (token) => {
+    try {
+      await api.post('/api/users/push-token', { token: token.value });
+    } catch (err) {
+      console.error('Error saving push token to backend:', err);
+    }
+  });
+
+  PushNotifications.addListener('registrationError', (error) => {
+    console.error('Push registration error:', error);
+  });
+
+  PushNotifications.addListener('pushNotificationReceived', (notification) => {
+    console.log('Push notification received:', notification);
+  });
+
+  PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
+    console.log('Push notification action performed:', notification);
+  });
+};
+
+export const requestNotificationPermission = async () => {
+  if (Capacitor.getPlatform() === 'web') return;
+  await LocalNotifications.requestPermissions();
+};
+
+export const sendUpdateNotification = async (type: string, name: string) => {
+  if (Capacitor.getPlatform() === 'web') return;
+
+  const titles: Record<string, string> = {
+    technical: 'Vistoria Atualizada',
+    installation: 'Obra Atualizada',
+    commercial: 'Proposta Atualizada'
   };
 
   await LocalNotifications.schedule({
-    notifications: [{
-      id: Math.floor(Math.random() * 8000) + 2000,
-      title: titulos[aba] || '🔔 Atualização MT Solar',
-      body: `${cliente} teve status atualizado.`,
-      schedule: { at: new Date(Date.now() + 1000) },
-      sound: 'default',
-      smallIcon: 'ic_notification',
-      actionTypeId: '',
-      extra: null,
-    }]
+    notifications: [
+      {
+        title: titles[type] || 'Atualização no Sistema',
+        body: `O projeto de ${name} foi atualizado com sucesso.`,
+        id: Math.floor(Math.random() * 10000),
+        schedule: { at: new Date(Date.now() + 1000) },
+        sound: 'default'
+      }
+    ]
   });
+};
+
+export const scheduleAgendaNotifications = async (events: any[]) => {
+  if (Capacitor.getPlatform() === 'web') return;
+
+  // Clear existing notifications first
+  const pending = await LocalNotifications.getPending();
+  if (pending.notifications.length > 0) {
+    await LocalNotifications.cancel(pending);
+  }
+
+  const notifications = events
+    .filter(event => !event.completed)
+    .map(event => {
+      const eventDate = new Date(event.event_date);
+      const now = new Date();
+      
+      // Calculate schedule time: 1 hour before event
+      const scheduleTime = new Date(eventDate.getTime() - 60 * 60 * 1000);
+      
+      if (scheduleTime > now) {
+        return {
+          title: `Lembrete: ${event.title}`,
+          body: `Seu compromisso "${event.title}" começa em 1 hora.`,
+          id: event.id,
+          schedule: { at: scheduleTime },
+          sound: 'default'
+        };
+      }
+      return null;
+    })
+    .filter(n => n !== null);
+
+  if (notifications.length > 0) {
+    await LocalNotifications.schedule({ notifications: notifications as any });
+  }
 };
 
 export const createNotificationChannel = async () => {
+  if (Capacitor.getPlatform() !== 'android') return;
+  
   await LocalNotifications.createChannel({
-    id: 'mtsolar-alerts',
-    name: 'Alertas MTSolar',
+    id: 'default',
+    name: 'Default',
+    description: 'Canal padrão de notificações',
     importance: 5,
     visibility: 1,
-    vibration: true,
-    sound: 'default'
+    vibration: true
   });
 };
 
-export const checkAndNotify = async (
-  homologacoes: any[],
-  protocolos: any[]
-) => {
-  const today = new Date(new Date().toISOString().split('T')[0]);
+export const checkAndNotify = async (homologacoes: any[], neoenergia: any[]) => {
+  if (Capacitor.getPlatform() === 'web') return;
 
-  const overdueHomolog = homologacoes.filter(p =>
-    p.homologation_expected_date &&
-    ['technical_analysis','waiting_inspection','performing_inspection']
-      .includes(p.homologation_status) &&
-    new Date(p.homologation_expected_date) < today
+  const overdueHomolog = homologacoes.filter(p => 
+    p.homologation_expected_date && 
+    new Date(p.homologation_expected_date) < new Date() &&
+    p.homologation_status !== 'connection_point_approved'
   );
 
-  const overdueProtocols = protocolos.filter(p =>
-    p.data_prevista &&
-    p.status === 'em_andamento' &&
-    new Date(p.data_prevista) < today
+  const overdueNeo = neoenergia.filter(p => 
+    p.data_prevista && 
+    new Date(p.data_prevista) < new Date() &&
+    p.status === 'em_andamento'
   );
 
-  const total = overdueHomolog.length + overdueProtocols.length;
-  if (total === 0) return;
-
-  const permission = await LocalNotifications.requestPermissions();
-  if (permission.display !== 'granted') return;
-
-  const notifications = [];
-
-  if (overdueHomolog.length > 0) {
-    notifications.push({
-      id: 3001,
-      title: '⚠️ Homologações com prazo vencido',
-      body: `${overdueHomolog.length} projeto(s) precisam de atenção: ${overdueHomolog.map(p => p.client_name).join(', ')}`,
-      schedule: { at: new Date(Date.now() + 1000) },
-      sound: 'default',
-      smallIcon: 'ic_notification',
-      channelId: 'mtsolar-alerts'
+  if (overdueHomolog.length > 0 || overdueNeo.length > 0) {
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          title: 'Pendências Vencidas',
+          body: `Existem ${overdueHomolog.length + overdueNeo.length} processos com prazo vencido.`,
+          id: 999,
+          schedule: { at: new Date(Date.now() + 1000) },
+          sound: 'default'
+        }
+      ]
     });
   }
-
-  if (overdueProtocols.length > 0) {
-    notifications.push({
-      id: 3002,
-      title: '⚠️ Protocolos Neoenergia vencidos',
-      body: `${overdueProtocols.length} protocolo(s) com prazo vencido: ${overdueProtocols.map(p => p.client_name).join(', ')}`,
-      schedule: { at: new Date(Date.now() + 2000) },
-      sound: 'default',
-      smallIcon: 'ic_notification',
-      channelId: 'mtsolar-alerts'
-    });
-  }
-
-  await LocalNotifications.schedule({ notifications });
 };

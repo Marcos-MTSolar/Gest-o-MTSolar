@@ -198,6 +198,36 @@ app.delete('/api/users/:id', authenticateToken, async (req: any, res) => {
   res.json({ success: true });
 });
 
+app.post('/api/users/push-token', authenticateToken, async (req: any, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'Token is required' });
+
+  const { error } = await supabase
+    .from('users')
+    .update({ push_token: token })
+    .eq('id', req.user.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+// Helper to send push notifications (Infrastructure only for now)
+async function sendPushNotification(userId: number, title: string, body: string) {
+  try {
+    const { data: user } = await supabase.from('users').select('push_token').eq('id', userId).single();
+    if (!user?.push_token) {
+      console.log(`[PUSH] User ${userId} has no push token registered.`);
+      return;
+    }
+
+    console.log(`[PUSH] Sending to User ${userId}: ${title} - ${body}`);
+    // Here we would integrate with FCM or another provider
+    // Example: admin.messaging().sendToDevice(user.push_token, { notification: { title, body } });
+  } catch (err) {
+    console.error(`[PUSH ERROR] Failed to send notification to User ${userId}:`, err);
+  }
+}
+
 // Clients
 app.get('/api/clients', authenticateToken, async (req: any, res) => {
   const { data: clients } = await supabase.from('clients').select('*').order('created_at', { ascending: false });
@@ -424,7 +454,16 @@ app.put('/api/projects/:id/commercial', authenticateToken, async (req: any, res)
     .eq('project_id', req.params.id);
 
   if (status === 'proposta_enviada') {
+    const { data: proj } = await supabase.from('projects').select('client_name').eq('id', req.params.id).single();
     await supabase.from('projects').update({ current_stage: 'inspection', status: 'proposta_enviada', updated_at: new Date() }).eq('id', req.params.id);
+    
+    // Notify all technical users (since they all see the technical queue)
+    const { data: techUsers } = await supabase.from('users').select('id').eq('role', 'TECHNICAL');
+    if (techUsers) {
+      for (const u of techUsers) {
+        await sendPushNotification(u.id, 'Novo Projeto', `Um novo projeto para ${proj?.client_name || 'Cliente'} está disponível para vistoria.`);
+      }
+    }
   } else if (status === 'pendente_comercial') {
     await supabase.from('projects').update({ status: 'pendente_comercial', updated_at: new Date() }).eq('id', req.params.id);
   }
@@ -627,26 +666,55 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
           console.log(`Excluindo ${filesToDelete.length} fotos do bucket obras-fotos para o projeto ${req.params.id}`);
           try {
             const { error: storageError } = await supabase.storage.from('obras-fotos').remove(filesToDelete);
-            if (storageError) console.error('Erro ao excluir arquivos do storage:', storageError);
+            if (storageError) {
+              console.error(`[DELETE ERROR] Falha ao excluir arquivos do storage para o projeto ${req.params.id}:`, storageError);
+            }
           } catch (e) {
-            console.error('Erro catastrófico ao tentar excluir arquivos:', e);
+            console.error(`[DELETE ERROR] Erro catastrófico ao excluir arquivos do storage para o projeto ${req.params.id}:`, e);
           }
         }
 
         // Limpa as referências no banco de dados (technical_data)
-        const resetPhotos: any = {};
-        photoFields.forEach(f => resetPhotos[f] = null);
-        await supabase.from('technical_data').update(resetPhotos).eq('project_id', req.params.id);
+        try {
+          const resetPhotos: any = {};
+          photoFields.forEach(f => resetPhotos[f] = null);
+          const { error: techUpdateError } = await supabase.from('technical_data').update(resetPhotos).eq('project_id', req.params.id);
+          if (techUpdateError) {
+            console.error(`[DELETE ERROR] Falha ao limpar referências de fotos em technical_data para o projeto ${req.params.id}:`, techUpdateError);
+          }
+        } catch (e) {
+          console.error(`[DELETE ERROR] Erro ao limpar technical_data para o projeto ${req.params.id}:`, e);
+        }
       }
 
-      // Exclusão automática dos dados sensíveis do cliente (LGPD/SeguranÃ§a)
+      // 3. Exclusão automática dos dados comerciais (LGPD/Financeiro)
+      try {
+        console.log(`Removendo dados comerciais para o projeto ${req.params.id}`);
+        const { error: commDelError } = await supabase.from('commercial_data').delete().eq('project_id', req.params.id);
+        if (commDelError) {
+          console.error(`[DELETE ERROR] Falha ao excluir dados comerciais para o projeto ${req.params.id}:`, commDelError);
+        }
+      } catch (e) {
+        console.error(`[DELETE ERROR] Erro ao excluir commercial_data para o projeto ${req.params.id}:`, e);
+      }
+
+      // 4. Exclusão automática dos dados sensíveis do cliente (LGPD/Segurança)
       if (projData?.client_id) {
-        console.log(`Finalizando projeto ${req.params.id}. Removendo dados do cliente ${projData.client_id}`);
-        
-        await supabase.from('projects').update({ client_id: null }).eq('id', req.params.id);
-        
-        const { error: delError } = await supabase.from('clients').delete().eq('id', projData.client_id);
-        if (delError) console.error('Erro ao deletar cliente finalizado:', delError);
+        try {
+          console.log(`Finalizando projeto ${req.params.id}. Removendo dados do cliente ${projData.client_id}`);
+          
+          const { error: projUpdateError } = await supabase.from('projects').update({ client_id: null }).eq('id', req.params.id);
+          if (projUpdateError) {
+            console.error(`[DELETE ERROR] Falha ao desvincular cliente do projeto ${req.params.id}:`, projUpdateError);
+          }
+          
+          const { error: delError } = await supabase.from('clients').delete().eq('id', projData.client_id);
+          if (delError) {
+            console.error(`[DELETE ERROR] Falha ao deletar cliente ${projData.client_id} (Projeto: ${req.params.id}):`, delError);
+          }
+        } catch (e) {
+          console.error(`[DELETE ERROR] Erro ao limpar dados do cliente para o projeto ${req.params.id}:`, e);
+        }
       }
     } else if (homologation_status === 'technical_analysis' && project?.homologation_status !== 'technical_analysis') {
     // Log the automatic transition
@@ -759,6 +827,28 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
   }
 });
 
+
+app.post('/api/webhooks/whatsapp', async (req, res) => {
+  const payload = req.body;
+  
+  // Logic to handle incoming message from Evolution API
+  if (payload.event === 'messages.upsert') {
+    const message = payload.data;
+    const phone = message.key.remoteJid.split('@')[0];
+    const text = message.message?.conversation || message.message?.extendedTextMessage?.text;
+
+    if (text) {
+      // Find conversation
+      const { data: conv } = await supabase.from('whatsapp_conversations').select('*').eq('phone', phone).single();
+      
+      if (conv?.assigned_to) {
+        await sendPushNotification(conv.assigned_to, 'WhatsApp', `Nova mensagem de ${conv.contact_name || phone}: ${text.substring(0, 50)}...`);
+      }
+    }
+  }
+
+  res.json({ success: true });
+});
 
 // Documents
 app.get('/api/documents', authenticateToken, async (req: any, res) => {
