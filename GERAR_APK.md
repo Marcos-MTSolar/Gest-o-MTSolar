@@ -11,7 +11,7 @@
 No arquivo src/lib/api.ts, substitua:
   'https://SEU_BACKEND_URL_AQUI'
 pela URL real do seu backend no Vercel, por exemplo:
-  'https://gestao-mtsolar.vercel.app'
+  'https://gest-o-mt-solar.vercel.app'
 
 ### 2. Instale as dependências
   npm install

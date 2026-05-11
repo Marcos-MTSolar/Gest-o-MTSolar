@@ -7,7 +7,7 @@ const isNative = Capacitor.isNativePlatform();
 // Em desenvolvimento web, usa URL relativa (proxy do Vite).
 // NUNCA deixar IPs de rede local aqui — o APK distribui esse valor embutido.
 const baseURL = isNative
-  ? (import.meta.env.VITE_API_URL || 'https://gestao-mtsolar.vercel.app')
+  ? (import.meta.env.VITE_API_URL || 'https://gest-o-mt-solar.vercel.app')
   : '';
 
 if (isNative && (baseURL.includes('192.168') || baseURL.includes('localhost'))) {

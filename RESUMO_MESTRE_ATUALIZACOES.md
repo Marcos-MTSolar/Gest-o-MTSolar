@@ -117,7 +117,7 @@ gerador de propostas com PDF, histórico de propostas e controle de permissões 
 - **Mudanças**:
   - `versionCode 3`, `versionName "1.2"`.
   - `minifyEnabled true` (Otimização Proguard).
-  - `server.url`: https://gestao-mtsolar.vercel.app
+  - `server.url`: https://gest-o-mt-solar.vercel.app
   - Assinatura: Realizada com `mtsolar.jks` (alias: `mtsolar`).
 - **Arquivo Assinado**: `android/app/build/outputs/apk/release/app-release.apk`
 

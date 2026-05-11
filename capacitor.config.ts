@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'Gestão MTSolar',
   webDir: 'dist',
   server: {
-    url: 'https://gestao-mtsolar.vercel.app',
+    url: 'https://gest-o-mt-solar.vercel.app',
     androidScheme: 'https'
   }
 };
