@@ -32,8 +32,10 @@ export default function Login() {
       login(res.data.token, res.data.user);
       navigate('/');
     } catch (err: any) {
-      if (err.response?.headers['content-type']?.includes('text/html')) {
-        setError('Erro de conexão: O backend não está rodando ou a URL da API está incorreta.');
+      if (!err.response) {
+        setError('Erro de rede: Não foi possível conectar ao servidor. Verifique o CORS ou a URL.');
+      } else if (err.response?.headers['content-type']?.includes('text/html')) {
+        setError('Erro de configuração: O servidor retornou HTML. Verifique os rewrites na Vercel.');
       } else {
         const errorMsg = err.response?.data?.error;
         setError(typeof errorMsg === 'string' ? errorMsg : 'Falha no login');

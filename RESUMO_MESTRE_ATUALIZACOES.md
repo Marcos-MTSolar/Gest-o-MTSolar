@@ -115,7 +115,7 @@ gerador de propostas com PDF, histórico de propostas e controle de permissões 
 ### 📦 Geração de APK de Produção (v1.2) - ASSINADO
 - **Status**: Concluído e assinado em 11/05/2026.
 - **Mudanças**:
-  - `versionCode 3`, `versionName "1.2"`.
+  - `versionCode 4`, `versionName "1.2.1"`.
   - `minifyEnabled true` (Otimização Proguard).
   - `server.url`: https://gest-o-mt-solar.vercel.app
   - Assinatura: Realizada com `mtsolar.jks` (alias: `mtsolar`).
