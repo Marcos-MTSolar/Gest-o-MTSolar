@@ -680,7 +680,6 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
         for (const field of photoFields) {
           const url = techData[field];
           if (url && typeof url === 'string') {
-            // Extrai o nome do arquivo da URL (ex: "12345-foto.jpg")
             const parts = url.split('/');
             const filename = parts[parts.length - 1];
             if (filename) filesToDelete.push(filename);
@@ -690,12 +689,9 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
         if (filesToDelete.length > 0) {
           console.log(`Excluindo ${filesToDelete.length} fotos do bucket obras-fotos para o projeto ${req.params.id}`);
           try {
-            const { error: storageError } = await supabase.storage.from('obras-fotos').remove(filesToDelete);
-            if (storageError) {
-              console.error(`[DELETE ERROR] Falha ao excluir arquivos do storage para o projeto ${req.params.id}:`, storageError);
-            }
+            await supabase.storage.from('obras-fotos').remove(filesToDelete);
           } catch (e) {
-            console.error(`[DELETE ERROR] Erro catastrófico ao excluir arquivos do storage para o projeto ${req.params.id}:`, e);
+            console.error(`[DELETE ERROR] Erro ao excluir fotos de obra:`, e);
           }
         }
 
@@ -703,42 +699,58 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
         try {
           const resetPhotos: any = {};
           photoFields.forEach(f => resetPhotos[f] = null);
-          const { error: techUpdateError } = await supabase.from('technical_data').update(resetPhotos).eq('project_id', req.params.id);
-          if (techUpdateError) {
-            console.error(`[DELETE ERROR] Falha ao limpar referências de fotos em technical_data para o projeto ${req.params.id}:`, techUpdateError);
-          }
+          await supabase.from('technical_data').update(resetPhotos).eq('project_id', req.params.id);
         } catch (e) {
-          console.error(`[DELETE ERROR] Erro ao limpar technical_data para o projeto ${req.params.id}:`, e);
+          console.error(`[DELETE ERROR] Erro ao limpar technical_data:`, e);
         }
       }
 
-      // 3. Exclusão automática dos dados comerciais (LGPD/Financeiro)
+      // 2. Exclusão das propostas do storage
       try {
-        console.log(`Removendo dados comerciais para o projeto ${req.params.id}`);
-        const { error: commDelError } = await supabase.from('commercial_data').delete().eq('project_id', req.params.id);
-        if (commDelError) {
-          console.error(`[DELETE ERROR] Falha ao excluir dados comerciais para o projeto ${req.params.id}:`, commDelError);
+        const { data: proposals } = await supabase.from('proposal_history').select('url_arquivo').eq('project_id', req.params.id);
+        if (proposals && proposals.length > 0) {
+          const proposalFiles = proposals.map(p => p.url_arquivo?.split('/').pop()).filter(Boolean) as string[];
+          if (proposalFiles.length > 0) {
+            console.log(`Excluindo ${proposalFiles.length} propostas do storage para o projeto ${req.params.id}`);
+            await supabase.storage.from('propostas').remove(proposalFiles);
+          }
+          await supabase.from('proposal_history').delete().eq('project_id', req.params.id);
         }
       } catch (e) {
-        console.error(`[DELETE ERROR] Erro ao excluir commercial_data para o projeto ${req.params.id}:`, e);
+        console.error(`[DELETE ERROR] Erro ao excluir propostas:`, e);
       }
 
-      // 4. Exclusão automática dos dados sensíveis do cliente (LGPD/Segurança)
+      // 3. Exclusão dos dados comerciais
+      try {
+        console.log(`Removendo dados comerciais para o projeto ${req.params.id}`);
+        await supabase.from('commercial_data').delete().eq('project_id', req.params.id);
+      } catch (e) {
+        console.error(`[DELETE ERROR] Erro ao excluir commercial_data:`, e);
+      }
+
+      // 4. Limpeza de dados do cronograma e stage
+      try {
+        await supabase.from('projects').update({ 
+          current_stage: 'completed', 
+          status: 'completed', 
+          schedule_notes: null,
+          schedule_order: null,
+          schedule_status: null,
+          schedule_issue_notes: null,
+          updated_at: new Date() 
+        }).eq('id', req.params.id);
+      } catch (e) {
+        console.error(`[DELETE ERROR] Erro ao limpar dados do cronograma:`, e);
+      }
+
+      // 5. Exclusão dos dados sensíveis do cliente (tabela clients)
       if (projData?.client_id) {
         try {
           console.log(`Finalizando projeto ${req.params.id}. Removendo dados do cliente ${projData.client_id}`);
-          
-          const { error: projUpdateError } = await supabase.from('projects').update({ client_id: null }).eq('id', req.params.id);
-          if (projUpdateError) {
-            console.error(`[DELETE ERROR] Falha ao desvincular cliente do projeto ${req.params.id}:`, projUpdateError);
-          }
-          
-          const { error: delError } = await supabase.from('clients').delete().eq('id', projData.client_id);
-          if (delError) {
-            console.error(`[DELETE ERROR] Falha ao deletar cliente ${projData.client_id} (Projeto: ${req.params.id}):`, delError);
-          }
+          await supabase.from('projects').update({ client_id: null }).eq('id', req.params.id);
+          await supabase.from('clients').delete().eq('id', projData.client_id);
         } catch (e) {
-          console.error(`[DELETE ERROR] Erro ao limpar dados do cliente para o projeto ${req.params.id}:`, e);
+          console.error(`[DELETE ERROR] Erro ao limpar dados do cliente:`, e);
         }
       }
     } else if (homologation_status === 'technical_analysis' && project?.homologation_status !== 'technical_analysis') {
@@ -1244,6 +1256,50 @@ app.get('/api/stats', authenticateToken, async (req: any, res) => {
     completedProjects: completedProjects || 0,
     monthlyRevenue: 0
   });
+});
+
+// Obra Schedule
+app.get('/api/projects-schedule', authenticateToken, async (req: any, res) => {
+  const { data: projects, error } = await supabase
+    .from('projects')
+    .select('id, client_name, title, schedule_order, schedule_notes, schedule_status, schedule_issue_notes, current_stage')
+    .neq('current_stage', 'completed')
+    .order('schedule_order', { ascending: true });
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(projects || []);
+});
+
+app.put('/api/projects/:id/schedule', authenticateToken, async (req: any, res) => {
+  const { schedule_order, schedule_notes, schedule_status, schedule_issue_notes } = req.body;
+  const updates: any = {};
+  if (schedule_order !== undefined) updates.schedule_order = schedule_order;
+  if (schedule_notes !== undefined) updates.schedule_notes = schedule_notes;
+  if (schedule_status !== undefined) updates.schedule_status = schedule_status;
+  if (schedule_issue_notes !== undefined) updates.schedule_issue_notes = schedule_issue_notes;
+  updates.updated_at = new Date();
+
+  const { error } = await supabase
+    .from('projects')
+    .update(updates)
+    .eq('id', req.params.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.put('/api/projects/schedule/reorder', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'CEO' && req.user.role !== 'ADMIN') return res.sendStatus(403);
+  const { orders } = req.body; // Array of {id, schedule_order}
+
+  try {
+    for (const item of orders) {
+      await supabase.from('projects').update({ schedule_order: item.schedule_order }).eq('id', item.id);
+    }
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Stock

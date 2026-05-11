@@ -41,7 +41,7 @@ export default function Homologation() {
       const res = await api.get('/api/projects');
       if (Array.isArray(res.data)) {
         setProjects(res.data.filter((p: any) =>
-          ['homologation', 'conclusion', 'completed'].includes(p.current_stage)
+          ['homologation', 'conclusion'].includes(p.current_stage)
         ));
       } else {
         setProjects([]);

@@ -32,6 +32,8 @@ const Contracts = lazy(() => import('./pages/Contracts'));
 const WhatsApp = lazy(() => import('./pages/WhatsApp'));
 const NeoenergiaProtocols = lazy(() => import('./pages/NeoenergiaProtocols'));
 const EnergyCalculator = lazy(() => import('./pages/EnergyCalculator'));
+const ObraSchedule = lazy(() => import('./pages/ObraSchedule'));
+
 
 
 
@@ -153,7 +155,7 @@ export default function App() {
               } />
 
               <Route path="/agenda" element={
-                <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL']}>
+                <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
                   <Agenda />
                 </PrivateRoute>
               } />
@@ -165,8 +167,14 @@ export default function App() {
               } />
 
               <Route path="/calculadora" element={
-                <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL']}>
+                <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
                   <EnergyCalculator />
+                </PrivateRoute>
+              } />
+
+              <Route path="/cronograma" element={
+                <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL']}>
+                  <ObraSchedule />
                 </PrivateRoute>
               } />
               

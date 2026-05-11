@@ -69,7 +69,7 @@ export default function Commercial() {
         // Filter projects for Installation tab
         // Aguardando Instalação, Executando, Finalizada
         setInstallationProjects(res.data.filter((p: any) => 
-          ['installation', 'homologation', 'conclusion', 'completed'].includes(p.current_stage)
+          ['installation', 'homologation', 'conclusion'].includes(p.current_stage)
         ));
       } else {
         setProjectsPendentes([]);
