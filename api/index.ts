@@ -1344,4 +1344,10 @@ app.delete('/api/propostas/expiradas', async (req, res) => {
 });
 
 // Vite Integration
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`[BACKEND] Servidor rodando em http://localhost:${PORT}`);
+  });
+}
+
 export default app;
