@@ -278,10 +278,7 @@ export default function ObraSchedule() {
                           </span>
                         </div>
                         <p className="text-sm text-gray-500 font-medium truncate">{project.title}</p>
-                        <p className="text-xs text-gray-400 mt-1 flex items-center gap-1 truncate">
-                          <MapPin size={14} className="shrink-0" />
-                          {details.endereco || 'Endereço não informado'}
-                        </p>
+                        <p className="text-sm text-gray-400 truncate">{project.client_name ? (details.endereco || 'Endereço não informado') : ''}</p>
                       </div>
 
                       {/* Status & Actions */}

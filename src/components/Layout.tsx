@@ -178,7 +178,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     ? "bg-blue-800 text-amber-400"
                     : "text-gray-300 hover:bg-blue-800 hover:text-white"
                 )}
-                onClick={handleNavClick}
+                onClick={() => { if (window.innerWidth < 768) setIsOpen(false); }}
               >
                 <item.icon className="w-5 h-5 mr-3" />
                 {item.name}
@@ -203,7 +203,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </div>
             <button
               onClick={() => {
-                handleNavClick();
+                if (window.innerWidth < 768) setIsOpen(false);
                 logout();
               }}
               className="flex items-center w-full px-4 py-2 text-sm text-gray-300 hover:bg-blue-800 hover:text-white rounded-lg transition-colors"
