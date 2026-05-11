@@ -174,7 +174,7 @@ export default function ObraSchedule() {
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'in_progress': return 'Em Andamento';
-      case 'completed': return 'Finalizado';
+      case 'completed': return 'Concluído';
       case 'issue': return 'Pendência';
       default: return 'Pendente';
     }
@@ -278,6 +278,10 @@ export default function ObraSchedule() {
                           </span>
                         </div>
                         <p className="text-sm text-gray-500 font-medium truncate">{project.title}</p>
+                        <p className="text-xs text-gray-400 mt-1 flex items-center gap-1 truncate">
+                          <MapPin size={14} className="shrink-0" />
+                          {details.endereco || 'Endereço não informado'}
+                        </p>
                       </div>
 
                       {/* Status & Actions */}

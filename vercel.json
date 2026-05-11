@@ -11,6 +11,10 @@
     {
       "path": "/api/cleanup-proposals",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/agenda-reminders",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

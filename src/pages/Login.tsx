@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { motion } from 'motion/react';
 import { Sun, Eye, EyeOff } from 'lucide-react';
+import { registerPushNotifications } from '../lib/notifications';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -30,6 +31,7 @@ export default function Login() {
     try {
       const res = await api.post('/api/auth/login', { email, password });
       login(res.data.token, res.data.user);
+      registerPushNotifications();
       navigate('/');
     } catch (err: any) {
       if (!err.response) {

@@ -7,6 +7,11 @@ const config: CapacitorConfig = {
   server: {
     url: 'https://gest-o-mt-solar.vercel.app',
     androidScheme: 'https'
+  },
+  plugins: {
+    PushNotifications: {
+      presentationOptions: ["badge", "sound", "alert"]
+    }
   }
 };
 

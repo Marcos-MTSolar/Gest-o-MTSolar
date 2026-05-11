@@ -146,7 +146,7 @@ export default function FinishedProjects() {
                   <div className="flex justify-center items-center gap-2">
                     {p.current_stage === 'completed' ? (
                       <span className="flex items-center gap-1 text-green-700 bg-green-100 px-2 py-1 rounded-full text-xs font-bold w-fit">
-                        <CheckCircle size={14} /> Finalizado
+                        <CheckCircle size={14} /> Concluído
                       </span>
                     ) : (
                       <button

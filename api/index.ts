@@ -8,6 +8,7 @@ import cookieParser from 'cookie-parser';
 import multer from 'multer';
 import cors from 'cors';
 import * as dotenv from 'dotenv';
+import admin from 'firebase-admin';
 
 dotenv.config();
 
@@ -25,6 +26,24 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.error('WARNING: Missing Supabase environment variables! Endpoints will fail.');
+}
+
+// Firebase Admin Setup
+if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL) {
+  try {
+    if (admin.apps.length === 0) {
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: process.env.FIREBASE_PROJECT_ID,
+          privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        }),
+      });
+      console.log('Firebase Admin initialized successfully');
+    }
+  } catch (err) {
+    console.error('Firebase Admin initialization error:', err);
+  }
 }
 
 // Fallback to dummy so it doesn't crash the entire serverless instance on load
@@ -236,7 +255,7 @@ app.post('/api/users/push-token', authenticateToken, async (req: any, res) => {
   res.json({ success: true });
 });
 
-// Helper to send push notifications (Infrastructure only for now)
+// Helper to send push notifications via FCM
 async function sendPushNotification(userId: number, title: string, body: string) {
   try {
     const { data: user } = await supabase.from('users').select('push_token').eq('id', userId).single();
@@ -245,9 +264,32 @@ async function sendPushNotification(userId: number, title: string, body: string)
       return;
     }
 
-    console.log(`[PUSH] Sending to User ${userId}: ${title} - ${body}`);
-    // Here we would integrate with FCM or another provider
-    // Example: admin.messaging().sendToDevice(user.push_token, { notification: { title, body } });
+    console.log(`[PUSH] Sending to User ${userId}: ${title}`);
+    
+    if (admin.apps.length > 0) {
+      const message = {
+        notification: { title, body },
+        token: user.push_token,
+        android: {
+          priority: 'high' as const,
+          notification: {
+            sound: 'default',
+            channelId: 'default',
+            icon: 'stock_ticker_update', // Should match your app icon resource
+            color: '#001F3F'
+          }
+        },
+        data: {
+          click_action: 'FLUTTER_NOTIFICATION_CLICK', // Legacy but sometimes helps
+          userId: String(userId)
+        }
+      };
+
+      const response = await admin.messaging().send(message);
+      console.log(`[PUSH SUCCESS] Message ID: ${response}`);
+    } else {
+      console.log('[PUSH SKIP] Firebase Admin not initialized (check env vars)');
+    }
   } catch (err) {
     console.error(`[PUSH ERROR] Failed to send notification to User ${userId}:`, err);
   }
@@ -1367,8 +1409,34 @@ app.post('/api/settings/logo', authenticateToken, upload.single('logo'), async (
   res.json({ url });
 });
 
+// Agenda Reminders Cron (to be called by Vercel Cron)
+app.get('/api/cron/agenda-reminders', async (req, res) => {
+  try {
+    const now = new Date();
+    const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+    const in10Mins = new Date(now.getTime() + 70 * 60 * 1000);
+
+    const { data: events } = await supabase
+      .from('events')
+      .select('*')
+      .eq('completed', false)
+      .gte('event_date', now.toISOString())
+      .lte('event_date', in10Mins.toISOString());
+
+    if (events && events.length > 0) {
+      for (const event of events) {
+        await sendPushNotification(event.user_id, 'Lembrete de Agenda', `Seu compromisso "${event.title}" começa em aproximadamente 1 hora.`);
+      }
+    }
+
+    res.json({ success: true, notifiedCount: events?.length || 0 });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Cleanup expired proposals
-app.delete('/api/propostas/expiradas', async (req, res) => {
+app.get('/api/cleanup-proposals', async (req, res) => {
   try {
     console.log('Iniciando limpeza de propostas expiradas...');
     const { data: expired, error: fetchError } = await supabase

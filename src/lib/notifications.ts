@@ -1,11 +1,42 @@
-// import { PushNotifications } from '@capacitor/push-notifications';
+import { PushNotifications } from '@capacitor/push-notifications';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 import api from './api';
 
 export const registerPushNotifications = async () => {
-  // Desativado temporariamente para evitar erro de inicialização do Firebase
-  console.log('Push Notifications: Desativado (Firebase não configurado)');
+  if (Capacitor.getPlatform() === 'web') return;
+
+  let permStatus = await PushNotifications.checkPermissions();
+
+  if (permStatus.receive === 'prompt') {
+    permStatus = await PushNotifications.requestPermissions();
+  }
+
+  if (permStatus.receive !== 'granted') {
+    console.error('User denied permissions!');
+    return;
+  }
+
+  await PushNotifications.register();
+
+  PushNotifications.addListener('registration', async (token) => {
+    console.log('Push registration success, token: ' + token.value);
+    try {
+      await api.post('/api/users/push-token', { token: token.value });
+    } catch (err) {
+      console.error('Error saving push token to backend:', err);
+    }
+  });
+
+  PushNotifications.addListener('registrationError', (error) => {
+    console.error('Error on registration: ' + JSON.stringify(error));
+  });
+
+  PushNotifications.addListener('pushNotificationReceived', (notification) => {
+    console.log('Push received: ' + JSON.stringify(notification));
+    // The OS handles background notifications automatically if correctly sent from FCM.
+    // This listener is mostly for foreground behavior.
+  });
 };
 
 export const requestNotificationPermission = async () => {

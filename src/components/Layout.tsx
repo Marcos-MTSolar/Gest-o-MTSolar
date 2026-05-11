@@ -118,6 +118,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const toggleSidebar = () => setIsOpen(!isOpen);
 
+  const handleNavClick = () => {
+    if (window.innerWidth < 768) {
+      setIsOpen(false);
+    }
+  };
+
   const menuItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Atendimento', path: '/whatsapp', icon: MessageCircle, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
@@ -172,6 +178,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     ? "bg-blue-800 text-amber-400"
                     : "text-gray-300 hover:bg-blue-800 hover:text-white"
                 )}
+                onClick={handleNavClick}
               >
                 <item.icon className="w-5 h-5 mr-3" />
                 {item.name}
@@ -195,7 +202,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
             <button
-              onClick={logout}
+              onClick={() => {
+                handleNavClick();
+                logout();
+              }}
               className="flex items-center w-full px-4 py-2 text-sm text-gray-300 hover:bg-blue-800 hover:text-white rounded-lg transition-colors"
             >
               <LogOut className="w-5 h-5 mr-3" />

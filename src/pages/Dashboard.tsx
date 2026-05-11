@@ -97,12 +97,12 @@ export default function Dashboard() {
 
   const statusHomologacao = (status: string) => {
     const map: Record<string, { label: string; color: string }> = {
-      pending:                   { label: 'Aguardando',        color: 'bg-gray-100 text-gray-600' },
+      pending:                   { label: 'Pendente',          color: 'bg-gray-100 text-gray-600' },
       technical_analysis:        { label: 'Análise Técnica',   color: 'bg-blue-100 text-blue-700' },
       documentation_review:      { label: 'Rev. Documentos',   color: 'bg-amber-100 text-amber-700' },
       awaiting_approval:         { label: 'Aguard. Aprovação', color: 'bg-yellow-100 text-yellow-700' },
       rejected:                  { label: 'Reprovado',         color: 'bg-red-100 text-red-700' },
-      connection_point_approved: { label: 'Finalizado ✓',      color: 'bg-green-100 text-green-700' },
+      connection_point_approved: { label: 'Concluído ✓',       color: 'bg-green-100 text-green-700' },
     };
     return map[status] || { label: status || 'Sem status', color: 'bg-gray-100 text-gray-500' };
   };

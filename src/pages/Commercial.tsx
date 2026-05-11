@@ -180,7 +180,7 @@ export default function Commercial() {
       'installation': 'Instalação',
       'homologation': 'Homologação',
       'conclusion': 'Conclusão',
-      'completed': 'Finalizado',
+      'completed': 'Concluído',
       'vistoria_concluida': 'Vistoria Concluída'
     };
     return stages[stage] || stage;
@@ -189,7 +189,7 @@ export default function Commercial() {
   const translateTechnicalStatus = (status: string) => {
     const statuses: { [key: string]: string } = {
       'pending': 'Pendente',
-      'approved': 'Aprovada',
+      'approved': 'Aprovado',
       'rejected': 'Reprovada',
       'in_progress': 'Em Andamento',
       'connection_point_approved': 'Ponto de Conexão Aprovado',
@@ -368,7 +368,7 @@ export default function Commercial() {
                       <span className={`px-3 py-1 rounded-full text-xs font-bold ${['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'bg-green-100 text-green-800' :
                         ['pending', 'pendente_comercial'].includes(p.commercial_status) ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800'
                         }`}>
-                        {['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'Finalizado' : 'Pendente'}
+                        {['approved', 'proposta_enviada'].includes(p.commercial_status) ? 'Concluído' : 'Pendente'}
                       </span>
                     </div>
                   </div>
@@ -415,7 +415,7 @@ export default function Commercial() {
                           : 'bg-amber-100 text-amber-700'
                       }`}>
                         {p.installation_status === 'approved' || p.current_stage === 'completed'
-                          ? 'Obra Finalizada' 
+                          ? 'Obra Concluída' 
                           : p.installation_status === 'executing'
                           ? 'Executando'
                           : 'Aguardando Instalação'}
