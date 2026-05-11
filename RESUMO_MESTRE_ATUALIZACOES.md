@@ -115,10 +115,18 @@ gerador de propostas com PDF, histórico de propostas e controle de permissões 
 ### 📦 Geração de APK de Produção (v1.2) - ASSINADO
 - **Status**: Concluído e assinado em 11/05/2026.
 - **Mudanças**:
-  - `versionCode 4`, `versionName "1.2.1"`.
+  - `versionCode 7`, `versionName "1.2.4"`.
   - `minifyEnabled true` (Otimização Proguard).
   - `server.url`: https://gest-o-mt-solar.vercel.app
   - Assinatura: Realizada com `mtsolar.jks` (alias: `mtsolar`).
 - **Arquivo Assinado**: `android/app/build/outputs/apk/release/app-release.apk`
 
 
+### ⚡ Calculadora de Consumo de Energia (11/05/2026)
+- **[NOVO]** Criada a página `EnergyCalculator.tsx` para estimar o consumo mensal de equipamentos elétricos.
+- **[FUNCIONALIDADE]** Suporte para entrada em Watts ou BTU (com conversão automática para kW).
+- **[BIBLIOTECA]** Lista de equipamentos comuns (geladeira, ar-condicionado, chuveiro, etc.) com potências médias pré-carregadas.
+- **[CÁLCULO]** Fórmula baseada em (W/1000) * Qtd * Horas * (Dias * 4.33) para obter o consumo mensal em kWh.
+- **[SOLAR]** Estimativa automática da potência solar necessária (kWp) baseada na média de 4.5h de sol pico.
+- **[INTEGRAÇÃO]** Botão "Gerar Proposta" que redireciona para o `ProposalGenerator.tsx` passando o consumo e kWp estimado via state do React Router.
+- **[MENU]** Adicionado item "Calculadora" com ícone `Zap` no menu lateral para todos os cargos.

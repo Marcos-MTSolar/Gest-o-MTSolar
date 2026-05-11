@@ -1,45 +1,11 @@
-import { PushNotifications } from '@capacitor/push-notifications';
+// import { PushNotifications } from '@capacitor/push-notifications';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 import api from './api';
 
 export const registerPushNotifications = async () => {
-  if (Capacitor.getPlatform() === 'web') {
-    return;
-  }
-
-  let permStatus = await PushNotifications.checkPermissions();
-
-  if (permStatus.receive === 'prompt') {
-    permStatus = await PushNotifications.requestPermissions();
-  }
-
-  if (permStatus.receive !== 'granted') {
-    console.warn('User denied permissions for push notifications');
-    return;
-  }
-
-  await PushNotifications.register();
-
-  PushNotifications.addListener('registration', async (token) => {
-    try {
-      await api.post('/api/users/push-token', { token: token.value });
-    } catch (err) {
-      console.error('Error saving push token to backend:', err);
-    }
-  });
-
-  PushNotifications.addListener('registrationError', (error) => {
-    console.error('Push registration error:', error);
-  });
-
-  PushNotifications.addListener('pushNotificationReceived', (notification) => {
-    console.log('Push notification received:', notification);
-  });
-
-  PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
-    console.log('Push notification action performed:', notification);
-  });
+  // Desativado temporariamente para evitar erro de inicialização do Firebase
+  console.log('Push Notifications: Desativado (Firebase não configurado)');
 };
 
 export const requestNotificationPermission = async () => {

@@ -31,6 +31,8 @@ const ProposalGenerator = lazy(() => import('./pages/ProposalGenerator'));
 const Contracts = lazy(() => import('./pages/Contracts'));
 const WhatsApp = lazy(() => import('./pages/WhatsApp'));
 const NeoenergiaProtocols = lazy(() => import('./pages/NeoenergiaProtocols'));
+const EnergyCalculator = lazy(() => import('./pages/EnergyCalculator'));
+
 
 
 function PrivateRoute({ children, roles }: { children: React.ReactNode, roles?: string[] }) {
@@ -159,6 +161,12 @@ export default function App() {
               <Route path="/neoenergia" element={
                 <PrivateRoute roles={['CEO', 'ADMIN']}>
                   <NeoenergiaProtocols />
+                </PrivateRoute>
+              } />
+
+              <Route path="/calculadora" element={
+                <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL']}>
+                  <EnergyCalculator />
                 </PrivateRoute>
               } />
               

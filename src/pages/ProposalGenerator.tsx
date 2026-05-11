@@ -1,5 +1,7 @@
 // Página criada para MT Solar — Gerador de Propostas Solares
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+
 import { 
   User, 
   Zap, 
@@ -144,6 +146,7 @@ const TABELA_BANCOS = [
 
 export default function ProposalGenerator() {
   const { user } = useAuth();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<TabType>('dados');
 
   const [formData, setFormData] = useState<FormData>({
@@ -202,6 +205,19 @@ export default function ProposalGenerator() {
   });
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (location.state) {
+      const { consumoMensal, kWpEstimado, custoMensal } = location.state;
+      setFormData(prev => ({
+        ...prev,
+        monthlyBill: custoMensal ? custoMensal.toFixed(2) : prev.monthlyBill,
+        kitPower: kWpEstimado ? kWpEstimado.toFixed(2) : prev.kitPower,
+      }));
+      // Optional: switch to calculation tab to show results immediately?
+      // setActiveTab('calculo');
+    }
+  }, [location.state]);
 
 
   const fetchHistory = async () => {
