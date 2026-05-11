@@ -64,6 +64,14 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 } // 50MB
 });
 
+// Path normalization for Vercel
+app.use((req, res, next) => {
+  if (!req.url.startsWith('/api')) {
+    req.url = '/api' + req.url;
+  }
+  next();
+});
+
 // Auth Middleware
 const authenticateToken = (req: any, res: any, next: any) => {
   const token = req.cookies.token || req.headers['authorization']?.split(' ')[1];
@@ -1341,6 +1349,20 @@ app.delete('/api/propostas/expiradas', async (req, res) => {
     console.error('Erro catastrófico na limpeza de propostas:', err);
     res.status(500).json({ error: 'Falha interna na limpeza de propostas' });
   }
+});
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
+// Catch-all for API routes to prevent falling through to SPA HTML
+app.all('/api/*', (req, res) => {
+  res.status(404).json({ 
+    error: `Rota não encontrada no Backend`,
+    method: req.method,
+    path: req.path
+  });
 });
 
 // Vite Integration
