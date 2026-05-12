@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../lib/api';
-import { Plus, Search, FileText, CheckCircle, Clock, Camera } from 'lucide-react';
+import { Plus, Search, FileText, CheckCircle, Clock, Camera, Package } from 'lucide-react';
 import { sendUpdateNotification } from '../lib/notifications';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -10,9 +10,12 @@ export default function Commercial() {
   const [showNewClient, setShowNewClient] = useState(false);
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [newClient, setNewClient] = useState({ 
-    name: '', phone: '', email: '', address: '', city: '', state: '', cpf_cnpj: '',
-    proposal_value: '', payment_method: 'cash', kit_supplier: '', pendencies: '', notes: '', finance_grace_period: 0
+    name: '', phone: '', email: '', address: '', city: '', state: '', zip_code: '', cpf_cnpj: '',
+    proposal_value: '', payment_method: 'cash', kit_supplier: '', pendencies: '', notes: '', finance_grace_period: 0,
+    inversor_marca: '', inversor_modelo: '', inversor_potencia: '', 
+    modulo_potencia: '', modulo_modelo: '', estrutura_tipo: ''
   });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const { user } = useAuth();
 
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
@@ -31,6 +34,28 @@ export default function Commercial() {
     fetchProjectsPendentes();
     fetchActiveProposals();
   }, []);
+
+  const validateForm = (data: any) => {
+    const errors: Record<string, string> = {};
+    if (!data.name?.trim()) errors.name = 'Nome completo é obrigatório';
+    if (!data.cpf_cnpj?.trim()) errors.cpf_cnpj = 'CPF/CNPJ é obrigatório';
+    if (!data.phone?.trim()) errors.phone = 'Telefone é obrigatório';
+    if (!data.address?.trim()) errors.address = 'Rua e número são obrigatórios';
+    if (!data.city?.trim()) errors.city = 'Cidade é obrigatória';
+    if (!data.state?.trim()) errors.state = 'UF é obrigatória';
+    if (!data.zip_code?.trim()) errors.zip_code = 'CEP é obrigatório';
+    
+    // Kit Negociado validation
+    if (!data.inversor_marca?.trim()) errors.inversor_marca = 'Marca do inversor é obrigatória';
+    if (!data.inversor_modelo?.trim()) errors.inversor_modelo = 'Modelo do inversor é obrigatório';
+    if (!data.inversor_potencia) errors.inversor_potencia = 'Potência do inversor é obrigatória';
+    if (!data.modulo_potencia) errors.modulo_potencia = 'Potência do módulo é obrigatória';
+    if (!data.modulo_modelo?.trim()) errors.modulo_modelo = 'Modelo do módulo é obrigatório';
+    if (!data.estrutura_tipo?.trim()) errors.estrutura_tipo = 'Tipo de estrutura é obrigatório';
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const fetchActiveProposals = async () => {
     try {
@@ -83,6 +108,10 @@ export default function Commercial() {
 
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateForm(newClient)) {
+      alert('Por favor, preencha todos os campos obrigatórios corretamente.');
+      return;
+    }
     setIsSavingProject(true);
     try {
       const clientPayload = {
@@ -99,9 +128,12 @@ export default function Commercial() {
 
       setShowNewClient(false);
       setNewClient({ 
-        name: '', phone: '', email: '', address: '', city: '', state: '', cpf_cnpj: '',
-        proposal_value: '', payment_method: 'cash', kit_supplier: '', pendencies: '', notes: '', finance_grace_period: 0
+        name: '', phone: '', email: '', address: '', city: '', state: '', zip_code: '', cpf_cnpj: '',
+        proposal_value: '', payment_method: 'cash', kit_supplier: '', pendencies: '', notes: '', finance_grace_period: 0,
+        inversor_marca: '', inversor_modelo: '', inversor_potencia: '', 
+        modulo_potencia: '', modulo_modelo: '', estrutura_tipo: ''
       });
+      setFormErrors({});
       setSelectedProposalId('');
       setSelectedProposal(null);
       fetchProjectsPendentes();
@@ -143,6 +175,10 @@ export default function Commercial() {
 
   const handleEditClient = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateForm(editClientData)) {
+      alert('Por favor, preencha todos os campos obrigatórios corretamente.');
+      return;
+    }
     try {
       if (!selectedProject) return;
       await api.put(`/api/clients/${selectedProject.client_id}`, editClientData);
@@ -236,14 +272,105 @@ export default function Commercial() {
                         <option key={prop.id} value={prop.id}>{prop.client_name}</option>
                       ))}
                     </select>
+                       <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-gray-500 mb-1">NOME COMPLETO *</label>
+                    <input placeholder="Nome Completo" className={`w-full border p-2 rounded ${formErrors.name ? 'border-red-500' : ''}`} value={newClient.name} onChange={e => setNewClient({ ...newClient, name: e.target.value })} />
+                    {formErrors.name && <p className="text-red-500 text-[10px] mt-1">{formErrors.name}</p>}
                   </div>
-                  <input placeholder="Nome Completo" className="border p-2 rounded" required value={newClient.name} onChange={e => setNewClient({ ...newClient, name: e.target.value })} />
-                  <input placeholder="CPF/CNPJ" className="border p-2 rounded" value={newClient.cpf_cnpj} onChange={e => setNewClient({ ...newClient, cpf_cnpj: e.target.value })} />
-                  <input placeholder="Telefone" className="border p-2 rounded" value={newClient.phone} onChange={e => setNewClient({ ...newClient, phone: e.target.value })} />
-                  <input placeholder="Email" className="border p-2 rounded" value={newClient.email} onChange={e => setNewClient({ ...newClient, email: e.target.value })} />
-                  <input placeholder="Endereço" className="border p-2 rounded md:col-span-2" value={newClient.address} onChange={e => setNewClient({ ...newClient, address: e.target.value })} />
-                  <input placeholder="Cidade" className="border p-2 rounded" value={newClient.city} onChange={e => setNewClient({ ...newClient, city: e.target.value })} />
-                  <input placeholder="Estado" className="border p-2 rounded" value={newClient.state} onChange={e => setNewClient({ ...newClient, state: e.target.value })} />
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">CPF/CNPJ *</label>
+                    <input placeholder="CPF/CNPJ" className={`w-full border p-2 rounded ${formErrors.cpf_cnpj ? 'border-red-500' : ''}`} value={newClient.cpf_cnpj} onChange={e => setNewClient({ ...newClient, cpf_cnpj: e.target.value })} />
+                    {formErrors.cpf_cnpj && <p className="text-red-500 text-[10px] mt-1">{formErrors.cpf_cnpj}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">TELEFONE *</label>
+                    <input placeholder="Telefone" className={`w-full border p-2 rounded ${formErrors.phone ? 'border-red-500' : ''}`} value={newClient.phone} onChange={e => setNewClient({ ...newClient, phone: e.target.value })} />
+                    {formErrors.phone && <p className="text-red-500 text-[10px] mt-1">{formErrors.phone}</p>}
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-gray-500 mb-1">EMAIL (OPCIONAL)</label>
+                    <input placeholder="Email" className="w-full border p-2 rounded" value={newClient.email} onChange={e => setNewClient({ ...newClient, email: e.target.value })} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-gray-500 mb-1">ENDEREÇO (RUA, Nº, BAIRRO) *</label>
+                    <input placeholder="Rua, Número, Bairro" className={`w-full border p-2 rounded ${formErrors.address ? 'border-red-500' : ''}`} value={newClient.address} onChange={e => setNewClient({ ...newClient, address: e.target.value })} />
+                    {formErrors.address && <p className="text-red-500 text-[10px] mt-1">{formErrors.address}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">CIDADE *</label>
+                    <input placeholder="Cidade" className={`w-full border p-2 rounded ${formErrors.city ? 'border-red-500' : ''}`} value={newClient.city} onChange={e => setNewClient({ ...newClient, city: e.target.value })} />
+                    {formErrors.city && <p className="text-red-500 text-[10px] mt-1">{formErrors.city}</p>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1">UF *</label>
+                      <input placeholder="UF" className={`w-full border p-2 rounded ${formErrors.state ? 'border-red-500' : ''}`} value={newClient.state} onChange={e => setNewClient({ ...newClient, state: e.target.value })} />
+                      {formErrors.state && <p className="text-red-500 text-[10px] mt-1">{formErrors.state}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1">CEP *</label>
+                      <input placeholder="CEP" className={`w-full border p-2 rounded ${formErrors.zip_code ? 'border-red-500' : ''}`} value={newClient.zip_code} onChange={e => setNewClient({ ...newClient, zip_code: e.target.value })} />
+                      {formErrors.zip_code && <p className="text-red-500 text-[10px] mt-1">{formErrors.zip_code}</p>}
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-2 mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 border-t pt-4 bg-amber-50 p-4 rounded-xl border border-amber-100">
+                    <h3 className="md:col-span-2 lg:col-span-3 font-bold text-amber-900 flex items-center gap-2 mb-2">
+                      <Package size={18} /> Kit Negociado
+                    </h3>
+                    
+                    <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
+                      <p className="md:col-span-3 text-[10px] font-black text-amber-800 uppercase tracking-widest">Inversor</p>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-500 mb-1">MARCA *</label>
+                        <input placeholder="Ex: Growatt" className={`w-full border p-2 rounded bg-white ${formErrors.inversor_marca ? 'border-red-500' : ''}`} value={newClient.inversor_marca} onChange={e => setNewClient({ ...newClient, inversor_marca: e.target.value })} />
+                        {formErrors.inversor_marca && <p className="text-red-500 text-[10px] mt-1">{formErrors.inversor_marca}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-500 mb-1">MODELO *</label>
+                        <input placeholder="Modelo" className={`w-full border p-2 rounded bg-white ${formErrors.inversor_modelo ? 'border-red-500' : ''}`} value={newClient.inversor_modelo} onChange={e => setNewClient({ ...newClient, inversor_modelo: e.target.value })} />
+                        {formErrors.inversor_modelo && <p className="text-red-500 text-[10px] mt-1">{formErrors.inversor_modelo}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-500 mb-1">POTÊNCIA (kW) *</label>
+                        <input type="number" step="0.01" placeholder="0.00" className={`w-full border p-2 rounded bg-white ${formErrors.inversor_potencia ? 'border-red-500' : ''}`} value={newClient.inversor_potencia} onChange={e => setNewClient({ ...newClient, inversor_potencia: e.target.value })} />
+                        {formErrors.inversor_potencia && <p className="text-red-500 text-[10px] mt-1">{formErrors.inversor_potencia}</p>}
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
+                      <p className="md:col-span-2 text-[10px] font-black text-amber-800 uppercase tracking-widest">Módulo Fotovoltaico</p>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-500 mb-1">POTÊNCIA (Wp) *</label>
+                        <input type="number" placeholder="Ex: 585" className={`w-full border p-2 rounded bg-white ${formErrors.modulo_potencia ? 'border-red-500' : ''}`} value={newClient.modulo_potencia} onChange={e => setNewClient({ ...newClient, modulo_potencia: e.target.value })} />
+                        {formErrors.modulo_potencia && <p className="text-red-500 text-[10px] mt-1">{formErrors.modulo_potencia}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-500 mb-1">MODELO *</label>
+                        <input placeholder="Ex: Jinko Bifacial" className={`w-full border p-2 rounded bg-white ${formErrors.modulo_modelo ? 'border-red-500' : ''}`} value={newClient.modulo_modelo} onChange={e => setNewClient({ ...newClient, modulo_modelo: e.target.value })} />
+                        {formErrors.modulo_modelo && <p className="text-red-500 text-[10px] mt-1">{formErrors.modulo_modelo}</p>}
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-3">
+                      <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest mb-1">Estrutura</p>
+                      <label className="block text-[10px] font-bold text-gray-500 mb-1">TIPO DE ESTRUTURA *</label>
+                      <select 
+                        className={`w-full border p-2 rounded bg-white ${formErrors.estrutura_tipo ? 'border-red-500' : ''}`} 
+                        value={newClient.estrutura_tipo} 
+                        onChange={e => setNewClient({ ...newClient, estrutura_tipo: e.target.value })}
+                      >
+                        <option value="">Selecione...</option>
+                        <option value="Fibrocimento">Fibrocimento</option>
+                        <option value="Cerâmico">Cerâmico</option>
+                        <option value="Metálico">Metálico</option>
+                        <option value="Solo">Solo</option>
+                        <option value="Laje">Laje</option>
+                      </select>
+                      {formErrors.estrutura_tipo && <p className="text-red-500 text-[10px] mt-1">{formErrors.estrutura_tipo}</p>}
+                    </div>
+                  </div>
+.target.value })} />
                   
                   <div className="md:col-span-2 mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
                     <h3 className="md:col-span-2 font-bold text-gray-800 flex items-center gap-2 mb-2">
@@ -481,7 +608,14 @@ export default function Commercial() {
                     email: selectedProject.email || '',
                     address: selectedProject.address || '',
                     city: selectedProject.city || '',
-                    state: selectedProject.state || ''
+                    state: selectedProject.state || '',
+                    zip_code: selectedProject.zip_code || '',
+                    inversor_marca: selectedProject.inversor_marca || '',
+                    inversor_modelo: selectedProject.inversor_modelo || '',
+                    inversor_potencia: selectedProject.inversor_potencia || '',
+                    modulo_potencia: selectedProject.modulo_potencia || '',
+                    modulo_modelo: selectedProject.modulo_modelo || '',
+                    estrutura_tipo: selectedProject.estrutura_tipo || ''
                   });
                   setShowEditClient(true);
                 }}
@@ -558,6 +692,34 @@ export default function Commercial() {
                   <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg border mt-1 whitespace-pre-wrap">
                     {selectedProject.commercial_notes || 'Sem observações.'}
                   </p>
+                </div>
+
+                <h3 className="md:col-span-2 font-bold text-amber-900 flex items-center gap-2 border-b pb-2 mt-4 bg-amber-50/50 p-2 rounded">
+                  <Package size={18} /> Kit Negociado
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:col-span-2">
+                  <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
+                    <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest mb-2">Inversor</p>
+                    <p className="text-xs font-bold text-gray-500 uppercase">Marca / Modelo</p>
+                    <p className="text-base font-bold text-gray-800">{selectedProject.inversor_marca} / {selectedProject.inversor_modelo}</p>
+                    <p className="text-xs font-bold text-gray-500 uppercase mt-2">Potência</p>
+                    <p className="text-base font-bold text-gray-800">{selectedProject.inversor_potencia} kW</p>
+                  </div>
+                  
+                  <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
+                    <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest mb-2">Módulo</p>
+                    <p className="text-xs font-bold text-gray-500 uppercase">Potência</p>
+                    <p className="text-base font-bold text-gray-800">{selectedProject.modulo_potencia} Wp</p>
+                    <p className="text-xs font-bold text-gray-500 uppercase mt-2">Modelo</p>
+                    <p className="text-base font-bold text-gray-800">{selectedProject.modulo_modelo}</p>
+                  </div>
+
+                  <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
+                    <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest mb-2">Estrutura</p>
+                    <p className="text-xs font-bold text-gray-500 uppercase">Tipo</p>
+                    <p className="text-lg font-black text-amber-900">{selectedProject.estrutura_tipo}</p>
+                  </div>
                 </div>
               </div>
 
@@ -675,13 +837,104 @@ export default function Commercial() {
           <div className="bg-white p-6 rounded-xl w-full max-w-2xl">
             <h2 className="text-xl font-bold mb-4">Editar Cliente</h2>
             <form onSubmit={handleEditClient} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input placeholder="Nome Completo" className="border p-2 rounded" required value={editClientData.name} onChange={e => setEditClientData({ ...editClientData, name: e.target.value })} />
-              <input placeholder="CPF/CNPJ" className="border p-2 rounded" value={editClientData.cpf_cnpj} onChange={e => setEditClientData({ ...editClientData, cpf_cnpj: e.target.value })} />
-              <input placeholder="Telefone" className="border p-2 rounded" value={editClientData.phone} onChange={e => setEditClientData({ ...editClientData, phone: e.target.value })} />
-              <input placeholder="Email" className="border p-2 rounded" value={editClientData.email} onChange={e => setEditClientData({ ...editClientData, email: e.target.value })} />
-              <input placeholder="Endereço" className="border p-2 rounded md:col-span-2" value={editClientData.address} onChange={e => setEditClientData({ ...editClientData, address: e.target.value })} />
-              <input placeholder="Cidade" className="border p-2 rounded" value={editClientData.city} onChange={e => setEditClientData({ ...editClientData, city: e.target.value })} />
-              <input placeholder="Estado" className="border p-2 rounded" value={editClientData.state} onChange={e => setEditClientData({ ...editClientData, state: e.target.value })} />
+              <div className="md:col-span-2">
+                <label className="block text-xs font-bold text-gray-500 mb-1">NOME COMPLETO *</label>
+                <input placeholder="Nome Completo" className={`w-full border p-2 rounded ${formErrors.name ? 'border-red-500' : ''}`} required value={editClientData.name} onChange={e => setEditClientData({ ...editClientData, name: e.target.value })} />
+                {formErrors.name && <p className="text-red-500 text-[10px] mt-1">{formErrors.name}</p>}
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">CPF/CNPJ *</label>
+                <input placeholder="CPF/CNPJ" className={`w-full border p-2 rounded ${formErrors.cpf_cnpj ? 'border-red-500' : ''}`} value={editClientData.cpf_cnpj} onChange={e => setEditClientData({ ...editClientData, cpf_cnpj: e.target.value })} />
+                {formErrors.cpf_cnpj && <p className="text-red-500 text-[10px] mt-1">{formErrors.cpf_cnpj}</p>}
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">TELEFONE *</label>
+                <input placeholder="Telefone" className={`w-full border p-2 rounded ${formErrors.phone ? 'border-red-500' : ''}`} value={editClientData.phone} onChange={e => setEditClientData({ ...editClientData, phone: e.target.value })} />
+                {formErrors.phone && <p className="text-red-500 text-[10px] mt-1">{formErrors.phone}</p>}
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-xs font-bold text-gray-500 mb-1">EMAIL (OPCIONAL)</label>
+                <input placeholder="Email" className="w-full border p-2 rounded" value={editClientData.email} onChange={e => setEditClientData({ ...editClientData, email: e.target.value })} />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-xs font-bold text-gray-500 mb-1">ENDEREÇO (RUA, Nº, BAIRRO) *</label>
+                <input placeholder="Rua, Número, Bairro" className={`w-full border p-2 rounded ${formErrors.address ? 'border-red-500' : ''}`} value={editClientData.address} onChange={e => setEditClientData({ ...editClientData, address: e.target.value })} />
+                {formErrors.address && <p className="text-red-500 text-[10px] mt-1">{formErrors.address}</p>}
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">CIDADE *</label>
+                <input placeholder="Cidade" className={`w-full border p-2 rounded ${formErrors.city ? 'border-red-500' : ''}`} value={editClientData.city} onChange={e => setEditClientData({ ...editClientData, city: e.target.value })} />
+                {formErrors.city && <p className="text-red-500 text-[10px] mt-1">{formErrors.city}</p>}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">UF *</label>
+                  <input placeholder="UF" className={`w-full border p-2 rounded ${formErrors.state ? 'border-red-500' : ''}`} value={editClientData.state} onChange={e => setEditClientData({ ...editClientData, state: e.target.value })} />
+                  {formErrors.state && <p className="text-red-500 text-[10px] mt-1">{formErrors.state}</p>}
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">CEP *</label>
+                  <input placeholder="CEP" className={`w-full border p-2 rounded ${formErrors.zip_code ? 'border-red-500' : ''}`} value={editClientData.zip_code} onChange={e => setEditClientData({ ...editClientData, zip_code: e.target.value })} />
+                  {formErrors.zip_code && <p className="text-red-500 text-[10px] mt-1">{formErrors.zip_code}</p>}
+                </div>
+              </div>
+
+              <div className="md:col-span-2 mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 border-t pt-4 bg-amber-50 p-4 rounded-xl border border-amber-100">
+                <h3 className="md:col-span-2 lg:col-span-3 font-bold text-amber-900 flex items-center gap-2 mb-2">
+                  <Package size={18} /> Kit Negociado
+                </h3>
+                
+                <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
+                  <p className="md:col-span-3 text-[10px] font-black text-amber-800 uppercase tracking-widest">Inversor</p>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 mb-1">MARCA *</label>
+                    <input placeholder="Ex: Growatt" className={`w-full border p-2 rounded bg-white ${formErrors.inversor_marca ? 'border-red-500' : ''}`} value={editClientData.inversor_marca} onChange={e => setEditClientData({ ...editClientData, inversor_marca: e.target.value })} />
+                    {formErrors.inversor_marca && <p className="text-red-500 text-[10px] mt-1">{formErrors.inversor_marca}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 mb-1">MODELO *</label>
+                    <input placeholder="Modelo" className={`w-full border p-2 rounded bg-white ${formErrors.inversor_modelo ? 'border-red-500' : ''}`} value={editClientData.inversor_modelo} onChange={e => setEditClientData({ ...editClientData, inversor_modelo: e.target.value })} />
+                    {formErrors.inversor_modelo && <p className="text-red-500 text-[10px] mt-1">{formErrors.inversor_modelo}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 mb-1">POTÊNCIA (kW) *</label>
+                    <input type="number" step="0.01" placeholder="0.00" className={`w-full border p-2 rounded bg-white ${formErrors.inversor_potencia ? 'border-red-500' : ''}`} value={editClientData.inversor_potencia} onChange={e => setEditClientData({ ...editClientData, inversor_potencia: e.target.value })} />
+                    {formErrors.inversor_potencia && <p className="text-red-500 text-[10px] mt-1">{formErrors.inversor_potencia}</p>}
+                  </div>
+                </div>
+
+                <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
+                  <p className="md:col-span-2 text-[10px] font-black text-amber-800 uppercase tracking-widest">Módulo Fotovoltaico</p>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 mb-1">POTÊNCIA (Wp) *</label>
+                    <input type="number" placeholder="Ex: 585" className={`w-full border p-2 rounded bg-white ${formErrors.modulo_potencia ? 'border-red-500' : ''}`} value={editClientData.modulo_potencia} onChange={e => setEditClientData({ ...editClientData, modulo_potencia: e.target.value })} />
+                    {formErrors.modulo_potencia && <p className="text-red-500 text-[10px] mt-1">{formErrors.modulo_potencia}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 mb-1">MODELO *</label>
+                    <input placeholder="Ex: Jinko Bifacial" className={`w-full border p-2 rounded bg-white ${formErrors.modulo_modelo ? 'border-red-500' : ''}`} value={editClientData.modulo_modelo} onChange={e => setEditClientData({ ...editClientData, modulo_modelo: e.target.value })} />
+                    {formErrors.modulo_modelo && <p className="text-red-500 text-[10px] mt-1">{formErrors.modulo_modelo}</p>}
+                  </div>
+                </div>
+
+                <div className="md:col-span-3">
+                  <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest mb-1">Estrutura</p>
+                  <label className="block text-[10px] font-bold text-gray-500 mb-1">TIPO DE ESTRUTURA *</label>
+                  <select 
+                    className={`w-full border p-2 rounded bg-white ${formErrors.estrutura_tipo ? 'border-red-500' : ''}`} 
+                    value={editClientData.estrutura_tipo} 
+                    onChange={e => setEditClientData({ ...editClientData, estrutura_tipo: e.target.value })}
+                  >
+                    <option value="">Selecione...</option>
+                    <option value="Fibrocimento">Fibrocimento</option>
+                    <option value="Cerâmico">Cerâmico</option>
+                    <option value="Metálico">Metálico</option>
+                    <option value="Solo">Solo</option>
+                    <option value="Laje">Laje</option>
+                  </select>
+                  {formErrors.estrutura_tipo && <p className="text-red-500 text-[10px] mt-1">{formErrors.estrutura_tipo}</p>}
+                </div>
+              </div>
 
               <div className="md:col-span-2 flex justify-end gap-2 mt-4">
                 <button type="button" onClick={() => setShowEditClient(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
