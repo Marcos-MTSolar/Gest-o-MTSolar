@@ -702,7 +702,16 @@ app.put('/api/projects/:id/installation', authenticateToken, async (req: any, re
 
 // Homologation Update
 app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, res) => {
-  const { homologation_status, rejection_reason, homologation_observations, homologation_checklist, homologation_expected_date } = req.body;
+  const { 
+    homologation_status, 
+    rejection_reason, 
+    homologation_observations, 
+    homologation_checklist, 
+    homologation_expected_date,
+    homologation_protocol,
+    homologation_entry_date,
+    homologation_notes
+  } = req.body;
 
   console.log('--- PUT /api/projects/:id/homologation ---');
   console.log('ID:', req.params.id);
@@ -714,6 +723,9 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
   if (homologation_observations !== undefined) updates.homologation_observations = homologation_observations;
   if (homologation_checklist !== undefined) updates.homologation_checklist = homologation_checklist;
   if (homologation_expected_date !== undefined) updates.homologation_expected_date = homologation_expected_date;
+  if (homologation_protocol !== undefined) updates.homologation_protocol = homologation_protocol;
+  if (homologation_entry_date !== undefined) updates.homologation_entry_date = homologation_entry_date;
+  if (homologation_notes !== undefined) updates.homologation_notes = homologation_notes;
 
   console.log('Updates object que serÃ¡ enviado pro Supabase:', updates);
 
@@ -831,11 +843,47 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
     await supabase.from('logs').insert({ user_id: req.user.id, action: 'HOMOLOGATION_STARTED', details: `Checklist concluÃ­do. Processo de homologaÃ§Ã£o iniciado para o projeto ID ${req.params.id}` });
   } else if ((homologation_status === null || homologation_status === '') && project?.homologation_status === 'technical_analysis') {
     // Log the regression
-    await supabase.from('logs').insert({ user_id: req.user.id, action: 'HOMOLOGATION_SUSPENDED', details: `Checklist reaberto/pendente. Processo de homologaÃ§Ã£o suspenso para o projeto ID ${req.params.id}` });
+    await supabase.from('logs').insert({ user_id: req.user.id, action: 'HOMOLOGATION_SUSPENDED', details: `Checklist reaberto/pendente. Processo de homologação suspenso para o projeto ID ${req.params.id}` });
   }
 
-
   res.json({ success: true });
+});
+
+app.get('/api/projects/:id/homologation/documents', authenticateToken, async (req: any, res) => {
+  const { data: docs, error } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('project_id', req.params.id)
+    .eq('type', 'homologation');
+  
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(docs || []);
+});
+
+app.post('/api/projects/:id/homologation/documents', authenticateToken, upload.single('file'), async (req: any, res) => {
+  const { title } = req.body;
+  const file = req.file;
+
+  if (!file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+
+  const url = await uploadFile(file, 'homologation-docs');
+  if (!url) return res.status(500).json({ error: 'Erro ao fazer upload do arquivo' });
+
+  const { data, error } = await supabase
+    .from('documents')
+    .insert([{
+      project_id: req.params.id,
+      title: title || file.originalname,
+      url,
+      type: 'homologation',
+      uploaded_by: req.user.id,
+      company_id: req.user.company_id
+    }])
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
 });
 
 // Messages

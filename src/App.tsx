@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import Layout from './components/Layout';
 import { Loader2 } from 'lucide-react';
+import { Toaster } from 'react-hot-toast';
 
 // Lazy load pages
 const Login = lazy(() => import('./pages/Login'));
@@ -58,6 +59,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <Toaster position="top-right" />
       <AuthProvider>
         <SocketProvider>
           <Suspense fallback={
@@ -131,7 +133,7 @@ export default function App() {
               } />
 
               <Route path="/homologation" element={
-                <PrivateRoute roles={['CEO', 'ADMIN']}>
+                <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
                   <Homologation />
                 </PrivateRoute>
               } />

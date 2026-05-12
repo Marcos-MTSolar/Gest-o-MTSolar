@@ -23,7 +23,8 @@ import {
   FileSignature,
   MessageCircle,
   ClipboardList,
-  Zap
+  Zap,
+  FileCheck
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
@@ -36,7 +37,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [hasCompletedInspection, setHasCompletedInspection] = useState(false);
   const prevMessagesLength = useRef(0);
 
   useEffect(() => {
@@ -47,17 +47,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     // Check for unread messages on mount
     checkUnreadMessages();
 
-    // Check if any project has completed inspection (to unlock Homologação)
-    api.get('/api/projects').then(res => {
-      if (Array.isArray(res.data)) {
-        const hasInspection = res.data.some((p: any) =>
-          p.technical_status === 'vistoria_concluida' ||
-          p.technical_status === 'approved' ||
-          ['homologation', 'conclusion', 'completed'].includes(p.current_stage)
-        );
-        setHasCompletedInspection(hasInspection);
-      }
-    }).catch(() => { });
+    // Check for unread messages on mount
+    checkUnreadMessages();
   }, []);
 
   const checkUnreadMessages = async () => {
@@ -88,19 +79,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         }
       });
     }
-
-    // Re-check inspection status on every navigation change
-    // so Homologação menu appears right after a vistoria is finalized
-    api.get('/api/projects').then(res => {
-      if (Array.isArray(res.data)) {
-        const hasInspection = res.data.some((p: any) =>
-          p.technical_status === 'vistoria_concluida' ||
-          p.technical_status === 'approved' ||
-          ['homologation', 'conclusion', 'completed'].includes(p.current_stage)
-        );
-        setHasCompletedInspection(hasInspection);
-      }
-    }).catch(() => { });
   }, [location.pathname]);
 
   useEffect(() => {
@@ -135,7 +113,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: 'Kit Solar', path: '/kit-purchase', icon: ShoppingCart, roles: ['CEO', 'ADMIN'] },
     { name: 'Contratos', path: '/contracts', icon: FileSignature, roles: ['CEO', 'ADMIN'] },
     { name: 'Técnica', path: '/technical', icon: Wrench, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
-    ...(hasCompletedInspection ? [{ name: 'Homologação', path: '/homologation', icon: CheckSquare, roles: ['CEO', 'ADMIN'] }] : []),
+    { name: 'Homologação', path: '/homologation', icon: FileCheck, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Obra', path: '/obra', icon: Hammer, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
     { name: 'Estoque', path: '/estoque', icon: Package, roles: ['CEO', 'ADMIN'] },
     { name: 'Finalizados', path: '/finished', icon: Archive, roles: ['CEO', 'ADMIN'] },
