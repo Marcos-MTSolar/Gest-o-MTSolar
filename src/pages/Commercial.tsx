@@ -272,7 +272,8 @@ export default function Commercial() {
                         <option key={prop.id} value={prop.id}>{prop.client_name}</option>
                       ))}
                     </select>
-                       <div className="md:col-span-2">
+                  </div>
+                  <div className="md:col-span-2">
                     <label className="block text-xs font-bold text-gray-500 mb-1">NOME COMPLETO *</label>
                     <input placeholder="Nome Completo" className={`w-full border p-2 rounded ${formErrors.name ? 'border-red-500' : ''}`} value={newClient.name} onChange={e => setNewClient({ ...newClient, name: e.target.value })} />
                     {formErrors.name && <p className="text-red-500 text-[10px] mt-1">{formErrors.name}</p>}
@@ -370,7 +371,6 @@ export default function Commercial() {
                       {formErrors.estrutura_tipo && <p className="text-red-500 text-[10px] mt-1">{formErrors.estrutura_tipo}</p>}
                     </div>
                   </div>
-.target.value })} />
                   
                   <div className="md:col-span-2 mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
                     <h3 className="md:col-span-2 font-bold text-gray-800 flex items-center gap-2 mb-2">
@@ -808,6 +808,7 @@ export default function Commercial() {
                       </p>
                     </div>
                   )}
+                </div>
 
               <div className="flex justify-end gap-3 pt-6 border-t mt-6">
                 <button 
@@ -828,8 +829,7 @@ export default function Commercial() {
             </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
 
       {/* Edit Client Modal */}
       {showEditClient && selectedProject && (

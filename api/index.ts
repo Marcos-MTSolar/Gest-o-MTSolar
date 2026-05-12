@@ -155,13 +155,30 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   // Create a default user object if fallback succeeded but DB user doesn't exist
-  const effectiveUser = user || { id: 1, email: 'ceo@mtsolar.com', role: 'CEO', name: 'CEO User', active: true };
+  const { data: defaultCompany } = await supabase.from('companies').select('id').eq('name', 'MT Solar').single();
+  const effectiveUser = user || { 
+    id: 1, 
+    email: 'ceo@mtsolar.com', 
+    role: 'CEO', 
+    name: 'CEO User', 
+    active: true,
+    company_id: defaultCompany?.id
+  };
 
   if (!effectiveUser.active) {
     return res.status(403).json({ error: 'Account deactivated' });
   }
 
-  const token = jwt.sign({ id: effectiveUser.id, role: effectiveUser.role, name: effectiveUser.name }, JWT_SECRET, { expiresIn: '8h' });
+  const token = jwt.sign(
+    { 
+      id: effectiveUser.id, 
+      role: effectiveUser.role, 
+      name: effectiveUser.name,
+      company_id: effectiveUser.company_id 
+    }, 
+    JWT_SECRET, 
+    { expiresIn: '8h' }
+  );
   res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
 
   // Log login, but ignore error if user is dummy
@@ -169,7 +186,16 @@ app.post('/api/auth/login', async (req, res) => {
     await supabase.from('logs').insert({ user_id: effectiveUser.id, action: 'LOGIN', details: 'User logged in' });
   }
 
-  res.json({ token, user: { id: effectiveUser.id, name: effectiveUser.name, email: effectiveUser.email, role: effectiveUser.role } });
+  res.json({ 
+    token, 
+    user: { 
+      id: effectiveUser.id, 
+      name: effectiveUser.name, 
+      email: effectiveUser.email, 
+      role: effectiveUser.role,
+      company_id: effectiveUser.company_id
+    } 
+  });
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -186,7 +212,7 @@ app.get('/api/auth/me', authenticateToken, async (req: any, res) => {
 // Users
 app.get('/api/users', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CEO' && req.user.role !== 'ADMIN') return res.sendStatus(403);
-  const { data: users } = await supabase.from('users').select('id, name, email, role, active, created_at');
+  const { data: users } = await supabase.from('users').select('id, name, email, role, active, created_at').eq('company_id', req.user.company_id);
   res.json(users);
 });
 
@@ -197,7 +223,7 @@ app.post('/api/users', authenticateToken, async (req: any, res) => {
 
   const { data, error } = await supabase
     .from('users')
-    .insert({ name, email, password_hash: hash, role })
+    .insert({ name, email, password_hash: hash, role, company_id: req.user.company_id })
     .select()
     .single();
 
@@ -217,7 +243,7 @@ app.put('/api/users/:id', authenticateToken, async (req: any, res) => {
     updates.password_hash = bcrypt.hashSync(password, 10);
   }
 
-  await supabase.from('users').update(updates).eq('id', req.params.id);
+  await supabase.from('users').update(updates).eq('id', req.params.id).eq('company_id', req.user.company_id);
 
 
   res.json({ success: true });
@@ -234,7 +260,7 @@ app.delete('/api/users/:id', authenticateToken, async (req: any, res) => {
   await supabase.from('documents').update({ uploaded_by: null }).eq('uploaded_by', userId);
   await supabase.from('logs').update({ user_id: null }).eq('user_id', userId);
 
-  const { error } = await supabase.from('users').delete().eq('id', userId);
+  const { error } = await supabase.from('users').delete().eq('id', userId).eq('company_id', req.user.company_id);
 
   if (error) return res.status(500).json({ error: error.message });
 
@@ -297,7 +323,7 @@ async function sendPushNotification(userId: number, title: string, body: string)
 
 // Clients
 app.get('/api/clients', authenticateToken, async (req: any, res) => {
-  const { data: clients } = await supabase.from('clients').select('*').order('created_at', { ascending: false });
+  const { data: clients } = await supabase.from('clients').select('*').eq('company_id', req.user.company_id).order('created_at', { ascending: false });
   res.json(clients);
 });
 
@@ -310,7 +336,7 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
   try {
     const { data: client, error } = await supabase
       .from('clients')
-      .insert({ name, phone, email, address, city, state, cpf_cnpj, created_by: req.user.id })
+      .insert({ name, phone, email, address, city, state, cpf_cnpj, created_by: req.user.id, company_id: req.user.company_id })
       .select()
       .single();
 
@@ -323,7 +349,8 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
         client_id: client.id, 
         client_name: name, // Persiste o nome para histórico
         title: `Projeto Solar - ${name}`, 
-        status: 'pending' 
+        status: 'pending',
+        company_id: req.user.company_id
       })
       .select()
       .single();
@@ -339,9 +366,10 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
         pendencies: pendencies || null,
         notes: notes || null,
         finance_grace_period: parseInt(finance_grace_period) || 0,
-        status: 'pendente_comercial'
+        status: 'pendente_comercial',
+        company_id: req.user.company_id
       });
-      await supabase.from('technical_data').insert({ project_id: project.id });
+      await supabase.from('technical_data').insert({ project_id: project.id, company_id: req.user.company_id });
 
     res.json({ id: client.id, project_id: project?.id });
   } catch (error: any) {
@@ -354,7 +382,8 @@ app.put('/api/clients/:id', authenticateToken, async (req: any, res) => {
   const { name, phone, email, address, city, state, cpf_cnpj } = req.body;
   await supabase.from('clients')
     .update({ name, phone, email, address, city, state, cpf_cnpj })
-    .eq('id', req.params.id);
+    .eq('id', req.params.id)
+    .eq('company_id', req.user.company_id);
   res.json({ success: true });
 });
 
@@ -369,6 +398,7 @@ app.get('/api/projects', authenticateToken, async (req: any, res) => {
       technical_data (status, structure_type),
       documents (*)
     `)
+    .eq('company_id', req.user.company_id)
     .order('updated_at', { ascending: false });
 
   // Flatten for frontend compatibility
@@ -414,6 +444,7 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
       technical_data (*)
     `)
     .eq('id', req.params.id)
+    .eq('company_id', req.user.company_id)
     .single();
 
   if (!project) return res.status(404).json({ error: 'Project not found' });
@@ -489,9 +520,9 @@ app.delete('/api/projects/:id', authenticateToken, async (req: any, res) => {
   // Optional depending on schema: clean up any other related tables directly bound to project_id here.
 
 
-  await supabase.from('projects').delete().eq('id', req.params.id);
+  await supabase.from('projects').delete().eq('id', req.params.id).eq('company_id', req.user.company_id);
   if (project?.client_id) {
-    await supabase.from('clients').delete().eq('id', project.client_id);
+    await supabase.from('clients').delete().eq('id', project.client_id).eq('company_id', req.user.company_id);
   }
 
   res.json({ success: true });
@@ -812,6 +843,7 @@ app.get('/api/messages', authenticateToken, async (req: any, res) => {
   const { data: messages } = await supabase
     .from('messages')
     .select('*, users(name, role)')
+    .eq('company_id', req.user.company_id)
     .order('created_at', { ascending: false })
     .limit(50);
 
@@ -828,7 +860,7 @@ app.post('/api/messages', authenticateToken, async (req: any, res) => {
   const { content } = req.body;
   const { data: msg, error } = await supabase
     .from('messages')
-    .insert({ sender_id: req.user.id, content })
+    .insert({ sender_id: req.user.id, content, company_id: req.user.company_id })
     .select()
     .single();
 
@@ -934,6 +966,7 @@ app.get('/api/documents', authenticateToken, async (req: any, res) => {
   const { data: docs } = await supabase
     .from('documents')
     .select('*, projects(title), users(name)')
+    .eq('company_id', req.user.company_id)
     .order('created_at', { ascending: false });
 
   const formatted = docs?.map((d: any) => ({
@@ -955,7 +988,7 @@ app.post('/api/documents', authenticateToken, upload.single('file'), async (req:
     const url = await uploadFile(file);
     if (!url) return res.status(500).json({ error: 'Upload failed' });
 
-    const { error } = await supabase.from('documents').insert({ project_id, title, url, type: type || 'other', uploaded_by: req.user.id });
+    const { error } = await supabase.from('documents').insert({ project_id, title, url, type: type || 'other', uploaded_by: req.user.id, company_id: req.user.company_id });
     if (error) throw error;
 
     res.json({ success: true });
@@ -966,14 +999,14 @@ app.post('/api/documents', authenticateToken, upload.single('file'), async (req:
 });
 
 app.delete('/api/documents/:id', authenticateToken, async (req: any, res) => {
-  await supabase.from('documents').delete().eq('id', req.params.id);
+  await supabase.from('documents').delete().eq('id', req.params.id).eq('company_id', req.user.company_id);
   // Ideally delete from storage too, but skipping for brevity
   res.json({ success: true });
 });
 
 // Events
 app.get('/api/events', authenticateToken, async (req: any, res) => {
-  const { data: events } = await supabase.from('events').select('*').order('event_date', { ascending: true });
+  const { data: events } = await supabase.from('events').select('*').eq('company_id', req.user.company_id).order('event_date', { ascending: true });
   res.json(events || []);
 });
 
@@ -985,19 +1018,20 @@ app.post('/api/events', authenticateToken, async (req: any, res) => {
     description, 
     event_date, 
     is_reminder,
-    color: color || 'blue'
+    color: color || 'blue',
+    company_id: req.user.company_id
   }).select().single();
   res.json({ id: data.id });
 });
 
 app.put('/api/events/:id', authenticateToken, async (req: any, res) => {
   const { title, description, event_date, is_reminder, color } = req.body;
-  await supabase.from('events').update({ title, description, event_date, is_reminder, color }).eq('id', req.params.id);
+  await supabase.from('events').update({ title, description, event_date, is_reminder, color }).eq('id', req.params.id).eq('company_id', req.user.company_id);
   res.json({ success: true });
 });
 
 app.delete('/api/events/:id', authenticateToken, async (req: any, res) => {
-  await supabase.from('events').delete().eq('id', req.params.id);
+  await supabase.from('events').delete().eq('id', req.params.id).eq('company_id', req.user.company_id);
   res.json({ success: true });
 });
 
@@ -1021,6 +1055,7 @@ app.get('/api/proposal-history', authenticateToken, async (req: any, res) => {
   const { data: history, error } = await supabase
     .from('proposal_history')
     .select('*')
+    .eq('company_id', req.user.company_id)
     .order('created_at', { ascending: false });
   
   if (error) return res.status(500).json({ error: error.message });
@@ -1034,6 +1069,7 @@ app.get('/api/proposals-active', authenticateToken, async (req: any, res) => {
   const { data, error } = await supabase
     .from('proposals')
     .select('*')
+    .eq('company_id', req.user.company_id)
     .gte('created_at', sevenDaysAgo)
     .order('created_at', { ascending: false });
 
@@ -1055,7 +1091,8 @@ app.post('/api/proposals', authenticateToken, async (req: any, res) => {
       proposal_number,
       margin,
       kit_value,
-      created_by
+      created_by,
+      company_id: req.user.company_id
     }])
     .select()
     .single();
@@ -1099,7 +1136,8 @@ app.post('/api/proposal-history', authenticateToken, async (req: any, res) => {
       url_arquivo,
       data_geracao: data_geracao.toISOString(),
       data_expiracao: data_expiracao.toISOString(),
-      created_by 
+      created_by,
+      company_id: req.user.company_id
     }])
     .select()
     .single();
@@ -1117,7 +1155,8 @@ app.delete('/api/proposal-history/:id', authenticateToken, async (req: any, res)
   const { error } = await supabase
     .from('proposal_history')
     .delete()
-    .eq('id', id);
+    .eq('id', id)
+    .eq('company_id', req.user.company_id);
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
@@ -1160,6 +1199,7 @@ app.get('/api/neoenergia', authenticateToken, async (req: any, res) => {
     const { data: protocols, error } = await supabase
       .from('neoenergia_protocols')
       .select('*')
+      .eq('company_id', req.user.company_id)
       .or(`resolved_at.is.null,resolved_at.gt.${new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()}`)
       .order('created_at', { ascending: false });
 
@@ -1185,7 +1225,8 @@ app.post('/api/neoenergia', authenticateToken, async (req: any, res) => {
         numero_protocolo,
         status: status || 'em_andamento',
         data_prevista,
-        updated_at: new Date()
+        updated_at: new Date(),
+        company_id: req.user.company_id
       })
       .select()
       .single();
@@ -1211,6 +1252,7 @@ app.put('/api/neoenergia/:id', authenticateToken, async (req: any, res) => {
         updated_at: new Date()
       })
       .eq('id', req.params.id)
+      .eq('company_id', req.user.company_id)
       .select()
       .single();
 
@@ -1231,6 +1273,7 @@ app.put('/api/neoenergia/:id/resolve', authenticateToken, async (req: any, res) 
         updated_at: new Date()
       })
       .eq('id', req.params.id)
+      .eq('company_id', req.user.company_id)
       .select()
       .single();
 
@@ -1254,7 +1297,8 @@ app.post('/api/neoenergia/:id/novo-protocolo', authenticateToken, async (req: an
         data_prevista,
         parent_id: req.params.id,
         status: 'em_andamento',
-        updated_at: new Date()
+        updated_at: new Date(),
+        company_id: req.user.company_id
       })
       .select()
       .single();
@@ -1271,7 +1315,8 @@ app.delete('/api/neoenergia/:id', authenticateToken, async (req: any, res) => {
     const { error } = await supabase
       .from('neoenergia_protocols')
       .delete()
-      .eq('id', req.params.id);
+      .eq('id', req.params.id)
+      .eq('company_id', req.user.company_id);
 
     if (error) throw error;
     res.json({ success: true });
@@ -1283,11 +1328,12 @@ app.delete('/api/neoenergia/:id', authenticateToken, async (req: any, res) => {
 // Stats
 app.get('/api/stats', authenticateToken, async (req: any, res) => {
   // Count all projects that are not completed
-  const { count: totalProjects } = await supabase.from('projects').select('*', { count: 'exact', head: true });
+  const { count: totalProjects } = await supabase.from('projects').select('*', { count: 'exact', head: true }).eq('company_id', req.user.company_id);
   const { count: completedProjects } = await supabase.from('projects').select('*', { count: 'exact', head: true })
+    .eq('company_id', req.user.company_id)
     .or('status.eq.completed,current_stage.eq.completed');
-  const { count: pendingInspections } = await supabase.from('projects').select('*', { count: 'exact', head: true }).eq('current_stage', 'inspection');
-  const { count: pendingInstallations } = await supabase.from('projects').select('*', { count: 'exact', head: true }).eq('current_stage', 'installation');
+  const { count: pendingInspections } = await supabase.from('projects').select('*', { count: 'exact', head: true }).eq('company_id', req.user.company_id).eq('current_stage', 'inspection');
+  const { count: pendingInstallations } = await supabase.from('projects').select('*', { count: 'exact', head: true }).eq('company_id', req.user.company_id).eq('current_stage', 'installation');
 
   const activeProjects = (totalProjects || 0) - (completedProjects || 0);
 
@@ -1305,6 +1351,7 @@ app.get('/api/projects-schedule', authenticateToken, async (req: any, res) => {
   const { data: projects, error } = await supabase
     .from('projects')
     .select('id, client_name, title, schedule_order, schedule_notes, schedule_status, schedule_issue_notes, current_stage')
+    .eq('company_id', req.user.company_id)
     .neq('current_stage', 'completed')
     .order('schedule_order', { ascending: true });
 
@@ -1324,7 +1371,8 @@ app.put('/api/projects/:id/schedule', authenticateToken, async (req: any, res) =
   const { error } = await supabase
     .from('projects')
     .update(updates)
-    .eq('id', req.params.id);
+    .eq('id', req.params.id)
+    .eq('company_id', req.user.company_id);
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
@@ -1336,7 +1384,7 @@ app.put('/api/projects/schedule/reorder', authenticateToken, async (req: any, re
 
   try {
     for (const item of orders) {
-      await supabase.from('projects').update({ schedule_order: item.schedule_order }).eq('id', item.id);
+      await supabase.from('projects').update({ schedule_order: item.schedule_order }).eq('id', item.id).eq('company_id', req.user.company_id);
     }
     res.json({ success: true });
   } catch (err: any) {
@@ -1346,7 +1394,7 @@ app.put('/api/projects/schedule/reorder', authenticateToken, async (req: any, re
 
 // Stock
 app.get('/api/stock', authenticateToken, async (req: any, res) => {
-  const { data: items } = await supabase.from('stock_items').select('*').order('category', { ascending: true });
+  const { data: items } = await supabase.from('stock_items').select('*').eq('company_id', req.user.company_id).order('category', { ascending: true });
   res.json(items || []);
 });
 
@@ -1360,7 +1408,8 @@ app.post('/api/stock/withdraw', authenticateToken, async (req: any, res) => {
     installation_name,
     technician_name,
     notes,
-    created_by: req.user.id
+    created_by: req.user.id,
+    company_id: req.user.company_id
   }).select().single();
 
   if (error) return res.status(400).json({ error: error.message });
@@ -1375,7 +1424,8 @@ app.put('/api/stock/:id', authenticateToken, async (req: any, res) => {
   
   await supabase.from('stock_items')
     .update({ current_quantity, ideal_quantity, low_stock_threshold, updated_at: new Date() })
-    .eq('id', req.params.id);
+    .eq('id', req.params.id)
+    .eq('company_id', req.user.company_id);
     
 
   res.json({ success: true });
