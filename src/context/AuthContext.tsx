@@ -8,6 +8,7 @@ interface User {
   email: string;
   role: 'CEO' | 'ADMIN' | 'COMMERCIAL' | 'TECHNICAL';
   avatar_url?: string;
+  company_id: string;
 }
 
 interface AuthContextType {

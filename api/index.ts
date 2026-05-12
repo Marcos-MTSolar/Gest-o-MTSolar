@@ -96,9 +96,26 @@ const authenticateToken = (req: any, res: any, next: any) => {
   const token = req.cookies.token || req.headers['authorization']?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
-  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
+  jwt.verify(token, JWT_SECRET, async (err: any, decoded: any) => {
     if (err) return res.status(403).json({ error: 'Forbidden' });
-    req.user = user;
+    
+    // If token is missing company_id, try to fetch it from DB
+    if (!decoded.company_id) {
+      const { data: dbUser } = await supabase
+        .from('users')
+        .select('id, name, role, company_id')
+        .eq('id', decoded.id)
+        .single();
+      
+      if (dbUser) {
+        req.user = dbUser;
+      } else {
+        req.user = decoded;
+      }
+    } else {
+      req.user = decoded;
+    }
+    
     next();
   });
 };
@@ -204,9 +221,15 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 app.get('/api/auth/me', authenticateToken, async (req: any, res) => {
-  const { data: user } = await supabase.from('users').select('id, name, email, role, avatar_url').eq('id', req.user.id).single();
-  // Always return a valid user object â€” either from DB or from token payload
-  res.json(user || { id: req.user.id, name: req.user.name, role: req.user.role, email: req.user.email || 'ceo@mtsolar.com' });
+  const { data: user } = await supabase.from('users').select('id, name, email, role, avatar_url, company_id').eq('id', req.user.id).single();
+  // Always return a valid user object — either from DB or from token payload
+  res.json(user || { 
+    id: req.user.id, 
+    name: req.user.name, 
+    role: req.user.role, 
+    email: req.user.email || 'ceo@mtsolar.com',
+    company_id: req.user.company_id 
+  });
 });
 
 // Users
