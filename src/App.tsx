@@ -45,18 +45,19 @@ function PrivateRoute({ children, roles }: { children: React.ReactNode, roles?: 
   
   if (!user) return <Navigate to="/login" />;
 
-  // Se for VENDEDOR (COMMERCIAL), s  pode acessar /whatsapp
+  // Se for VENDEDOR (COMMERCIAL), acesso restrito a Dashboard, WhatsApp, Agenda e Proposta
   const isCommercial = user.role.toUpperCase() === 'COMMERCIAL';
   const currentPath = window.location.pathname;
+  const allowedCommercialPaths = ['/', '/whatsapp', '/agenda', '/proposal-generator'];
   
-  if (isCommercial && currentPath !== '/whatsapp') {
-    return <Navigate to="/whatsapp" />;
+  if (isCommercial && !allowedCommercialPaths.includes(currentPath)) {
+    return <Navigate to="/" />;
   }
 
   if (roles && !roles.includes(user.role)) {
-    // Se n  tiver permiss o para a rota e n  for vendedor (que j  foi tratado acima)
-    // Redireciona para home ou para a p gina de whatsapp se for vendedor
-    return <Navigate to={isCommercial ? "/whatsapp" : "/"} />;
+    // Se não tiver permissão para a rota e não for vendedor (que já foi tratado acima)
+    // Redireciona para home ou para a primeira página permitida se for vendedor
+    return <Navigate to={isCommercial ? "/" : "/"} />;
   }
 
   return <Layout>{children}</Layout>;

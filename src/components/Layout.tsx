@@ -126,8 +126,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const filteredItems = menuItems.filter(item => {
     const hasRole = !item.roles || item.roles.includes(user?.role || '');
     if (isCommercial) {
-      // Vendedor s  v  Atendimento
-      return item.path === '/whatsapp';
+      // Vendedor: Dashboard, Atendimento, Agenda e Gerador de Proposta
+      const allowedPaths = ['/', '/whatsapp', '/agenda', '/proposal-generator'];
+      return allowedPaths.includes(item.path);
     }
     return hasRole;
   });
