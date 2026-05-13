@@ -122,7 +122,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: 'Configurações', path: '/settings', icon: Settings, roles: ['CEO', 'ADMIN'] },
   ];
 
-  const filteredItems = menuItems.filter(item => !item.roles || item.roles.includes(user?.role || ''));
+  const isCommercial = user?.role?.toUpperCase() === 'COMMERCIAL';
+  const filteredItems = menuItems.filter(item => {
+    const hasRole = !item.roles || item.roles.includes(user?.role || '');
+    if (isCommercial) {
+      // Vendedor s  v  Atendimento
+      return item.path === '/whatsapp';
+    }
+    return hasRole;
+  });
 
   return (
     <div className="flex h-screen bg-gray-100 overflow-hidden">

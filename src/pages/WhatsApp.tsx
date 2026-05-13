@@ -88,15 +88,15 @@ export default function WhatsApp() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [activeInstance, setActiveInstance] = useState<'all' | 'admin' | 'atendimento'>('all');
+  const isAdmin = user?.role?.toUpperCase() === 'CEO' || user?.role?.toUpperCase() === 'ADMIN';
+  const isAgent = isAdmin || user?.role?.toUpperCase() === 'COMMERCIAL';
+  const isCommercial = user?.role?.toUpperCase() === 'COMMERCIAL';
+  const [activeInstance, setActiveInstance] = useState<'admin' | 'atendimento'>('atendimento');
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [showTagDropdown, setShowTagDropdown] = useState(false);
   const [showTransferInstanceModal, setShowTransferInstanceModal] = useState(false);
   const [transferObservation, setTransferObservation] = useState('');
   const [isTransferring, setIsTransferring] = useState(false);
-  
-  const isAdmin = user?.role?.toUpperCase() === 'CEO' || user?.role?.toUpperCase() === 'ADMIN';
-  const isAgent = isAdmin || user?.role?.toUpperCase() === 'COMMERCIAL';
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   
   // Media State
@@ -715,15 +715,6 @@ export default function WhatsApp() {
           
           <div className="flex gap-1 p-1 bg-gray-100 rounded-lg mt-3">
             <button 
-              onClick={() => setActiveInstance('all')}
-              className={cn(
-                "flex-1 text-[10px] font-bold py-1.5 rounded-md transition-all",
-                activeInstance === 'all' ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:bg-gray-200"
-              )}
-            >
-              Todos
-            </button>
-            <button 
               onClick={() => setActiveInstance('atendimento')}
               className={cn(
                 "flex-1 text-[10px] font-bold py-1.5 rounded-md transition-all",
@@ -732,15 +723,17 @@ export default function WhatsApp() {
             >
               Atendimento
             </button>
-            <button 
-              onClick={() => setActiveInstance('admin')}
-              className={cn(
-                "flex-1 text-[10px] font-bold py-1.5 rounded-md transition-all",
-                activeInstance === 'admin' ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:bg-gray-200"
-              )}
-            >
-              Administrativo
-            </button>
+            {!isCommercial && (
+              <button 
+                onClick={() => setActiveInstance('admin')}
+                className={cn(
+                  "flex-1 text-[10px] font-bold py-1.5 rounded-md transition-all",
+                  activeInstance === 'admin' ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:bg-gray-200"
+                )}
+              >
+                Administrativo
+              </button>
+            )}
           </div>
 
           <div className="mt-3 overflow-x-auto no-scrollbar flex gap-2 pb-1">
@@ -1188,7 +1181,7 @@ export default function WhatsApp() {
                     <CheckCircle2 size={16} /> Encerrar Atendimento
                   </button>
 
-                  {selectedConversation.instance === 'atendimento-cliente' && isAgent && (
+                  {selectedConversation.instance === 'atendimento-cliente' && isAdmin && (
                     <button 
                       onClick={() => setShowTransferInstanceModal(true)}
                       className="w-full flex items-center justify-center gap-2 py-3 bg-blue-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-all shadow-md"

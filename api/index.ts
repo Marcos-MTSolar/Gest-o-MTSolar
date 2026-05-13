@@ -1023,7 +1023,14 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
 
 app.post('/api/webhooks/whatsapp', async (req, res) => {
   const payload = req.body;
-  const instance = payload.instance || 'mtsolar';
+  let instance = payload.instance || 'mtsolar';
+  
+  // Normalização de nome de instância (ex: "Instance Name: atendimento-cliente" -> "atendimento-cliente")
+  if (instance.includes('atendimento-cliente')) {
+    instance = 'atendimento-cliente';
+  } else if (instance.includes('mtsolar')) {
+    instance = 'mtsolar';
+  }
   
   // Logic to handle incoming message from Evolution API
   if (payload.event === 'messages.upsert') {
@@ -1114,7 +1121,8 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
           media_type: mediaType,
           media_url: mediaUrl,
           file_name: fileName,
-          file_size: fileSize
+          file_size: fileSize,
+          instance: instance
         });
 
         // 3. Push Notification for Agents

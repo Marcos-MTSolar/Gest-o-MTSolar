@@ -45,8 +45,18 @@ function PrivateRoute({ children, roles }: { children: React.ReactNode, roles?: 
   
   if (!user) return <Navigate to="/login" />;
 
+  // Se for VENDEDOR (COMMERCIAL), s  pode acessar /whatsapp
+  const isCommercial = user.role.toUpperCase() === 'COMMERCIAL';
+  const currentPath = window.location.pathname;
+  
+  if (isCommercial && currentPath !== '/whatsapp') {
+    return <Navigate to="/whatsapp" />;
+  }
+
   if (roles && !roles.includes(user.role)) {
-    return <Navigate to="/" />;
+    // Se n  tiver permiss o para a rota e n  for vendedor (que j  foi tratado acima)
+    // Redireciona para home ou para a p gina de whatsapp se for vendedor
+    return <Navigate to={isCommercial ? "/whatsapp" : "/"} />;
   }
 
   return <Layout>{children}</Layout>;
