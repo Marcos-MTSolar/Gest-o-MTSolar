@@ -199,6 +199,8 @@ export default function WhatsApp() {
     const { data, error } = await query.order('last_message_at', { ascending: false });
 
     if (!error && data) {
+      console.log('[CONVERSAS] Total recebido:', data.length);
+      console.log('[CONVERSAS] Dados:', data);
       setConversations(data);
     }
     setLoading(false);

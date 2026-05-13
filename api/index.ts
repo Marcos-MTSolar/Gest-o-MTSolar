@@ -1026,7 +1026,7 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
   let instance = payload.instance || 'mtsolar';
   
   // Normalização de nome de instância (ex: "Instance Name: atendimento-cliente" -> "atendimento-cliente")
-  if (instance.includes('atendimento-cliente')) {
+  if (instance.includes('atendimento-cliente') || instance.includes('atendimento_cliente')) {
     instance = 'atendimento-cliente';
   } else if (instance.includes('mtsolar')) {
     instance = 'mtsolar';
