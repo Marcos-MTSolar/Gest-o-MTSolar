@@ -1038,18 +1038,30 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
   // Resolvendo company_id pela instância
   let companyId = null;
   try {
-    const { data: company } = await supabase
-      .from('companies')
-      .select('id')
-      .eq('whatsapp_instance', instance)
+    // 1. Tentar buscar na nova tabela de vínculos de instância
+    const { data: instanceLink } = await supabase
+      .from('companies_instances')
+      .select('company_id')
+      .eq('instance_name', instance)
       .single();
     
-    if (company) {
-      companyId = company.id;
+    if (instanceLink) {
+      companyId = instanceLink.company_id;
     } else {
-      // Fallback para a primeira empresa se não encontrar pela instância (modo single-tenant)
-      const { data: firstCompany } = await supabase.from('companies').select('id').limit(1).single();
-      companyId = firstCompany?.id;
+      // 2. Fallback para a coluna whatsapp_instance legado na tabela companies
+      const { data: company } = await supabase
+        .from('companies')
+        .select('id')
+        .eq('whatsapp_instance', instance)
+        .single();
+      
+      if (company) {
+        companyId = company.id;
+      } else {
+        // 3. Fallback final para a primeira empresa (modo single-tenant)
+        const { data: firstCompany } = await supabase.from('companies').select('id').limit(1).single();
+        companyId = firstCompany?.id;
+      }
     }
   } catch (e) {
     console.error('[WEBHOOK] Erro ao buscar empresa:', e);

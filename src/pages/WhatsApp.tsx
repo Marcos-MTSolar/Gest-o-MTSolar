@@ -193,8 +193,7 @@ export default function WhatsApp() {
     if (activeInstance === 'admin') {
       query = query.eq('instance', evolutionApi.instances.ADMIN);
     } else if (activeInstance === 'atendimento') {
-      // Mostrar ambas as instâncias no Atendimento durante a transição
-      query = query.in('instance', [evolutionApi.instances.ATENDIMENTO, evolutionApi.instances.ADMIN]);
+      query = query.eq('instance', evolutionApi.instances.ATENDIMENTO);
     }
 
     const { data, error } = await query.order('last_message_at', { ascending: false });
