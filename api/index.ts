@@ -1031,6 +1031,36 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
   } else if (instance.includes('mtsolar')) {
     instance = 'mtsolar';
   }
+
+  const messageType = payload.event;
+  console.log('[WEBHOOK] Payload recebido:', instance, messageType);
+
+  // Resolvendo company_id pela instância
+  let companyId = null;
+  try {
+    const { data: company } = await supabase
+      .from('companies')
+      .select('id')
+      .eq('whatsapp_instance', instance)
+      .single();
+    
+    if (company) {
+      companyId = company.id;
+    } else {
+      // Fallback para a primeira empresa se não encontrar pela instância (modo single-tenant)
+      const { data: firstCompany } = await supabase.from('companies').select('id').limit(1).single();
+      companyId = firstCompany?.id;
+    }
+  } catch (e) {
+    console.error('[WEBHOOK] Erro ao buscar empresa:', e);
+  }
+
+  console.log('[WEBHOOK] company_id resolvido:', companyId);
+
+  if (!companyId) {
+    console.error('[WEBHOOK] Erro: Não foi possível resolver o company_id para a instância:', instance);
+    return res.status(200).json({ success: false, error: 'Company not found' }); // Return 200 to avoid Evolution API retries
+  }
   
   // Logic to handle incoming message from Evolution API
   if (payload.event === 'messages.upsert') {
@@ -1076,6 +1106,7 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
         .from('whatsapp_conversations')
         .select('*')
         .eq('phone', phone)
+        .eq('company_id', companyId)
         .single();
       
       let conversationId = conv?.id;
@@ -1090,7 +1121,8 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
             last_message: text,
             last_message_at: new Date().toISOString(),
             status: 'waiting',
-            instance: instance
+            instance: instance,
+            company_id: companyId
           })
           .select()
           .single();
@@ -1103,7 +1135,8 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
           .update({
             last_message: text,
             last_message_at: new Date().toISOString(),
-            instance: instance // Sync instance
+            instance: instance, // Sync instance
+            company_id: companyId
           })
           .eq('id', conv.id);
       }
@@ -1122,8 +1155,11 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
           media_url: mediaUrl,
           file_name: fileName,
           file_size: fileSize,
-          instance: instance
+          instance: instance,
+          company_id: companyId
         });
+
+        console.log('[WEBHOOK] Mensagem salva com sucesso');
 
         // 3. Push Notification for Agents
         if (conv?.assigned_to && !fromMe) {
