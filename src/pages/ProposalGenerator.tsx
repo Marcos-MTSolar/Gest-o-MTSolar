@@ -73,6 +73,7 @@ interface FormData {
   structureItems: StructureItem[];
   discountValue: string;
   discountType: 'fixed' | 'percent';
+  discountObservation: string;
 }
 
 interface Results {
@@ -192,7 +193,8 @@ export default function ProposalGenerator() {
     ],
     tipoEstrutura: 'telhado_ceramico',
     discountValue: '',
-    discountType: 'percent'
+    discountType: 'percent',
+    discountObservation: ''
   });
 
   const [results, setResults] = useState<Results>({
@@ -1266,6 +1268,24 @@ export default function ProposalGenerator() {
               </div>
             </div>
 
+            <!-- OBSERVAÇÃO DE DESCONTO -->
+            ${formData.discountObservation ? `
+              <div style="background:#fff;border-left:5px solid #ef4444;border-radius:6px;
+                padding:4mm 6mm;margin-bottom:5mm;box-shadow:0 2px 10px rgba(0,0,0,0.05);
+                border-top:1px solid #fee2e2;border-right:1px solid #fee2e2;border-bottom:1px solid #fee2e2;">
+                <div style="display:flex;align-items:flex-start;gap:3mm;">
+                  <div style="flex-grow:1;">
+                    <span style="color:#ef4444;font-size:10pt;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-right:2mm;">
+                      Desconto:
+                    </span>
+                    <span style="color:#374151;font-size:10pt;font-weight:bold;line-height:1.5;">
+                      ${formData.discountObservation}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
+
             <!-- GRID 3 INDICADORES -->
             <table style="width:100%;border-collapse:separate;border-spacing:3mm;margin-bottom:5mm;">
               <tr>
@@ -2231,6 +2251,20 @@ export default function ProposalGenerator() {
                   </p>
                 </div>
               </div>
+            </div>
+            
+            <div className="mt-6 space-y-2">
+              <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                <Info size={16} className="text-blue-600" />
+                Desconto / Observação
+              </label>
+              <textarea
+                value={formData.discountObservation}
+                onChange={(e) => updateForm('discountObservation', e.target.value)}
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[80px] text-sm"
+                placeholder="Ex: 5% de desconto para pagamento à vista"
+              />
+              <p className="text-[10px] text-gray-400 italic">Este texto aparecerá em destaque logo abaixo do valor total na proposta.</p>
             </div>
 
             {/* Detalhes dos Equipamentos */}
