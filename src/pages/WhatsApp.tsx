@@ -3,24 +3,16 @@ import { supabase } from '../lib/supabase';
 import { evolutionApi } from '../lib/whatsapp';
 import { useAuth } from '../context/AuthContext';
 import { 
-  Send, 
-  User, 
-  Phone, 
-  Clock, 
-  MessageCircle, 
-  Search, 
-  MoreVertical, 
-  CheckCircle2, 
-  Timer, 
-  Lock,
-  ArrowLeft,
-  Settings,
-  LogOut,
-  UserPlus,
-  RefreshCcw,
   Check,
   Pencil,
-  X
+  X,
+  Mic,
+  Paperclip,
+  Image as ImageIcon,
+  FileText,
+  Download,
+  Trash2,
+  File as FileIcon
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
@@ -35,6 +27,10 @@ interface Message {
   from_me: boolean;
   timestamp: string;
   status: string;
+  media_type?: string | null;
+  media_url?: string | null;
+  file_name?: string | null;
+  file_size?: number | null;
 }
 
 interface Conversation {
@@ -48,7 +44,21 @@ interface Conversation {
   assigned_name: string | null;
   assigned_at: string | null;
   token?: string;
+  instance?: string;
+  tag?: string | null;
 }
+
+const WHATSAPP_TAGS = [
+  { id: 'Atendimento Iniciado', label: 'Atendimento Iniciado', color: '#3B82F6' },
+  { id: 'Cuidar e Fechar', label: 'Cuidar e Fechar', color: '#F97316' },
+  { id: 'Fechou Venda', label: 'Fechou Venda', color: '#16A34A' },
+  { id: 'Lead Desqualificado', label: 'Lead Desqualificado', color: '#DC2626' },
+  { id: 'Lead Qualificado', label: 'Lead Qualificado', color: '#22C55E' },
+  { id: 'Não Fechou Venda', label: 'Não Fechou Venda', color: '#6B7280' },
+  { id: 'Orçamento Enviado', label: 'Orçamento Enviado', color: '#9333EA' },
+  { id: 'Visita Agendada', label: 'Visita Agendada', color: '#EAB308' },
+  { id: 'Transferido', label: 'Transferido', color: '#1D4ED8' },
+];
 
 export default function WhatsApp() {
   const { user } = useAuth();
@@ -63,13 +73,35 @@ export default function WhatsApp() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [activeInstance, setActiveInstance] = useState<'all' | 'admin' | 'atendimento'>('all');
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [showTagDropdown, setShowTagDropdown] = useState(false);
+  const [showTransferInstanceModal, setShowTransferInstanceModal] = useState(false);
+  const [transferObservation, setTransferObservation] = useState('');
+  const [isTransferring, setIsTransferring] = useState(false);
+  
   const isAdmin = user?.role?.toUpperCase() === 'CEO' || user?.role?.toUpperCase() === 'ADMIN';
+  const isAgent = isAdmin || user?.role?.toUpperCase() === 'COMMERCIAL';
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Media State
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchConversations();
     fetchAgents();
+  }, [activeInstance]);
 
+  useEffect(() => {
     const conversationSubscription = supabase
       .channel('whatsapp_conversations')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_conversations' }, (payload) => {
@@ -138,11 +170,18 @@ export default function WhatsApp() {
   };
 
   const fetchConversations = async () => {
-    const { data, error } = await supabase
+    let query = supabase
       .from('whatsapp_conversations')
       .select('*')
-      .eq('company_id', user?.company_id)
-      .order('last_message_at', { ascending: false });
+      .eq('company_id', user?.company_id);
+
+    if (activeInstance === 'admin') {
+      query = query.eq('instance', evolutionApi.instances.ADMIN);
+    } else if (activeInstance === 'atendimento') {
+      query = query.eq('instance', evolutionApi.instances.ATENDIMENTO);
+    }
+
+    const { data, error } = await query.order('last_message_at', { ascending: false });
 
     if (!error && data) {
       setConversations(data);
@@ -174,9 +213,22 @@ export default function WhatsApp() {
     }
   };
 
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const base64String = reader.result as string;
+        // Evolution API expects just the base64 data, without the data:image/png;base64, prefix
+        resolve(base64String.split(',')[1]);
+      };
+      reader.onerror = error => reject(error);
+    });
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedConversation || !user) return;
+    if ((!newMessage.trim() && !selectedFile) || !selectedConversation || !user) return;
 
     if (selectedConversation.status !== 'in_progress' || (Number(selectedConversation.assigned_to) !== Number(user.id) && !isAdmin)) {
       alert("Você precisa assumir este atendimento para enviar mensagens.");
@@ -184,27 +236,51 @@ export default function WhatsApp() {
     }
 
     const messageText = newMessage.trim();
+    const currentFile = selectedFile;
+    
     setNewMessage('');
+    setSelectedFile(null);
+    setFilePreview(null);
+    setIsSending(true);
 
     try {
-      // 1. Enviar via Evolution API
-      const result = await evolutionApi.sendMessage(selectedConversation.phone, messageText);
+      let result;
+      let mediaType: string | null = null;
+      let fileName: string | null = null;
+
+      if (currentFile) {
+        const base64 = await fileToBase64(currentFile);
+        fileName = currentFile.name;
+        
+        if (currentFile.type.startsWith('image/')) {
+          mediaType = 'image';
+          result = await evolutionApi.sendMedia(selectedConversation.phone, base64, fileName, 'image', messageText, selectedConversation.instance || undefined);
+        } else {
+          mediaType = 'document';
+          result = await evolutionApi.sendMedia(selectedConversation.phone, base64, fileName, 'document', messageText, selectedConversation.instance || undefined);
+        }
+      } else {
+        result = await evolutionApi.sendMessage(selectedConversation.phone, messageText, selectedConversation.instance || undefined);
+      }
       
       // 2. Salvar no Supabase
       const { error } = await supabase.from('whatsapp_messages').insert({
         conversation_id: selectedConversation.id,
         phone: selectedConversation.phone,
-        message: messageText,
+        message: messageText || (mediaType ? `[${mediaType}]` : ''),
         from_me: true,
         message_id: result.key?.id || `sent-${Date.now()}`,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        media_type: mediaType,
+        file_name: fileName,
+        file_size: currentFile?.size
       });
 
       if (error) throw error;
 
       // 3. Atualizar última mensagem na conversa
       await supabase.from('whatsapp_conversations').update({
-        last_message: messageText,
+        last_message: messageText || `[${mediaType || 'Mídia'}]`,
         last_message_at: new Date().toISOString()
       })
       .eq('id', selectedConversation.id)
@@ -212,8 +288,97 @@ export default function WhatsApp() {
 
     } catch (error: any) {
       console.error("Erro ao enviar mensagem:", error);
-      const msg = error?.response?.data?.error || error?.message || "Falha ao enviar mensagem.";
-      alert(msg);
+      alert(error?.message || "Falha ao enviar mensagem.");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/mp3' });
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = async () => {
+          const base64 = (reader.result as string).split(',')[1];
+          await sendAudioMessage(base64, audioBlob.size);
+        };
+        
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      timerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error("Erro ao acessar microfone:", err);
+      alert("Não foi possível acessar o microfone.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  };
+
+  const sendAudioMessage = async (base64: string, size: number) => {
+    if (!selectedConversation || !user) return;
+
+    try {
+      const result = await evolutionApi.sendAudio(selectedConversation.phone, base64, selectedConversation.instance || undefined);
+      
+      await supabase.from('whatsapp_messages').insert({
+        conversation_id: selectedConversation.id,
+        phone: selectedConversation.phone,
+        message: '[Áudio]',
+        from_me: true,
+        message_id: result.key?.id || `sent-audio-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        media_type: 'audio',
+        file_name: 'audio.mp3',
+        file_size: size
+      });
+
+      await supabase.from('whatsapp_conversations').update({
+        last_message: '[Áudio]',
+        last_message_at: new Date().toISOString()
+      })
+      .eq('id', selectedConversation.id)
+      .eq('company_id', user.company_id);
+
+    } catch (error: any) {
+      console.error("Erro ao enviar áudio:", error);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = () => setFilePreview(reader.result as string);
+        reader.readAsDataURL(file);
+      } else {
+        setFilePreview(null);
+      }
     }
   };
 
@@ -324,12 +489,88 @@ export default function WhatsApp() {
     }
   };
 
+  const updateTag = async (tag: string | null) => {
+    if (!selectedConversation) return;
+
+    const { error } = await supabase
+      .from('whatsapp_conversations')
+      .update({ tag })
+      .eq('id', selectedConversation.id)
+      .eq('company_id', user?.company_id);
+
+    if (!error) {
+      setSelectedConversation({ ...selectedConversation, tag });
+      setShowTagDropdown(false);
+      fetchConversations();
+    }
+  };
+
+  const transferToAdministrative = async () => {
+    if (!selectedConversation || !user) return;
+    
+    setIsTransferring(true);
+    try {
+      // 1. Enviar mensagem automática de despedida via Atendimento
+      const farewellMsg = "Olá! Seu atendimento foi encaminhado para nossa equipe administrativa. Em breve entraremos em contato. Obrigado!";
+      await evolutionApi.sendMessage(selectedConversation.phone, farewellMsg, 'atendimento-cliente');
+
+      // 2. Salvar mensagem de despedida no banco
+      await supabase.from('whatsapp_messages').insert({
+        conversation_id: selectedConversation.id,
+        phone: selectedConversation.phone,
+        message: farewellMsg,
+        from_me: true,
+        timestamp: new Date().toISOString(),
+        status: 'sent'
+      });
+
+      // 3. Salvar observação interna se existir
+      if (transferObservation.trim()) {
+        await supabase.from('whatsapp_messages').insert({
+          conversation_id: selectedConversation.id,
+          phone: selectedConversation.phone,
+          message: `📌 NOTA DE TRANSFERÊNCIA: ${transferObservation.trim()}`,
+          from_me: true,
+          is_internal: true,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // 4. Atualizar conversa: troca instância, coloca tag "Transferido", volta status para waiting? 
+      // O usuário disse: "Move a conversa para aparecer na fila do Administrativo".
+      // Para aparecer na fila (waiting), vamos resetar o assigned_to.
+      await supabase.from('whatsapp_conversations').update({
+        instance: 'mtsolar',
+        tag: 'Transferido',
+        status: 'waiting',
+        assigned_to: null,
+        assigned_name: null,
+        assigned_at: null,
+        last_message: '[Transferido para Administrativo]',
+        last_message_at: new Date().toISOString()
+      }).eq('id', selectedConversation.id);
+
+      alert("Conversa transferida com sucesso para o Administrativo!");
+      setSelectedConversation(null);
+      setShowTransferInstanceModal(false);
+      setTransferObservation('');
+      fetchConversations();
+
+    } catch (err: any) {
+      console.error("Erro na transferência:", err);
+      alert("Falha ao transferir conversa.");
+    } finally {
+      setIsTransferring(false);
+    }
+  };
 
 
-  const allFiltered = conversations.filter(conv =>
-    (conv.contact_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-     conv.phone.includes(searchQuery))
-  );
+  const allFiltered = conversations.filter(conv => {
+    const matchesSearch = (conv.contact_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                           conv.phone.includes(searchQuery));
+    const matchesTag = activeTag ? conv.tag === activeTag : true;
+    return matchesSearch && matchesTag;
+  });
 
   // Fila de espera — aparece para todos
   const waitingConversations = allFiltered.filter(c => c.status === 'waiting');
@@ -350,6 +591,7 @@ export default function WhatsApp() {
   const renderConversationItem = (conv: Conversation) => {
     const isAssignedToOther = conv.status === 'in_progress' && Number(conv.assigned_to) !== Number(user?.id);
     const isBlocked = isAssignedToOther && !isAdmin;
+    const currentTag = WHATSAPP_TAGS.find(t => t.id === conv.tag);
 
     return (
       <div
@@ -370,15 +612,29 @@ export default function WhatsApp() {
         )}
       >
         <div className="flex justify-between items-start mb-1">
-          <div className="flex flex-col">
+          <div className="flex flex-col gap-1">
             <span className="font-bold text-gray-800 truncate">
               {conv.contact_name || conv.phone}
             </span>
-            {conv.token && (
-              <span className="text-[10px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 w-fit mt-0.5">
-                {conv.token}
-              </span>
-            )}
+            <div className="flex flex-wrap gap-1">
+              {conv.instance === 'atendimento-cliente' ? (
+                <span className="text-[9px] font-bold text-green-700 bg-green-100 px-1.5 py-0.5 rounded border border-green-200 w-fit uppercase tracking-tighter">
+                  Atendimento
+                </span>
+              ) : (
+                <span className="text-[9px] font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 w-fit uppercase tracking-tighter">
+                  Administrativo
+                </span>
+              )}
+              {currentTag && (
+                <span 
+                  className="text-[9px] font-bold text-white px-1.5 py-0.5 rounded w-fit uppercase tracking-tighter"
+                  style={{ backgroundColor: currentTag.color }}
+                >
+                  {currentTag.label}
+                </span>
+              )}
+            </div>
           </div>
           <span className="text-[10px] text-gray-400">
             {format(new Date(conv.last_message_at), 'HH:mm', { locale: ptBR })}
@@ -440,6 +696,64 @@ export default function WhatsApp() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
+          </div>
+          
+          <div className="flex gap-1 p-1 bg-gray-100 rounded-lg mt-3">
+            <button 
+              onClick={() => setActiveInstance('all')}
+              className={cn(
+                "flex-1 text-[10px] font-bold py-1.5 rounded-md transition-all",
+                activeInstance === 'all' ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:bg-gray-200"
+              )}
+            >
+              Todos
+            </button>
+            <button 
+              onClick={() => setActiveInstance('atendimento')}
+              className={cn(
+                "flex-1 text-[10px] font-bold py-1.5 rounded-md transition-all",
+                activeInstance === 'atendimento' ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:bg-gray-200"
+              )}
+            >
+              Atendimento
+            </button>
+            <button 
+              onClick={() => setActiveInstance('admin')}
+              className={cn(
+                "flex-1 text-[10px] font-bold py-1.5 rounded-md transition-all",
+                activeInstance === 'admin' ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:bg-gray-200"
+              )}
+            >
+              Administrativo
+            </button>
+          </div>
+
+          <div className="mt-3 overflow-x-auto no-scrollbar flex gap-2 pb-1">
+            <button
+              onClick={() => setActiveTag(null)}
+              className={cn(
+                "whitespace-nowrap px-3 py-1 rounded-full text-[10px] font-bold border transition-all",
+                !activeTag ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-500 border-gray-200 hover:border-blue-300"
+              )}
+            >
+              Todas
+            </button>
+            {WHATSAPP_TAGS.map(tag => (
+              <button
+                key={tag.id}
+                onClick={() => setActiveTag(tag.id)}
+                className={cn(
+                  "whitespace-nowrap px-3 py-1 rounded-full text-[10px] font-bold border transition-all",
+                  activeTag === tag.id ? "border-transparent text-white shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
+                )}
+                style={{ 
+                  backgroundColor: activeTag === tag.id ? tag.color : 'white',
+                  borderColor: activeTag === tag.id ? 'transparent' : '#e5e7eb'
+                }}
+              >
+                {tag.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -508,12 +822,57 @@ export default function WhatsApp() {
                 </div>
                 <div>
                   <h2 className="font-bold text-gray-800">{selectedConversation.contact_name || selectedConversation.phone}</h2>
-                  <p className="text-xs text-gray-400 flex items-center gap-1">
-                    <Phone size={10} /> {selectedConversation.phone}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-gray-400 flex items-center gap-1">
+                      <Phone size={10} /> {selectedConversation.phone}
+                    </p>
+                    {selectedConversation.tag && (
+                      <span 
+                        className="text-[9px] font-bold text-white px-1.5 py-0.5 rounded uppercase tracking-tighter"
+                        style={{ backgroundColor: WHATSAPP_TAGS.find(t => t.id === selectedConversation.tag)?.color }}
+                      >
+                        {selectedConversation.tag}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowTagDropdown(!showTagDropdown)}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition-all"
+                  >
+                    Etiqueta
+                    <ArrowLeft size={12} className={cn("transition-transform", showTagDropdown ? "-rotate-90" : "")} />
+                  </button>
+
+                  {showTagDropdown && (
+                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 z-50 animate-in fade-in zoom-in duration-100">
+                      <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Selecionar Etiqueta</div>
+                      {WHATSAPP_TAGS.map(tag => (
+                        <button
+                          key={tag.id}
+                          onClick={() => updateTag(tag.id)}
+                          className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }}></div>
+                          {tag.label}
+                          {selectedConversation.tag === tag.id && <Check size={12} className="ml-auto text-blue-600" />}
+                        </button>
+                      ))}
+                      <div className="border-t border-gray-100 mt-2 pt-2">
+                        <button
+                          onClick={() => updateTag(null)}
+                          className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs hover:bg-red-50 text-red-600 transition-colors"
+                        >
+                          <X size={12} />
+                          Remover Etiqueta
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <button className="p-2 text-gray-400 hover:text-blue-600 transition-colors">
                   <MoreVertical size={20} />
                 </button>
@@ -534,12 +893,73 @@ export default function WhatsApp() {
                   )}
                 >
                   <div className={cn(
-                    "px-3 py-2 rounded-lg text-sm shadow-sm relative",
+                    "px-3 py-2 rounded-lg text-sm shadow-sm relative overflow-hidden",
                     msg.from_me 
-                      ? "bg-[#dcf8c6] text-gray-800 rounded-tr-none" 
-                      : "bg-white text-gray-800 rounded-tl-none border border-gray-100"
+                      ? (msg.is_internal ? "bg-amber-100 text-amber-900 border border-amber-200" : "bg-[#dcf8c6] text-gray-800")
+                      : "bg-white text-gray-800 rounded-tl-none border border-gray-100",
+                    msg.from_me && !msg.is_internal ? "rounded-tr-none" : ""
                   )}>
-                    {msg.message}
+                    {msg.is_internal && (
+                      <div className="text-[10px] font-bold text-amber-600 mb-1 flex items-center gap-1">
+                        <Lock size={10} /> NOTA INTERNA
+                      </div>
+                    )}
+                    {/* Media Rendering */}
+                    {msg.media_type === 'image' && (
+                      <div className="mb-2 max-w-full">
+                        <img 
+                          src={msg.media_url || ''} 
+                          alt="Imagem" 
+                          className="rounded-lg max-h-64 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => msg.media_url && window.open(msg.media_url, '_blank')}
+                          onError={(e) => {
+                            // If media_url is missing or broken, we can't show it easily without proxying
+                            // but for now we just hide it or show a placeholder
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {msg.media_type === 'audio' && (
+                      <div className="mb-2 min-w-[240px]">
+                        <audio 
+                          src={msg.media_url || ''} 
+                          controls 
+                          className="w-full h-10 accent-blue-600"
+                        />
+                      </div>
+                    )}
+
+                    {msg.media_type === 'document' && (
+                      <div className="mb-2 p-3 bg-black/5 rounded-lg border border-black/10 flex items-center gap-3 min-w-[200px]">
+                        <div className="w-10 h-10 rounded bg-white flex items-center justify-center text-blue-600 border border-gray-200">
+                          <FileText size={20} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold truncate text-gray-800">{msg.file_name || 'Documento'}</p>
+                          <p className="text-[10px] text-gray-500">
+                            {msg.file_size ? `${(msg.file_size / 1024 / 1024).toFixed(2)} MB` : 'Arquivo'}
+                          </p>
+                        </div>
+                        {msg.media_url && (
+                          <a 
+                            href={msg.media_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                            title="Baixar"
+                          >
+                            <Download size={16} />
+                          </a>
+                        )}
+                      </div>
+                    )}
+
+                    {msg.message && msg.message !== '[Áudio]' && msg.message !== '[image]' && msg.message !== '[document]' && (
+                      <div className="whitespace-pre-wrap">{msg.message}</div>
+                    )}
+                    
                     <div className="text-[9px] text-gray-400 mt-1 text-right">
                       {format(new Date(msg.timestamp), 'HH:mm', { locale: ptBR })}
                     </div>
@@ -548,25 +968,94 @@ export default function WhatsApp() {
               ))}
             </div>
 
+            {/* Preview de Arquivo */}
+            {selectedFile && (
+              <div className="px-4 py-3 bg-white border-t border-gray-100 flex items-center gap-4 animate-in slide-in-from-bottom-2">
+                {filePreview ? (
+                  <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
+                    <img src={filePreview} alt="Preview" className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="w-16 h-16 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center text-blue-600">
+                    <FileText size={24} />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-gray-800 truncate">{selectedFile.name}</p>
+                  <p className="text-xs text-gray-500">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    setSelectedFile(null);
+                    setFilePreview(null);
+                  }}
+                  className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            )}
+
             {/* Campo de Envio */}
             <div className="p-4 bg-white border-t border-gray-200">
               {selectedConversation.status === 'in_progress' && (Number(selectedConversation.assigned_to) === Number(user?.id) || isAdmin) ? (
-                <form onSubmit={handleSendMessage} className="flex gap-2">
+                <div className="flex items-end gap-2">
                   <input 
-                    type="text" 
-                    placeholder="Digite uma mensagem..." 
-                    className="flex-1 px-4 py-2 bg-gray-100 border-none rounded-full text-sm focus:ring-2 focus:ring-blue-500 transition-all"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
+                    type="file" 
+                    ref={fileInputRef}
+                    className="hidden"
+                    accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
+                    onChange={handleFileSelect}
                   />
                   <button 
-                    type="submit" 
-                    disabled={!newMessage.trim()}
-                    className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-2.5 text-gray-400 hover:text-blue-600 transition-colors bg-gray-50 rounded-full"
                   >
-                    <Send size={18} />
+                    <Paperclip size={20} />
                   </button>
-                </form>
+                  
+                  <form onSubmit={handleSendMessage} className="flex-1 flex gap-2 items-center bg-gray-100 rounded-[24px] px-4 py-1">
+                    {isRecording ? (
+                      <div className="flex-1 flex items-center gap-3 py-2 animate-pulse">
+                        <div className="w-2 h-2 rounded-full bg-red-600 animate-bounce" />
+                        <span className="text-sm font-bold text-red-600">Gravando {Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}</span>
+                        <span className="text-xs text-gray-400 ml-auto">Solte para enviar</span>
+                      </div>
+                    ) : (
+                      <input 
+                        type="text" 
+                        placeholder="Digite uma mensagem..." 
+                        className="flex-1 bg-transparent border-none py-2 text-sm focus:ring-0 transition-all"
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                      />
+                    )}
+                  </form>
+
+                  {!newMessage.trim() && !selectedFile && !isRecording ? (
+                    <button 
+                      type="button"
+                      onMouseDown={startRecording}
+                      onMouseUp={stopRecording}
+                      onMouseLeave={stopRecording}
+                      onTouchStart={(e) => { e.preventDefault(); startRecording(); }}
+                      onTouchEnd={(e) => { e.preventDefault(); stopRecording(); }}
+                      className="w-10 h-10 bg-gray-100 text-gray-400 rounded-full flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                    >
+                      <Mic size={20} />
+                    </button>
+                  ) : (
+                    <button 
+                      type="button"
+                      onClick={handleSendMessage}
+                      disabled={isSending || (!newMessage.trim() && !selectedFile)}
+                      className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
+                    >
+                      <Send size={18} />
+                    </button>
+                  )}
+                </div>
               ) : (
                 <div className="text-center p-2 bg-red-50 text-red-600 rounded-lg text-sm font-medium border border-red-100 flex items-center justify-center gap-2">
                   {selectedConversation.status === 'in_progress' ? (
@@ -683,6 +1172,15 @@ export default function WhatsApp() {
                   >
                     <CheckCircle2 size={16} /> Encerrar Atendimento
                   </button>
+
+                  {selectedConversation.instance === 'atendimento-cliente' && isAgent && (
+                    <button 
+                      onClick={() => setShowTransferInstanceModal(true)}
+                      className="w-full flex items-center justify-center gap-2 py-3 bg-blue-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-all shadow-md"
+                    >
+                      <RefreshCcw size={16} /> Transferir para Administrativo
+                    </button>
+                  )}
                 </>
               ) : selectedConversation.status === 'closed' ? (
                 <button 
@@ -707,6 +1205,56 @@ export default function WhatsApp() {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Transferência de Instância */}
+      {showTransferInstanceModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-blue-900 text-white">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <RefreshCcw size={20} />
+                Transferir Instância
+              </h3>
+              <button onClick={() => setShowTransferInstanceModal(false)} className="hover:bg-white/10 p-1 rounded-lg transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="p-4 bg-blue-50 rounded-xl border border-blue-100 text-blue-900 text-sm">
+                <p>Você está transferindo este atendimento para a instância <strong>Administrativo (mtsolar)</strong>.</p>
+                <p className="mt-2 text-xs opacity-80">O cliente receberá uma mensagem automática informando a transferência.</p>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Observação Interna (Opcional)</label>
+                <textarea 
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 transition-all h-24 resize-none"
+                  placeholder="Ex: Cliente solicita alteração no contrato financeiro..."
+                  value={transferObservation}
+                  onChange={(e) => setTransferObservation(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowTransferInstanceModal(false)}
+                className="px-6 py-2 text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={transferToAdministrative}
+                disabled={isTransferring}
+                className="px-6 py-2 bg-blue-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-all shadow-md disabled:opacity-50 flex items-center gap-2"
+              >
+                {isTransferring ? 'Transferindo...' : 'Confirmar Transferência'}
+              </button>
             </div>
           </div>
         </div>

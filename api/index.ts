@@ -995,8 +995,10 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
 
     // 4. Send WhatsApp message
     const EVOLUTION_URL = process.env.VITE_EVOLUTION_URL;
-    const EVOLUTION_KEY = process.env.VITE_EVOLUTION_KEY;
-    const INSTANCE_NAME = process.env.VITE_EVOLUTION_INSTANCE;
+    const INSTANCE_NAME = conv.instance || process.env.VITE_EVOLUTION_INSTANCE;
+    const EVOLUTION_KEY = INSTANCE_NAME === process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO 
+      ? (process.env.VITE_EVOLUTION_TOKEN_ATENDIMENTO || process.env.VITE_EVOLUTION_KEY)
+      : process.env.VITE_EVOLUTION_KEY;
 
     const response = await fetch(`${EVOLUTION_URL}/message/sendText/${INSTANCE_NAME}`, {
       method: 'POST',
@@ -1021,19 +1023,107 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
 
 app.post('/api/webhooks/whatsapp', async (req, res) => {
   const payload = req.body;
+  const instance = payload.instance || 'mtsolar';
   
   // Logic to handle incoming message from Evolution API
   if (payload.event === 'messages.upsert') {
     const message = payload.data;
     const phone = message.key.remoteJid.split('@')[0];
-    const text = message.message?.conversation || message.message?.extendedTextMessage?.text;
+    const fromMe = message.key.fromMe;
+    const messageId = message.key.id;
+    const pushName = message.pushName || null;
+
+    let mediaType = null;
+    let mediaUrl = null;
+    let fileName = null;
+    let fileSize = null;
+
+    if (message.message?.imageMessage) {
+      mediaType = 'image';
+      mediaUrl = message.message.imageMessage.url || message.message.imageMessage.directPath;
+      fileName = 'image.jpg';
+    } else if (message.message?.audioMessage) {
+      mediaType = 'audio';
+      mediaUrl = message.message.audioMessage.url || message.message.audioMessage.directPath;
+      fileName = 'audio.mp3';
+    } else if (message.message?.documentMessage) {
+      mediaType = 'document';
+      mediaUrl = message.message.documentMessage.url || message.message.documentMessage.directPath;
+      fileName = message.message.documentMessage.fileName || 'document';
+      fileSize = message.message.documentMessage.fileLength;
+    } else if (message.message?.videoMessage) {
+      mediaType = 'video';
+      mediaUrl = message.message.videoMessage.url || message.message.videoMessage.directPath;
+      fileName = 'video.mp4';
+    }
+
+    const text = message.message?.conversation || 
+                 message.message?.extendedTextMessage?.text || 
+                 message.message?.imageMessage?.caption || 
+                 message.message?.videoMessage?.caption || 
+                 (mediaType ? `[${mediaType}]` : '[Mensagem]');
 
     if (text) {
-      // Find conversation
-      const { data: conv } = await supabase.from('whatsapp_conversations').select('*').eq('phone', phone).single();
+      // 1. Find or Create Conversation
+      const { data: conv } = await supabase
+        .from('whatsapp_conversations')
+        .select('*')
+        .eq('phone', phone)
+        .single();
       
-      if (conv?.assigned_to) {
-        await sendPushNotification(conv.assigned_to, 'WhatsApp', `Nova mensagem de ${conv.contact_name || phone}: ${text.substring(0, 50)}...`);
+      let conversationId = conv?.id;
+
+      if (!conv) {
+        // Create new conversation
+        const { data: newConv, error: createError } = await supabase
+          .from('whatsapp_conversations')
+          .insert({
+            phone,
+            contact_name: pushName,
+            last_message: text,
+            last_message_at: new Date().toISOString(),
+            status: 'waiting',
+            instance: instance
+          })
+          .select()
+          .single();
+        
+        if (!createError) conversationId = newConv.id;
+      } else {
+        // Update existing conversation
+        await supabase
+          .from('whatsapp_conversations')
+          .update({
+            last_message: text,
+            last_message_at: new Date().toISOString(),
+            instance: instance // Sync instance
+          })
+          .eq('id', conv.id);
+      }
+
+      // 2. Save Message
+      if (conversationId) {
+        await supabase.from('whatsapp_messages').insert({
+          conversation_id: conversationId,
+          phone,
+          message: text,
+          from_me: fromMe,
+          message_id: messageId,
+          timestamp: new Date().toISOString(),
+          status: 'received',
+          media_type: mediaType,
+          media_url: mediaUrl,
+          file_name: fileName,
+          file_size: fileSize
+        });
+
+        // 3. Push Notification for Agents
+        if (conv?.assigned_to && !fromMe) {
+          await sendPushNotification(conv.assigned_to, 'WhatsApp', `Nova mensagem de ${conv.contact_name || phone}: ${text.substring(0, 50)}...`);
+        } else if (!fromMe) {
+          // If not assigned, maybe notify admins? 
+          // (Implementation detail: usually we don't spam everyone, but here we could)
+        }
       }
     }
   }
