@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 import type { StockItem, StockWithdrawal, WithdrawalFormData } from '../types/stock';
 
 export function useStock() {
@@ -7,28 +8,35 @@ export function useStock() {
   const [withdrawals, setWithdrawals] = useState<StockWithdrawal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { user: authUser } = useAuth();
+  const companyId = authUser?.company_id;
 
   const fetchItems = useCallback(async () => {
+    if (!companyId) return;
     const { data, error } = await supabase
       .from('stock_items')
       .select('*')
+      .eq('company_id', companyId)
       .order('category', { ascending: true })
       .order('specification', { ascending: true });
     if (error) { setError(error.message); return; }
     setItems(data || []);
-  }, []);
+  }, [companyId]);
 
   const fetchWithdrawals = useCallback(async () => {
+    if (!companyId) return;
     const { data, error } = await supabase
       .from('stock_withdrawals')
       .select('*, stock_items(category, specification, unit)')
+      .eq('company_id', companyId)
       .order('withdrawal_date', { ascending: false })
       .limit(100);
     if (error) { setError(error.message); return; }
     setWithdrawals(data || []);
-  }, []);
+  }, [companyId]);
 
   useEffect(() => {
+    if (!companyId) return;
     const load = async () => {
       setLoading(true);
       await Promise.all([fetchItems(), fetchWithdrawals()]);
@@ -37,19 +45,29 @@ export function useStock() {
     load();
 
     const channel = supabase
-      .channel('stock-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_items' }, fetchItems)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'stock_withdrawals' }, fetchWithdrawals)
+      .channel(`stock-changes-${companyId}`)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'stock_items',
+        filter: `company_id=eq.${companyId}` 
+      }, fetchItems)
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'stock_withdrawals',
+        filter: `company_id=eq.${companyId}` 
+      }, fetchWithdrawals)
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [fetchItems, fetchWithdrawals]);
+  }, [companyId, fetchItems, fetchWithdrawals]);
 
   const registerWithdrawal = async (form: WithdrawalFormData) => {
     const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase
       .from('stock_withdrawals')
-      .insert({ ...form, created_by: user?.id });
+      .insert({ ...form, created_by: user?.id, company_id: companyId });
     if (error) throw new Error(error.message);
     await fetchItems();
     await fetchWithdrawals();
@@ -59,7 +77,8 @@ export function useStock() {
     const { error } = await supabase
       .from('stock_items')
       .update({ ideal_quantity })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('company_id', companyId);
     if (error) throw new Error(error.message);
     await fetchItems();
   };
@@ -68,7 +87,8 @@ export function useStock() {
     const { error } = await supabase
       .from('stock_items')
       .update({ current_quantity })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('company_id', companyId);
     if (error) throw new Error(error.message);
     await fetchItems();
   };
@@ -76,7 +96,7 @@ export function useStock() {
   const addItem = async (item: Omit<StockItem, 'id' | 'created_at' | 'updated_at'>) => {
     const { data, error } = await supabase
       .from('stock_items')
-      .insert(item)
+      .insert({ ...item, company_id: companyId })
       .select();
     if (error) throw new Error(error.message);
     
@@ -92,7 +112,8 @@ export function useStock() {
       const { error } = await supabase
         .from('stock_items')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('company_id', companyId);
       
       console.log('[StockHook] Resposta do Supabase - Erro:', error);
       

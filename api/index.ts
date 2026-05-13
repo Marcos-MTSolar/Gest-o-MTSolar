@@ -200,7 +200,12 @@ app.post('/api/auth/login', async (req, res) => {
 
   // Log login, but ignore error if user is dummy
   if (user) {
-    await supabase.from('logs').insert({ user_id: effectiveUser.id, action: 'LOGIN', details: 'User logged in' });
+    await supabase.from('logs').insert({ 
+      user_id: effectiveUser.id, 
+      action: 'LOGIN', 
+      details: 'User logged in',
+      company_id: effectiveUser.company_id 
+    });
   }
 
   res.json({ 
@@ -298,7 +303,8 @@ app.post('/api/users/push-token', authenticateToken, async (req: any, res) => {
   const { error } = await supabase
     .from('users')
     .update({ push_token: token })
-    .eq('id', req.user.id);
+    .eq('id', req.user.id)
+    .eq('company_id', req.user.company_id);
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
@@ -572,11 +578,12 @@ app.put('/api/projects/:id/commercial', authenticateToken, async (req: any, res)
       finance_grace_period,
       updated_at: new Date() 
     })
-    .eq('project_id', req.params.id);
+    .eq('project_id', req.params.id)
+    .eq('company_id', req.user.company_id);
 
   if (status === 'proposta_enviada') {
-    const { data: proj } = await supabase.from('projects').select('client_name').eq('id', req.params.id).single();
-    await supabase.from('projects').update({ current_stage: 'inspection', status: 'proposta_enviada', updated_at: new Date() }).eq('id', req.params.id);
+    const { data: proj } = await supabase.from('projects').select('client_name').eq('id', req.params.id).eq('company_id', req.user.company_id).single();
+    await supabase.from('projects').update({ current_stage: 'inspection', status: 'proposta_enviada', updated_at: new Date() }).eq('id', req.params.id).eq('company_id', req.user.company_id);
     
     // Notify all technical users (since they all see the technical queue)
     const { data: techUsers } = await supabase.from('users').select('id').eq('role', 'TECHNICAL');
@@ -586,7 +593,7 @@ app.put('/api/projects/:id/commercial', authenticateToken, async (req: any, res)
       }
     }
   } else if (status === 'pendente_comercial') {
-    await supabase.from('projects').update({ status: 'pendente_comercial', updated_at: new Date() }).eq('id', req.params.id);
+    await supabase.from('projects').update({ status: 'pendente_comercial', updated_at: new Date() }).eq('id', req.params.id).eq('company_id', req.user.company_id);
   }
 
 
@@ -608,10 +615,10 @@ app.put('/api/projects/:id/kit', authenticateToken, async (req: any, res) => {
     // Some schemas put these in technical_data. We'll try to put them in technical_data.
     await supabase.from('technical_data').update({
       inverter_model, inverter_power, module_model, module_power, updated_at: new Date()
-    }).eq('project_id', req.params.id);
+    }).eq('project_id', req.params.id).eq('company_id', req.user.company_id);
 
     // Update main project status
-    await supabase.from('projects').update({ ...updatePayload, status: 'kit_definido' }).eq('id', req.params.id);
+    await supabase.from('projects').update({ ...updatePayload, status: 'kit_definido' }).eq('id', req.params.id).eq('company_id', req.user.company_id);
 
 
     res.json({ success: true });
@@ -638,7 +645,7 @@ app.put('/api/projects/:id/technical', authenticateToken, upload.any(), async (r
   }
 
   // Fetch existing media
-  const { data: currentData } = await supabase.from('technical_data').select('inspection_media').eq('project_id', req.params.id).single();
+  const { data: currentData } = await supabase.from('technical_data').select('inspection_media').eq('project_id', req.params.id).eq('company_id', req.user.company_id).single();
   let existingMedia: string[] = [];
   if (currentData?.inspection_media) {
     try { existingMedia = JSON.parse(currentData.inspection_media); } catch (e) { }
@@ -652,7 +659,8 @@ app.put('/api/projects/:id/technical', authenticateToken, upload.any(), async (r
       project_id: parseInt(req.params.id),
       entrance_pattern, grounding, roof_structure, roof_overview, breaker_box,
       structure_type, module_quantity, reinforcement_needed: reinforcement_needed === 'true', observations, status,
-      inspection_media: JSON.stringify(finalMedia), updated_at: new Date()
+      inspection_media: JSON.stringify(finalMedia), updated_at: new Date(),
+      company_id: req.user.company_id
     }, { onConflict: 'project_id' });
 
   if (upsertError) {
@@ -661,7 +669,7 @@ app.put('/api/projects/:id/technical', authenticateToken, upload.any(), async (r
 
   // Update project stage when vistoria is finalized â€” goes directly to homologation
   if (status === 'vistoria_concluida') {
-    await supabase.from('projects').update({ current_stage: 'installation', status: 'vistoria_concluida', updated_at: new Date() }).eq('id', req.params.id);
+    await supabase.from('projects').update({ current_stage: 'homologation', status: 'vistoria_concluida', updated_at: new Date() }).eq('id', req.params.id).eq('company_id', req.user.company_id);
   }
 
 
@@ -696,14 +704,14 @@ app.put('/api/projects/:id/installation', authenticateToken, async (req: any, re
     };
 
     console.log('Executando update em technical_data com:', updates);
-    const { error: techError } = await supabase.from('technical_data').update(updates).eq('project_id', projectId);
+    const { error: techError } = await supabase.from('technical_data').update(updates).eq('project_id', projectId).eq('company_id', req.user.company_id);
     if (techError) {
       console.error('Erro ao atualizar technical_data:', techError);
       return res.status(500).json({ error: `Erro no Banco (technical_data): ${techError.message}` });
     }
 
     console.log('Atualizando status do projeto para:', status);
-    const { error: projectError } = await supabase.from('projects').update({ installation_status: status, updated_at: new Date() }).eq('id', projectId);
+    const { error: projectError } = await supabase.from('projects').update({ installation_status: status, updated_at: new Date() }).eq('id', projectId).eq('company_id', req.user.company_id);
     if (projectError) {
       console.error('Erro ao atualizar projects (installation_status):', projectError);
       return res.status(500).json({ error: `Erro no Banco (projects): ${projectError.message}` });
@@ -711,7 +719,7 @@ app.put('/api/projects/:id/installation', authenticateToken, async (req: any, re
 
     if (status === 'approved') {
       console.log('Status "approved" detectado. Movendo para homologation.');
-      const { error: stageError } = await supabase.from('projects').update({ current_stage: 'homologation', updated_at: new Date() }).eq('id', projectId);
+      const { error: stageError } = await supabase.from('projects').update({ current_stage: 'homologation', updated_at: new Date() }).eq('id', projectId).eq('company_id', req.user.company_id);
       if (stageError) console.error('Erro ao atualizar current_stage:', stageError);
     }
 
@@ -753,9 +761,9 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
   console.log('Updates object que serÃ¡ enviado pro Supabase:', updates);
 
   // Previous status check
-  const { data: project } = await supabase.from('projects').select('homologation_status').eq('id', req.params.id).single();
+  const { data: project } = await supabase.from('projects').select('homologation_status').eq('id', req.params.id).eq('company_id', req.user.company_id).single();
 
-  const { error: updateError } = await supabase.from('projects').update(updates).eq('id', req.params.id);
+  const { error: updateError } = await supabase.from('projects').update(updates).eq('id', req.params.id).eq('company_id', req.user.company_id);
   if (updateError) {
     console.error('Supabase Update Error:', updateError);
   } else {
@@ -764,17 +772,17 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
 
     if (homologation_status === 'connection_point_approved') {
       // Busca o client_id e as fotos antes de atualizar o projeto
-      const { data: projData } = await supabase.from('projects').select('client_id, client_name').eq('id', req.params.id).single();
+      const { data: projData } = await supabase.from('projects').select('client_id, client_name').eq('id', req.params.id).eq('company_id', req.user.company_id).single();
       
       // Busca fotos da obra para exclusão
-      const { data: techData } = await supabase.from('technical_data').select('*').eq('project_id', req.params.id).single();
+      const { data: techData } = await supabase.from('technical_data').select('*').eq('project_id', req.params.id).eq('company_id', req.user.company_id).single();
 
       // Atualiza o projeto para finalizado
       await supabase.from('projects').update({ 
         current_stage: 'completed', 
         status: 'completed', 
         updated_at: new Date() 
-      }).eq('id', req.params.id);
+      }).eq('id', req.params.id).eq('company_id', req.user.company_id);
 
       // Exclusão automática dos arquivos físicos no Supabase Storage
       if (techData) {
@@ -807,7 +815,7 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
         try {
           const resetPhotos: any = {};
           photoFields.forEach(f => resetPhotos[f] = null);
-          await supabase.from('technical_data').update(resetPhotos).eq('project_id', req.params.id);
+          await supabase.from('technical_data').update(resetPhotos).eq('project_id', req.params.id).eq('company_id', req.user.company_id);
         } catch (e) {
           console.error(`[DELETE ERROR] Erro ao limpar technical_data:`, e);
         }
@@ -815,14 +823,14 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
 
       // 2. Exclusão das propostas do storage
       try {
-        const { data: proposals } = await supabase.from('proposal_history').select('url_arquivo').eq('project_id', req.params.id);
+        const { data: proposals } = await supabase.from('proposal_history').select('url_arquivo').eq('project_id', req.params.id).eq('company_id', req.user.company_id);
         if (proposals && proposals.length > 0) {
           const proposalFiles = proposals.map(p => p.url_arquivo?.split('/').pop()).filter(Boolean) as string[];
           if (proposalFiles.length > 0) {
             console.log(`Excluindo ${proposalFiles.length} propostas do storage para o projeto ${req.params.id}`);
             await supabase.storage.from('propostas').remove(proposalFiles);
           }
-          await supabase.from('proposal_history').delete().eq('project_id', req.params.id);
+          await supabase.from('proposal_history').delete().eq('project_id', req.params.id).eq('company_id', req.user.company_id);
         }
       } catch (e) {
         console.error(`[DELETE ERROR] Erro ao excluir propostas:`, e);
@@ -831,7 +839,7 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
       // 3. Exclusão dos dados comerciais
       try {
         console.log(`Removendo dados comerciais para o projeto ${req.params.id}`);
-        await supabase.from('commercial_data').delete().eq('project_id', req.params.id);
+        await supabase.from('commercial_data').delete().eq('project_id', req.params.id).eq('company_id', req.user.company_id);
       } catch (e) {
         console.error(`[DELETE ERROR] Erro ao excluir commercial_data:`, e);
       }
@@ -846,7 +854,7 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
           schedule_status: null,
           schedule_issue_notes: null,
           updated_at: new Date() 
-        }).eq('id', req.params.id);
+        }).eq('id', req.params.id).eq('company_id', req.user.company_id);
       } catch (e) {
         console.error(`[DELETE ERROR] Erro ao limpar dados do cronograma:`, e);
       }
@@ -855,18 +863,18 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
       if (projData?.client_id) {
         try {
           console.log(`Finalizando projeto ${req.params.id}. Removendo dados do cliente ${projData.client_id}`);
-          await supabase.from('projects').update({ client_id: null }).eq('id', req.params.id);
-          await supabase.from('clients').delete().eq('id', projData.client_id);
+          await supabase.from('projects').update({ client_id: null }).eq('id', req.params.id).eq('company_id', req.user.company_id);
+          await supabase.from('clients').delete().eq('id', projData.client_id).eq('company_id', req.user.company_id);
         } catch (e) {
           console.error(`[DELETE ERROR] Erro ao limpar dados do cliente:`, e);
         }
       }
     } else if (homologation_status === 'technical_analysis' && project?.homologation_status !== 'technical_analysis') {
     // Log the automatic transition
-    await supabase.from('logs').insert({ user_id: req.user.id, action: 'HOMOLOGATION_STARTED', details: `Checklist concluÃ­do. Processo de homologaÃ§Ã£o iniciado para o projeto ID ${req.params.id}` });
+    await supabase.from('logs').insert({ user_id: req.user.id, action: 'HOMOLOGATION_STARTED', details: `Checklist concluÃ­do. Processo de homologaÃ§Ã£o iniciado para o projeto ID ${req.params.id}`, company_id: req.user.company_id });
   } else if ((homologation_status === null || homologation_status === '') && project?.homologation_status === 'technical_analysis') {
     // Log the regression
-    await supabase.from('logs').insert({ user_id: req.user.id, action: 'HOMOLOGATION_SUSPENDED', details: `Checklist reaberto/pendente. Processo de homologação suspenso para o projeto ID ${req.params.id}` });
+    await supabase.from('logs').insert({ user_id: req.user.id, action: 'HOMOLOGATION_SUSPENDED', details: `Checklist reaberto/pendente. Processo de homologação suspenso para o projeto ID ${req.params.id}`, company_id: req.user.company_id });
   }
 
   res.json({ success: true });
@@ -955,7 +963,7 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
   try {
     // 1. Get user name
     let userName = 'Usuário';
-    const { data: dbUser } = await supabase.from('users').select('name').eq('id', userId).single();
+    const { data: dbUser } = await supabase.from('users').select('name').eq('id', userId).eq('company_id', req.user.company_id).single();
     
     if (dbUser) {
       userName = dbUser.name;
@@ -979,6 +987,7 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
         token: token
       })
       .eq('id', conversationId)
+      .eq('company_id', req.user.company_id)
       .select('*')
       .single();
 
@@ -1115,7 +1124,7 @@ app.delete('/api/events/cleanup', authenticateToken, async (req: any, res) => {
 
 app.put('/api/events/:id/complete', authenticateToken, async (req: any, res) => {
   const { completed } = req.body;
-  await supabase.from('events').update({ completed: !!completed }).eq('id', req.params.id);
+  await supabase.from('events').update({ completed: !!completed }).eq('id', req.params.id).eq('company_id', req.user.company_id);
 
   res.json({ success: true });
 });
@@ -1238,6 +1247,7 @@ app.get('/api/service-proposals', authenticateToken, async (req: any, res) => {
   const { data, error } = await supabase
     .from('service_proposals')
     .select('*')
+    .eq('company_id', req.user.company_id)
     .order('created_at', { ascending: false });
   
   if (error) return res.status(500).json({ error: error.message });
@@ -1255,7 +1265,8 @@ app.post('/api/service-proposals', authenticateToken, async (req: any, res) => {
       execution_time,
       responsible,
       validity_date,
-      created_by: req.user.name
+      created_by: req.user.name,
+      company_id: req.user.company_id
     })
     .select()
     .single();
@@ -1403,8 +1414,12 @@ app.get('/api/stats', authenticateToken, async (req: any, res) => {
   const { count: completedProjects } = await supabase.from('projects').select('*', { count: 'exact', head: true })
     .eq('company_id', req.user.company_id)
     .or('status.eq.completed,current_stage.eq.completed');
-  const { count: pendingInspections } = await supabase.from('projects').select('*', { count: 'exact', head: true }).eq('company_id', req.user.company_id).eq('current_stage', 'inspection');
-  const { count: pendingInstallations } = await supabase.from('projects').select('*', { count: 'exact', head: true }).eq('company_id', req.user.company_id).eq('current_stage', 'installation');
+  const { count: pendingInspections } = await supabase.from('projects').select('*', { count: 'exact', head: true })
+    .eq('company_id', req.user.company_id)
+    .eq('current_stage', 'inspection');
+  const { count: pendingInstallations } = await supabase.from('projects').select('*', { count: 'exact', head: true })
+    .eq('company_id', req.user.company_id)
+    .eq('current_stage', 'installation');
 
   const activeProjects = (totalProjects || 0) - (completedProjects || 0);
 
@@ -1421,7 +1436,7 @@ app.get('/api/stats', authenticateToken, async (req: any, res) => {
 app.get('/api/projects-schedule', authenticateToken, async (req: any, res) => {
   const { data: projects, error } = await supabase
     .from('projects')
-    .select('id, client_name, title, schedule_order, schedule_notes, schedule_status, schedule_issue_notes, current_stage')
+    .select('id, client_name, title, schedule_order, schedule_notes, schedule_status, schedule_issue_notes, current_stage, company_id')
     .eq('company_id', req.user.company_id)
     .neq('current_stage', 'completed')
     .order('schedule_order', { ascending: true });

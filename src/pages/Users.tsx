@@ -183,7 +183,10 @@ export default function Users() {
                         u.role === 'COMMERCIAL' ? 'bg-green-100 text-green-800' :
                           'bg-amber-100 text-amber-800'
                     }`}>
-                    {u.role}
+                    {u.role === 'ADMIN' ? 'Administrador' :
+                     u.role === 'COMMERCIAL' ? 'Comercial' :
+                     u.role === 'TECHNICAL' ? 'Técnico' :
+                     u.role}
                   </span>
                 </td>
                 <td className="p-4">

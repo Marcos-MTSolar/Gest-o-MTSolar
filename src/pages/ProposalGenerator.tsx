@@ -28,6 +28,13 @@ import api from '../lib/api';
 
 type TabType = 'dados' | 'kit' | 'calculo' | 'financiamento' | 'servicos' | 'historico';
 
+interface StructureItem {
+  id: string;
+  name: string;
+  quantity: number;
+  warranty: string;
+}
+
 interface FormData {
   clientName: string;
   clientPhone: string;
@@ -61,18 +68,11 @@ interface FormData {
   kitSupplier: string;
   financeGracePeriod: string;
   financeDownPayment: string;
-  estruturaItem1: string;
-  garantiaEstruturaItem1: string;
-  estruturaItem2: string;
-  garantiaEstruturaItem2: string;
-  estruturaItem3: string;
-  garantiaEstruturaItem3: string;
-  estruturaItem4: string;
-  garantiaEstruturaItem4: string;
-  estruturaItem5: string;
-  garantiaEstruturaItem5: string;
   financeBanco: string;
   tipoEstrutura: 'telhado_ceramico' | 'telhado_metalico' | 'telhado_fibrocimento' | 'solo' | 'telhado_shingle' | 'outro';
+  structureItems: StructureItem[];
+  discountValue: string;
+  discountType: 'fixed' | 'percent';
 }
 
 interface Results {
@@ -183,17 +183,16 @@ export default function ProposalGenerator() {
     financeGracePeriod: '0',
     financeDownPayment: '',
     financeBanco: '',
-    estruturaItem1: '',
-    garantiaEstruturaItem1: '',
-    estruturaItem2: '',
-    garantiaEstruturaItem2: '',
-    estruturaItem3: '',
-    garantiaEstruturaItem3: '',
-    estruturaItem4: '',
-    garantiaEstruturaItem4: '',
-    estruturaItem5: '',
-    garantiaEstruturaItem5: '',
-    tipoEstrutura: 'telhado_ceramico'
+    structureItems: [
+      { id: '1', name: '', quantity: 1, warranty: '' },
+      { id: '2', name: '', quantity: 1, warranty: '' },
+      { id: '3', name: '', quantity: 1, warranty: '' },
+      { id: '4', name: '', quantity: 1, warranty: '' },
+      { id: '5', name: '', quantity: 1, warranty: '' },
+    ],
+    tipoEstrutura: 'telhado_ceramico',
+    discountValue: '',
+    discountType: 'percent'
   });
 
   const [results, setResults] = useState<Results>({
@@ -438,7 +437,18 @@ export default function ProposalGenerator() {
     const energyRate = parseFloat(formData.energyRate || '0.85');
     const kitPower = parseFloat(formData.kitPower || '0');
 
-    const salePrice = kitCost * (1 + marginPercent / 100);
+    let salePrice = kitCost * (1 + marginPercent / 100);
+    
+    const discountVal = parseFloat(formData.discountValue || '0');
+    let totalDiscount = 0;
+    if (formData.discountType === 'percent') {
+      totalDiscount = salePrice * (discountVal / 100);
+    } else {
+      totalDiscount = discountVal;
+    }
+    
+    salePrice = Math.max(0, salePrice - totalDiscount);
+
     const monthlyGeneration = kitPower * 30 * 4.5;
     const monthlySavings = monthlyGeneration * energyRate;
     const annualSavings = monthlySavings * 12;
@@ -488,6 +498,7 @@ export default function ProposalGenerator() {
     const dataValidade = validade.toLocaleDateString('pt-BR');
 
     const saleP = results.salePrice || (Number(formData.kitCost) * (1 + Number(formData.marginPercent)/100));
+    const originalPrice = Number(formData.kitCost) * (1 + Number(formData.marginPercent)/100);
 
     // Função interna para upload de PDF simplificado para o histórico
     // Cálculos para a Página 4
@@ -546,12 +557,12 @@ export default function ProposalGenerator() {
     const svgH = chartAreaH + paddingBottom;
 
     // Monta lista de materiais da estrutura
-    const itensEstrutura = ([1,2,3,4,5] as const)
-      .map(n => ({
-        nome: formData[`estruturaItem${n}`]?.trim() || '',
-        garantia: formData[`garantiaEstruturaItem${n}`]?.trim() || ''
-      }))
-      .filter(item => item.nome !== '');
+    const itensEstrutura = formData.structureItems
+      .filter(item => item.name.trim() !== '' && item.quantity > 0)
+      .map(item => ({
+        nome: `${item.name} — Qtd: ${item.quantity}`,
+        garantia: item.warranty?.trim() || ''
+      }));
 
     const temItensEstrutura = itensEstrutura.length > 0;
 
@@ -1231,10 +1242,23 @@ export default function ProposalGenerator() {
               <div>
                 <div style="color:#f59e0b;font-size:8.5pt;font-weight:bold;
                   text-transform:uppercase;letter-spacing:1px;">
-                  Valor Total do Sistema</div>
-                <div style="color:#fff;font-size:22pt;font-weight:900;margin-top:1mm;">
-                  R$ ${saleP.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
-                </div>
+                  Investimento no Sistema</div>
+                
+                ${(originalPrice - saleP) > 0.01 ? `
+                  <div style="color:rgba(255,255,255,0.7);font-size:10pt;text-decoration:line-through;margin-top:1mm;">
+                    R$ ${originalPrice.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
+                  </div>
+                  <div style="color:#fca5a5;font-size:11pt;font-weight:bold;margin-bottom:1mm;">
+                    Desconto: - R$ ${(originalPrice - saleP).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
+                  </div>
+                  <div style="color:#fff;font-size:22pt;font-weight:900;border-top:1px solid rgba(255,255,255,0.2);padding-top:1mm;">
+                    Valor Final: R$ ${saleP.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
+                  </div>
+                ` : `
+                  <div style="color:#fff;font-size:22pt;font-weight:900;margin-top:1mm;">
+                    R$ ${saleP.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
+                  </div>
+                `}
               </div>
               <div style="text-align:right;">
                 <div style="color:rgba(255,255,255,0.7);font-size:8pt;">Reajuste anual previsto</div>
@@ -2096,6 +2120,28 @@ export default function ProposalGenerator() {
               </div>
 
               <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">Desconto</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="number" 
+                    min="0"
+                    value={formData.discountValue}
+                    onChange={(e) => updateForm('discountValue', e.target.value)}
+                    className={inputStyle}
+                    placeholder="Ex: 5"
+                  />
+                  <select
+                    value={formData.discountType}
+                    onChange={(e) => updateForm('discountType', e.target.value as 'fixed' | 'percent')}
+                    className="border border-gray-300 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="percent">%</option>
+                    <option value="fixed">R$</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
                 <label className="text-sm font-medium text-gray-700">Conta de Luz Média Mensal (R$) *</label>
                 <input 
                   type="number" 
@@ -2167,10 +2213,21 @@ export default function ProposalGenerator() {
                   <p className="text-xs text-blue-700 uppercase font-medium">Margem ({formData.marginPercent || '0'}%)</p>
                   <p className="text-lg font-semibold text-blue-900">R$ {(parseFloat(formData.kitCost || '0') * parseFloat(formData.marginPercent || '0') / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                 </div>
+                {parseFloat(formData.discountValue || '0') > 0 && (
+                  <div>
+                    <p className="text-xs text-red-600 uppercase font-bold">Desconto ({formData.discountType === 'percent' ? formData.discountValue + '%' : 'R$'})</p>
+                    <p className="text-lg font-semibold text-red-600">
+                      - R$ {(formData.discountType === 'percent' 
+                        ? (parseFloat(formData.kitCost || '0') * (1 + parseFloat(formData.marginPercent || '0') / 100)) * (parseFloat(formData.discountValue || '0') / 100)
+                        : parseFloat(formData.discountValue || '0')
+                      ).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                )}
                 <div className="bg-white p-4 rounded-xl border-2 border-blue-200 shadow-sm transform hover:scale-105 transition-transform">
                   <p className="text-xs text-blue-700 uppercase font-bold">Valor Final de Venda</p>
                   <p className="text-3xl font-black text-blue-900">
-                    R$ {(parseFloat(formData.kitCost || '0') * (1 + parseFloat(formData.marginPercent || '0') / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    R$ {results.salePrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
               </div>
@@ -2277,45 +2334,98 @@ export default function ProposalGenerator() {
                 </p>
 
                 <div className="space-y-3">
-                  {[1, 2, 3, 4, 5].map(n => (
-                    <div key={n} className="flex gap-3 items-end mb-2">
+                  {formData.structureItems.map((item, index) => (
+                    <div key={item.id} className="flex gap-3 items-end mb-2 bg-white p-3 rounded-lg border border-gray-100 shadow-sm relative group">
                       <div className="flex-1 space-y-1">
-                        <label className="text-xs text-gray-500">Material {n}</label>
+                        <label className="text-xs text-gray-500 font-bold">Material {index + 1}</label>
                         <input 
                           type="text" 
-                          value={formData[`estruturaItem${n}` as keyof FormData] as string}
-                          onChange={(e) => updateForm(`estruturaItem${n}` as keyof FormData, e.target.value)}
+                          value={item.name}
+                          onChange={(e) => {
+                            const newItems = [...formData.structureItems];
+                            newItems[index].name = e.target.value;
+                            setFormData(prev => ({ ...prev, structureItems: newItems }));
+                          }}
                           className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                           placeholder="Ex: Trilho de Alumínio 40x40"
                         />
                       </div>
-                      <div className="w-32 space-y-1">
-                        <label className="text-xs text-gray-500">Garantia (anos)</label>
+                      <div className="w-20 space-y-1">
+                        <label className="text-xs text-gray-500 font-bold">Qtd</label>
+                        <input 
+                          type="number" 
+                          min="0"
+                          step="1"
+                          value={item.quantity}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value) || 0;
+                            const newItems = [...formData.structureItems];
+                            newItems[index].quantity = Math.max(0, val);
+                            setFormData(prev => ({ ...prev, structureItems: newItems }));
+                          }}
+                          className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold text-center"
+                        />
+                      </div>
+                      <div className="w-28 space-y-1">
+                        <label className="text-xs text-gray-500 font-bold">Garantia (anos)</label>
                         <input 
                           type="number" 
                           min="0"
                           max="50"
-                          value={formData[`garantiaEstruturaItem${n}` as keyof FormData] as string}
-                          onChange={(e) => updateForm(`garantiaEstruturaItem${n}` as keyof FormData, e.target.value)}
+                          value={item.warranty}
+                          onChange={(e) => {
+                            const newItems = [...formData.structureItems];
+                            newItems[index].warranty = e.target.value;
+                            setFormData(prev => ({ ...prev, structureItems: newItems }));
+                          }}
                           className="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                           placeholder="Ex: 10"
                         />
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newItems = formData.structureItems.filter((_, i) => i !== index);
+                          setFormData(prev => ({ ...prev, structureItems: newItems }));
+                        }}
+                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors mb-0.5"
+                        title="Remover Item"
+                      >
+                        <Plus size={18} className="rotate-45" />
+                      </button>
                     </div>
                   ))}
                 </div>
 
-                {([1, 2, 3, 4, 5].some(n => formData[`estruturaItem${n}` as keyof FormData])) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newItem: StructureItem = {
+                      id: Date.now().toString(),
+                      name: '',
+                      quantity: 1,
+                      warranty: ''
+                    };
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      structureItems: [...prev.structureItems, newItem] 
+                    }));
+                  }}
+                  className="mt-4 flex items-center gap-2 text-blue-900 font-bold text-sm hover:bg-blue-50 px-4 py-2 rounded-lg border border-blue-200 transition-all"
+                >
+                  <Plus size={18} />
+                  Adicionar Item
+                </button>
+
+                {(formData.structureItems.some(item => item.name && item.quantity > 0)) && (
                   <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
                     <p className="text-sm font-bold text-blue-900 mb-2">Materiais que aparecerão na proposta:</p>
                     <div className="space-y-1">
-                      {[1, 2, 3, 4, 5].map(n => {
-                        const material = formData[`estruturaItem${n}` as keyof FormData] as string;
-                        const garantia = formData[`garantiaEstruturaItem${n}` as keyof FormData] as string;
-                        if (!material) return null;
+                      {formData.structureItems.map((item, idx) => {
+                        if (!item.name || item.quantity <= 0) return null;
                         return (
-                          <div key={n} className="text-sm text-gray-700">
-                            • {material} — Garantia: {garantia || 'padrão'} {garantia ? 'anos' : ''}
+                          <div key={idx} className="text-sm text-gray-700">
+                            • {item.name} — Qtd: {item.quantity} — Garantia: {item.warranty || 'padrão'} {item.warranty ? 'anos' : ''}
                           </div>
                         );
                       })}

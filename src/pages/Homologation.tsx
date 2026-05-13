@@ -63,7 +63,8 @@ export default function Homologation() {
           const { data: docs } = await supabase
             .from('documents')
             .select('*')
-            .eq('project_id', id);
+            .eq('project_id', id)
+            .eq('company_id', selectedProject.company_id);
 
           if (docs && docs.length > 0) {
             for (const doc of docs) {
@@ -78,7 +79,8 @@ export default function Homologation() {
             await supabase
               .from('documents')
               .delete()
-              .eq('project_id', id);
+              .eq('project_id', id)
+              .eq('company_id', selectedProject.company_id);
 
             setProjectDocs([]);
           }
@@ -90,7 +92,8 @@ export default function Homologation() {
             await supabase
               .from('projects')
               .update({ homologacao_docs_path: null, homologacao_docs_uploaded_at: null })
-              .eq('id', id);
+              .eq('id', id)
+              .eq('company_id', selectedProject.company_id);
           }
         } catch (e) {
           console.warn('Não foi possível excluir documentos:', e);
@@ -285,7 +288,8 @@ export default function Homologation() {
                       const { data: docs } = await supabase
                         .from('documents')
                         .select('*')
-                        .eq('project_id', p.id);
+                        .eq('project_id', p.id)
+                        .eq('company_id', p.company_id);
                       setProjectDocs(docs || []);
                     }}
                     className="bg-blue-900 text-white px-5 py-2.5 rounded-lg hover:bg-blue-800 shadow shadow-blue-900/20 font-medium shrink-0"

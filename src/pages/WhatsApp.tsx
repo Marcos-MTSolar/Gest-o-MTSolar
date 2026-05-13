@@ -141,6 +141,7 @@ export default function WhatsApp() {
     const { data, error } = await supabase
       .from('whatsapp_conversations')
       .select('*')
+      .eq('company_id', user?.company_id)
       .order('last_message_at', { ascending: false });
 
     if (!error && data) {
@@ -153,6 +154,7 @@ export default function WhatsApp() {
     const { data, error } = await supabase
       .from('users')
       .select('id, name')
+      .eq('company_id', user?.company_id)
       .neq('id', user?.id);
     
     if (!error && data) {
@@ -204,7 +206,9 @@ export default function WhatsApp() {
       await supabase.from('whatsapp_conversations').update({
         last_message: messageText,
         last_message_at: new Date().toISOString()
-      }).eq('id', selectedConversation.id);
+      })
+      .eq('id', selectedConversation.id)
+      .eq('company_id', user.company_id);
 
     } catch (error: any) {
       console.error("Erro ao enviar mensagem:", error);
@@ -219,7 +223,8 @@ export default function WhatsApp() {
     const { error } = await supabase
       .from('whatsapp_conversations')
       .update({ contact_name: tempName.trim() })
-      .eq('id', selectedConversation.id);
+      .eq('id', selectedConversation.id)
+      .eq('company_id', user?.company_id);
 
     if (!error) {
       setSelectedConversation({ ...selectedConversation, contact_name: tempName.trim() });
@@ -238,7 +243,8 @@ export default function WhatsApp() {
         assigned_name: agentName,
         assigned_at: new Date().toISOString()
       })
-      .eq('id', selectedConversation.id);
+      .eq('id', selectedConversation.id)
+      .eq('company_id', user?.company_id);
 
     if (!error) {
       setSelectedConversation(null);
@@ -263,6 +269,7 @@ export default function WhatsApp() {
           .from('whatsapp_conversations')
           .select('*')
           .eq('id', conversation.id)
+          .eq('company_id', user.company_id)
           .single();
 
         if (!error && data) {
@@ -289,7 +296,8 @@ export default function WhatsApp() {
           assigned_name: null,
           assigned_at: null
         })
-        .eq('id', selectedConversation.id);
+        .eq('id', selectedConversation.id)
+        .eq('company_id', user?.company_id);
 
       if (!error) {
         setSelectedConversation(null);
@@ -306,10 +314,11 @@ export default function WhatsApp() {
       .update({
         status: 'waiting'
       })
-      .eq('id', selectedConversation.id);
+      .eq('id', selectedConversation.id)
+      .eq('company_id', user?.company_id);
 
     if (!error) {
-      const { data } = await supabase.from('whatsapp_conversations').select('*').eq('id', selectedConversation.id).single();
+      const { data } = await supabase.from('whatsapp_conversations').select('*').eq('id', selectedConversation.id).eq('company_id', user?.company_id).single();
       setSelectedConversation(data);
       fetchConversations();
     }

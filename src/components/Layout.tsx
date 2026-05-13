@@ -175,7 +175,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </div>
               <div className="ml-3">
                 <p className="text-sm font-medium text-white">{user?.name}</p>
-                <p className="text-xs text-gray-400">{user?.role}</p>
+                <p className="text-xs text-gray-400">
+                  {user?.role === 'ADMIN' ? 'Administrador' :
+                   user?.role === 'COMMERCIAL' ? 'Comercial' :
+                   user?.role === 'TECHNICAL' ? 'Técnico' :
+                   user?.role}
+                </p>
               </div>
             </div>
             <button
@@ -210,7 +215,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <div className="hidden md:flex items-center gap-3 mr-4 border-r pr-4">
               <div className="text-right">
                 <p className="text-sm font-bold text-gray-800">{user?.name}</p>
-                <p className="text-xs text-gray-500">{user?.role}</p>
+                <p className="text-xs text-gray-500">
+                  {user?.role === 'ADMIN' ? 'Administrador' :
+                   user?.role === 'COMMERCIAL' ? 'Comercial' :
+                   user?.role === 'TECHNICAL' ? 'Técnico' :
+                   user?.role}
+                </p>
               </div>
               {logoUrl ? (
                 <img src={logoUrl} alt="MT Solar Logo" className="h-10 w-auto object-contain bg-white rounded-lg p-1 border border-gray-200 shadow-sm" />

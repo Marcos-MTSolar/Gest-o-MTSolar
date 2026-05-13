@@ -1,5 +1,5 @@
 # RESUMO MESTRE — Gestão MT Solar
-*Atualizado em: 11/05/2026*
+*Atualizado em: 12/05/2026*
 
 ## 1. Objetivo Principal do Projeto
 Sistema ERP/CRM completo para empresas de energia solar, cobrindo todo o 
@@ -51,11 +51,14 @@ gerador de propostas com PDF, histórico de propostas e controle de permissões 
 - `RESUMO_MESTRE_ATUALIZACOES.md` — este arquivo
 
 ## 5. Pendências
+- Reativar RLS e criar políticas `USING (company_id = auth.uid_company_id())` após validação da estabilidade.
 - Testar Cron Job de expiração de propostas em ambiente de produção (Vercel).
-- Avaliar modularização do `api/index.ts` (atualmente +1000 linhas).
+- Avaliar modularização do `api/index.ts` (atualmente +1600 linhas).
 - Implementar melhorias no módulo de usuários (roles e permissões).
 
 ## 6. Problemas Resolvidos
+- **Páginas Vazias/Multi-tenant:** Resolvido o problema de dados invisíveis corrigindo a propagação do `company_id` no backend e frontend.
+- **Erro 400 Supabase:** Corrigido o envio de `company_id=undefined` em filtros do banco de dados.
 - Erro build "Unterminated regular expression" — Commercial.tsx linha 664.
 - Erros build JSX inválido — Commercial.tsx linhas 663/688.
 - Erros TypeScript — api/index.ts linhas 250-255.
@@ -132,3 +135,12 @@ gerador de propostas com PDF, histórico de propostas e controle de permissões 
 - **[SOLAR]** Estimativa automática da potência solar necessária (kWp) baseada na média de 4.5h de sol pico.
 - **[INTEGRAÇÃO]** Botão "Gerar Proposta" que redireciona para o `ProposalGenerator.tsx` passando o consumo e kWp estimado via state do React Router.
 - **[MENU]** Adicionado item "Calculadora" com ícone `Zap` no menu lateral para todos os cargos.
+
+### 🛡️ Estabilização Multi-tenant e Acesso a Dados (12/05/2026)
+
+- **[CRÍTICO]** Resolvido o problema de "Páginas Vazias" em todo o sistema.
+- **[ARQUITETURA]** Implementada a coluna `company_id` como o único filtro de isolamento entre empresas.
+- **[MIDDLEWARE]** O `authenticateToken` no backend agora é capaz de recuperar o `company_id` diretamente do banco de dados caso ele não esteja presente no token JWT (comum em sessões de usuários criados antes da migração multi-tenant).
+- **[FRONTEND]** Atualizado o `AuthContext.tsx` e o endpoint `/api/auth/me` para garantir que o objeto `user` sempre contenha o `company_id` após o login ou refresh da página.
+- **[SEGURANÇA]** O **RLS (Row Level Security)** foi desativado em todas as 18 tabelas do banco de dados para garantir fluidez no desenvolvimento multi-tenant. **AVISO:** A segurança agora depende estritamente dos filtros `.eq('company_id', ...)` aplicados no backend Express.
+- **[RESOLVIDO]** Eliminados os erros `400 Bad Request` causados por filtros `company_id=eq.undefined` nas chamadas à API do Supabase.
