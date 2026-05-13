@@ -740,15 +740,6 @@ export default function WhatsApp() {
           </div>
 
           <div className="mt-3 overflow-x-auto no-scrollbar flex gap-2 pb-1">
-            <button
-              onClick={() => setActiveTag(null)}
-              className={cn(
-                "whitespace-nowrap px-3 py-1 rounded-full text-[10px] font-bold border transition-all",
-                !activeTag ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-500 border-gray-200 hover:border-blue-300"
-              )}
-            >
-              Todas
-            </button>
             {WHATSAPP_TAGS.map(tag => (
               <button
                 key={tag.id}
