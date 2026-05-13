@@ -1105,13 +1105,16 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
       console.log('[WEBHOOK] Dados da conversa:', JSON.stringify({ phone, pushName, companyId, instance }));
       // 1. Find or Create Conversation
       let conversationId = null;
+      let conv: any = null;
       try {
-        const { data: conv, error: fetchError } = await supabase
+        const { data: fetchedConv, error: fetchError } = await supabase
           .from('whatsapp_conversations')
           .select('*')
           .eq('phone', phone)
           .eq('company_id', companyId)
           .single();
+        
+        conv = fetchedConv;
         
         if (fetchError && fetchError.code !== 'PGRST116') {
           console.error('[WEBHOOK ERROR] Falha ao buscar conversa:', fetchError.message, fetchError.details);
