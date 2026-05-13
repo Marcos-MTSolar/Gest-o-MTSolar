@@ -1103,64 +1103,51 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
     if (text) {
       console.log('[WEBHOOK] Tentando processar conversa/mensagem...');
       console.log('[WEBHOOK] Dados da conversa:', JSON.stringify({ phone, pushName, companyId, instance }));
-      // 1. Find or Create Conversation
+      // 1. Find or Create Conversation (UPSERT)
       let conversationId = null;
       let conv: any = null;
       try {
-        const { data: fetchedConv, error: fetchError } = await supabase
+        console.log('[WEBHOOK] Fazendo upsert da conversa para:', phone);
+        
+        // Primeiro buscamos a conversa para saber o status atual
+        const { data: existingConv } = await supabase
           .from('whatsapp_conversations')
           .select('*')
           .eq('phone', phone)
           .eq('company_id', companyId)
           .single();
-        
-        conv = fetchedConv;
-        
-        if (fetchError && fetchError.code !== 'PGRST116') {
-          console.error('[WEBHOOK ERROR] Falha ao buscar conversa:', fetchError.message, fetchError.details);
+
+        // Determinar o novo status: 
+        // Se for mensagem recebida e não estiver 'in_progress', vira 'waiting'
+        let newStatus = existingConv?.status || 'waiting';
+        if (!fromMe && newStatus !== 'in_progress') {
+          newStatus = 'waiting';
         }
 
-        conversationId = conv?.id;
+        const { data: conversationResult, error: upsertError } = await supabase
+          .from('whatsapp_conversations')
+          .upsert({
+            phone,
+            company_id: companyId,
+            contact_name: pushName || existingConv?.contact_name,
+            last_message: text,
+            last_message_at: new Date().toISOString(),
+            status: newStatus,
+            instance: instance
+          }, { 
+            onConflict: 'phone,company_id' 
+          })
+          .select()
+          .single();
 
-        if (!conv) {
-          console.log('[WEBHOOK] Tentando salvar nova conversa...');
-          const { data: newConv, error: createError } = await supabase
-            .from('whatsapp_conversations')
-            .insert({
-              phone,
-              contact_name: pushName,
-              last_message: text,
-              last_message_at: new Date().toISOString(),
-              status: 'waiting',
-              instance: instance,
-              company_id: companyId
-            })
-            .select()
-            .single();
-          
-          if (createError) {
-            console.error('[WEBHOOK ERROR] Falha ao salvar conversa (insert):', createError.message, createError.details);
-          } else {
-            conversationId = newConv.id;
-            console.log('[WEBHOOK] Conversa salva com sucesso');
-          }
+        console.log('[WEBHOOK] Resultado upsert conversa:', JSON.stringify(conversationResult));
+        
+        if (upsertError) {
+          console.error('[WEBHOOK ERROR] Falha ao salvar conversa (upsert):', upsertError.message, upsertError.details);
         } else {
-          console.log('[WEBHOOK] Tentando atualizar conversa existente...');
-          const { error: updateError } = await supabase
-            .from('whatsapp_conversations')
-            .update({
-              last_message: text,
-              last_message_at: new Date().toISOString(),
-              instance: instance, // Sync instance
-              company_id: companyId
-            })
-            .eq('id', conv.id);
-          
-          if (updateError) {
-            console.error('[WEBHOOK ERROR] Falha ao salvar conversa (update):', updateError.message, updateError.details);
-          } else {
-            console.log('[WEBHOOK] Conversa atualizada com sucesso');
-          }
+          conv = conversationResult;
+          conversationId = conv.id;
+          console.log('[WEBHOOK] Conversa salva/atualizada com sucesso');
         }
       } catch (err: any) {
         console.error('[WEBHOOK ERROR] Erro inesperado ao processar conversa:', err.message, err.details);
