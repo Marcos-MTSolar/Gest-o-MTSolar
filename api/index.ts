@@ -1101,65 +1101,96 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
                  (mediaType ? `[${mediaType}]` : '[Mensagem]');
 
     if (text) {
+      console.log('[WEBHOOK] Tentando processar conversa/mensagem...');
+      console.log('[WEBHOOK] Dados da conversa:', JSON.stringify({ phone, pushName, companyId, instance }));
       // 1. Find or Create Conversation
-      const { data: conv } = await supabase
-        .from('whatsapp_conversations')
-        .select('*')
-        .eq('phone', phone)
-        .eq('company_id', companyId)
-        .single();
-      
-      let conversationId = conv?.id;
-
-      if (!conv) {
-        // Create new conversation
-        const { data: newConv, error: createError } = await supabase
+      let conversationId = null;
+      try {
+        const { data: conv, error: fetchError } = await supabase
           .from('whatsapp_conversations')
-          .insert({
-            phone,
-            contact_name: pushName,
-            last_message: text,
-            last_message_at: new Date().toISOString(),
-            status: 'waiting',
-            instance: instance,
-            company_id: companyId
-          })
-          .select()
+          .select('*')
+          .eq('phone', phone)
+          .eq('company_id', companyId)
           .single();
         
-        if (!createError) conversationId = newConv.id;
-      } else {
-        // Update existing conversation
-        await supabase
-          .from('whatsapp_conversations')
-          .update({
-            last_message: text,
-            last_message_at: new Date().toISOString(),
-            instance: instance, // Sync instance
-            company_id: companyId
-          })
-          .eq('id', conv.id);
+        if (fetchError && fetchError.code !== 'PGRST116') {
+          console.error('[WEBHOOK ERROR] Falha ao buscar conversa:', fetchError.message, fetchError.details);
+        }
+
+        conversationId = conv?.id;
+
+        if (!conv) {
+          console.log('[WEBHOOK] Tentando salvar nova conversa...');
+          const { data: newConv, error: createError } = await supabase
+            .from('whatsapp_conversations')
+            .insert({
+              phone,
+              contact_name: pushName,
+              last_message: text,
+              last_message_at: new Date().toISOString(),
+              status: 'waiting',
+              instance: instance,
+              company_id: companyId
+            })
+            .select()
+            .single();
+          
+          if (createError) {
+            console.error('[WEBHOOK ERROR] Falha ao salvar conversa (insert):', createError.message, createError.details);
+          } else {
+            conversationId = newConv.id;
+            console.log('[WEBHOOK] Conversa salva com sucesso');
+          }
+        } else {
+          console.log('[WEBHOOK] Tentando atualizar conversa existente...');
+          const { error: updateError } = await supabase
+            .from('whatsapp_conversations')
+            .update({
+              last_message: text,
+              last_message_at: new Date().toISOString(),
+              instance: instance, // Sync instance
+              company_id: companyId
+            })
+            .eq('id', conv.id);
+          
+          if (updateError) {
+            console.error('[WEBHOOK ERROR] Falha ao salvar conversa (update):', updateError.message, updateError.details);
+          } else {
+            console.log('[WEBHOOK] Conversa atualizada com sucesso');
+          }
+        }
+      } catch (err: any) {
+        console.error('[WEBHOOK ERROR] Erro inesperado ao processar conversa:', err.message, err.details);
       }
 
       // 2. Save Message
       if (conversationId) {
-        await supabase.from('whatsapp_messages').insert({
-          conversation_id: conversationId,
-          phone,
-          message: text,
-          from_me: fromMe,
-          message_id: messageId,
-          timestamp: new Date().toISOString(),
-          status: 'received',
-          media_type: mediaType,
-          media_url: mediaUrl,
-          file_name: fileName,
-          file_size: fileSize,
-          instance: instance,
-          company_id: companyId
-        });
+        console.log('[WEBHOOK] Tentando salvar mensagem...');
+        try {
+          const { error: msgError } = await supabase.from('whatsapp_messages').insert({
+            conversation_id: conversationId,
+            phone,
+            message: text,
+            from_me: fromMe,
+            message_id: messageId,
+            timestamp: new Date().toISOString(),
+            status: 'received',
+            media_type: mediaType,
+            media_url: mediaUrl,
+            file_name: fileName,
+            file_size: fileSize,
+            instance: instance,
+            company_id: companyId
+          });
 
-        console.log('[WEBHOOK] Mensagem salva com sucesso');
+          if (msgError) {
+            console.error('[WEBHOOK ERROR] Falha ao salvar mensagem:', msgError.message, msgError.details);
+          } else {
+            console.log('[WEBHOOK] Mensagem salva com sucesso');
+          }
+        } catch (err: any) {
+          console.error('[WEBHOOK ERROR] Erro inesperado ao salvar mensagem:', err.message, err.details);
+        }
 
         // 3. Push Notification for Agents
         if (conv?.assigned_to && !fromMe) {
