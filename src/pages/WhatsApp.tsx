@@ -3,6 +3,21 @@ import { supabase } from '../lib/supabase';
 import { evolutionApi } from '../lib/whatsapp';
 import { useAuth } from '../context/AuthContext';
 import { 
+  Send, 
+  User, 
+  Phone, 
+  Clock, 
+  MessageCircle, 
+  Search, 
+  MoreVertical, 
+  CheckCircle2, 
+  Timer, 
+  Lock,
+  ArrowLeft,
+  Settings,
+  LogOut,
+  UserPlus,
+  RefreshCcw,
   Check,
   Pencil,
   X,
