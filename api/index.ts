@@ -979,6 +979,79 @@ app.get('/api/conversations', authenticateToken, async (req: any, res) => {
   res.json(data || []);
 });
 
+// Helper para resolver a instância WhatsApp e as credenciais do tenant autenticado
+async function getEvolutionApiCredentials(companyId: string, requestedInstance?: string) {
+  if (!companyId) throw new Error('Company ID ausente no contexto.');
+  
+  let validatedInstance = null;
+
+  if (requestedInstance) {
+    const { data: instanceLink } = await supabase
+      .from('company_instances')
+      .select('instance_name')
+      .eq('company_id', companyId)
+      .eq('instance_name', requestedInstance)
+      .maybeSingle();
+
+    if (instanceLink) {
+      validatedInstance = instanceLink.instance_name;
+    } else {
+      const { data: company } = await supabase
+        .from('companies')
+        .select('whatsapp_instance')
+        .eq('id', companyId)
+        .eq('whatsapp_instance', requestedInstance)
+        .maybeSingle();
+
+      if (company) {
+        validatedInstance = company.whatsapp_instance;
+      }
+    }
+
+    if (!validatedInstance) {
+      const isHardcodedTenant = Object.entries(INSTANCE_COMPANY_MAP).find(([inst, cid]) => inst === requestedInstance && cid === companyId);
+      if (isHardcodedTenant) {
+        validatedInstance = requestedInstance;
+      }
+    }
+  } else {
+    const { data: anyInstance } = await supabase
+      .from('company_instances')
+      .select('instance_name')
+      .eq('company_id', companyId)
+      .limit(1)
+      .single();
+
+    if (anyInstance) {
+      validatedInstance = anyInstance.instance_name;
+    } else {
+      const { data: company } = await supabase.from('companies').select('whatsapp_instance').eq('id', companyId).maybeSingle();
+      if (company && company.whatsapp_instance) validatedInstance = company.whatsapp_instance;
+    }
+  }
+
+  if (!validatedInstance) {
+    throw new Error('Instância WhatsApp não configurada para este tenant.');
+  }
+
+  validatedInstance = validatedInstance.toString().trim().toLowerCase().replace(/\s+/g, '-');
+
+  const EVOLUTION_URL = process.env.VITE_EVOLUTION_URL;
+  let EVOLUTION_KEY = process.env.VITE_EVOLUTION_KEY;
+
+  if (validatedInstance === process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO) {
+    EVOLUTION_KEY = process.env.VITE_EVOLUTION_TOKEN_ATENDIMENTO || process.env.VITE_EVOLUTION_KEY;
+  }
+
+  if (!EVOLUTION_URL || !EVOLUTION_KEY) {
+    throw new Error('Configuração da Evolution API incompleta no servidor.');
+  }
+
+  const baseUrl = EVOLUTION_URL.endsWith('/') ? EVOLUTION_URL.slice(0, -1) : EVOLUTION_URL;
+
+  return { baseUrl, apiKey: EVOLUTION_KEY, instanceName: validatedInstance };
+}
+
 // WhatsApp - Assume Conversation
 app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
   const { conversationId, userId } = req.body;
@@ -1017,23 +1090,23 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
     if (error) throw error;
 
     // 4. Send WhatsApp message
-    const EVOLUTION_URL = process.env.VITE_EVOLUTION_URL;
-    const INSTANCE_NAME = conv.instance || process.env.VITE_EVOLUTION_INSTANCE;
-    const EVOLUTION_KEY = INSTANCE_NAME === process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO 
-      ? (process.env.VITE_EVOLUTION_TOKEN_ATENDIMENTO || process.env.VITE_EVOLUTION_KEY)
-      : process.env.VITE_EVOLUTION_KEY;
+    try {
+      const creds = await getEvolutionApiCredentials(req.user.company_id, conv.instance);
+      console.log(`[WA SEND] Assume (Token: ${token}) na instância: ${creds.instanceName}`);
+      const response = await fetch(`${creds.baseUrl}/message/sendText/${creds.instanceName}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': creds.apiKey },
+        body: JSON.stringify({ 
+          number: conv.phone, 
+          text: `✅ Olá! Você está sendo atendido por ${userName}. Seu código de atendimento (ticket) é: ${token}. Guarde este código para futuros contatos conosco. 😊` 
+        })
+      });
 
-    const response = await fetch(`${EVOLUTION_URL}/message/sendText/${INSTANCE_NAME}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': EVOLUTION_KEY! },
-      body: JSON.stringify({ 
-        number: conv.phone, 
-        text: `✅ Olá! Você está sendo atendido por ${userName}. Seu código de atendimento (ticket) é: ${token}. Guarde este código para futuros contatos conosco. 😊` 
-      })
-    });
-
-    if (!response.ok) {
-      console.error('Evolution API Error:', await response.text());
+      if (!response.ok) {
+        console.error('Evolution API Error:', await response.text());
+      }
+    } catch (e: any) {
+      console.error('[WA SEND ERROR]', e.message);
     }
 
     res.json(conv);
@@ -1048,19 +1121,12 @@ app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) =>
   const { phone, audio, instance, conversationId } = req.body;
 
   try {
-    const EVOLUTION_URL = process.env.VITE_EVOLUTION_URL;
-    const INSTANCE_NAME = instance || process.env.VITE_EVOLUTION_INSTANCE;
-    const EVOLUTION_KEY = INSTANCE_NAME === process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO 
-      ? (process.env.VITE_EVOLUTION_TOKEN_ATENDIMENTO || process.env.VITE_EVOLUTION_KEY)
-      : process.env.VITE_EVOLUTION_KEY;
+    const creds = await getEvolutionApiCredentials(req.user.company_id, instance);
+    console.log(`[WA SEND] Enviando áudio na instância: ${creds.instanceName} para ${phone}`);
 
-    if (!EVOLUTION_URL || !EVOLUTION_KEY) {
-      throw new Error('Configuração da Evolution API incompleta no servidor.');
-    }
-
-    const response = await fetch(`${EVOLUTION_URL}/message/sendWhatsAppAudio/${INSTANCE_NAME}`, {
+    const response = await fetch(`${creds.baseUrl}/message/sendWhatsAppAudio/${creds.instanceName}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': EVOLUTION_KEY },
+      headers: { 'Content-Type': 'application/json', 'apikey': creds.apiKey },
       body: JSON.stringify({
         number: phone,
         audio: audio, // base64
@@ -1087,7 +1153,7 @@ app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) =>
         timestamp: new Date().toISOString(),
         media_type: 'audio',
         file_name: 'audio.mp3',
-        instance: INSTANCE_NAME,
+        instance: creds.instanceName,
         company_id: req.user.company_id
       });
 
@@ -1101,8 +1167,8 @@ app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) =>
 
     res.json(result);
   } catch (err: any) {
-    console.error("Error sending audio:", err);
-    res.status(500).json({ error: err.message });
+    console.error("[WA SEND ERROR] Error sending audio:", err);
+    res.status(400).json({ error: err.message });
   }
 });
 
@@ -1111,21 +1177,14 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
   const { phone, fileBase64, mimetype, filename, caption, instance, conversationId } = req.body;
 
   try {
-    const EVOLUTION_URL = process.env.VITE_EVOLUTION_URL;
-    const INSTANCE_NAME = instance || process.env.VITE_EVOLUTION_INSTANCE;
-    const EVOLUTION_KEY = INSTANCE_NAME === process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO 
-      ? (process.env.VITE_EVOLUTION_TOKEN_ATENDIMENTO || process.env.VITE_EVOLUTION_KEY)
-      : process.env.VITE_EVOLUTION_KEY;
-
-    if (!EVOLUTION_URL || !EVOLUTION_KEY) {
-      throw new Error('Configuração da Evolution API incompleta no servidor.');
-    }
+    const creds = await getEvolutionApiCredentials(req.user.company_id, instance);
+    console.log(`[WA SEND] Enviando mídia na instância: ${creds.instanceName} para ${phone}`);
 
     const mediatype = mimetype.startsWith('image/') ? 'image' : 'document';
 
-    const response = await fetch(`${EVOLUTION_URL}/message/sendMedia/${INSTANCE_NAME}`, {
+    const response = await fetch(`${creds.baseUrl}/message/sendMedia/${creds.instanceName}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': EVOLUTION_KEY },
+      headers: { 'Content-Type': 'application/json', 'apikey': creds.apiKey },
       body: JSON.stringify({
         number: phone,
         mediaMessage: {
@@ -1155,7 +1214,7 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
         timestamp: new Date().toISOString(),
         media_type: mediatype,
         file_name: filename,
-        instance: INSTANCE_NAME,
+        instance: creds.instanceName,
         company_id: req.user.company_id
       });
 
@@ -1169,17 +1228,66 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
 
     res.json(result);
   } catch (err: any) {
-    console.error("Error sending media:", err);
-    res.status(500).json({ error: err.message });
+    console.error("[WA SEND ERROR] Error sending media:", err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// WhatsApp - Send Text (New Endpoint)
+app.post('/api/whatsapp/send', authenticateToken, async (req: any, res) => {
+  const { phone, text, instance, conversationId } = req.body;
+
+  try {
+    const creds = await getEvolutionApiCredentials(req.user.company_id, instance);
+    console.log(`[WA SEND] Enviando texto na instância: ${creds.instanceName} para ${phone}`);
+
+    const response = await fetch(`${creds.baseUrl}/message/sendText/${creds.instanceName}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': creds.apiKey },
+      body: JSON.stringify({ number: phone, text })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Erro Evolution API: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+
+    // Salvar no banco
+    if (conversationId) {
+      await supabase.from('whatsapp_messages').insert({
+        conversation_id: conversationId,
+        phone: phone,
+        message: text,
+        from_me: true,
+        message_id: result.key?.id || `sent-text-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        media_type: null,
+        instance: creds.instanceName,
+        company_id: req.user.company_id
+      });
+
+      await supabase.from('whatsapp_conversations').update({
+        last_message: text,
+        last_message_at: new Date().toISOString()
+      })
+      .eq('id', conversationId)
+      .eq('company_id', req.user.company_id);
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    console.error("[WA SEND ERROR] Error sending text:", err);
+    res.status(400).json({ error: err.message });
   }
 });
 
 // WhatsApp - Transfer Instance
 app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
-  const { conversationId, targetInstance } = req.body;
+  const { conversationId, targetInstance, internalNote } = req.body;
 
   try {
-    // 1. Get conversation info
     const { data: conv, error: fetchError } = await supabase
       .from('whatsapp_conversations')
       .select('*')
@@ -1189,44 +1297,109 @@ app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
 
     if (fetchError || !conv) throw new Error('Conversa não encontrada');
 
-    // 2. Update conversation and messages
-    const { error: updateError } = await supabase
+    const creds = await getEvolutionApiCredentials(req.user.company_id, targetInstance);
+    console.log(`[TRANSFER] Transferindo conversa ${conversationId} para a instância: ${creds.instanceName}`);
+
+    // Verificar se já existe conversa na instância de destino (respeitando chave única)
+    const { data: existingTarget } = await supabase
       .from('whatsapp_conversations')
-      .update({ instance: targetInstance })
-      .eq('id', conversationId)
-      .eq('company_id', req.user.company_id);
+      .select('id')
+      .eq('phone', conv.phone)
+      .eq('instance', creds.instanceName)
+      .eq('company_id', req.user.company_id)
+      .maybeSingle();
 
-    if (updateError) throw updateError;
+    const transferData = {
+      status: 'waiting',
+      assigned_to: null,
+      assigned_name: null,
+      assigned_at: null,
+      tag: 'Transferido',
+      last_message: '[Transferido para outra equipe]',
+      last_message_at: new Date().toISOString()
+    };
 
-    await supabase
-      .from('whatsapp_messages')
-      .update({ instance: targetInstance })
-      .eq('conversation_id', conversationId);
+    let targetConvId = conversationId;
 
-    // 3. Send automated message from target instance
-    const EVOLUTION_URL = process.env.VITE_EVOLUTION_URL;
-    const INSTANCE_NAME = targetInstance;
-    const EVOLUTION_KEY = INSTANCE_NAME === process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO 
-      ? (process.env.VITE_EVOLUTION_TOKEN_ATENDIMENTO || process.env.VITE_EVOLUTION_KEY)
-      : process.env.VITE_EVOLUTION_KEY;
+    if (existingTarget) {
+      // Mesclar: mover mensagens para a conversa existente e deletar a antiga
+      targetConvId = existingTarget.id;
+      
+      await supabase
+        .from('whatsapp_messages')
+        .update({ conversation_id: targetConvId, instance: creds.instanceName })
+        .eq('conversation_id', conversationId)
+        .eq('company_id', req.user.company_id);
 
-    const teamName = targetInstance === process.env.VITE_EVOLUTION_INSTANCE_ADMIN ? 'Administrativa' : 'de Atendimento';
+      await supabase
+        .from('whatsapp_conversations')
+        .update(transferData)
+        .eq('id', targetConvId)
+        .eq('company_id', req.user.company_id);
 
-    if (EVOLUTION_URL && EVOLUTION_KEY) {
-      await fetch(`${EVOLUTION_URL}/message/sendText/${INSTANCE_NAME}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': EVOLUTION_KEY },
-        body: JSON.stringify({ 
-          number: conv.phone, 
-          text: `Seu atendimento foi transferido para nossa equipe ${teamName}. Em breve entraremos em contato. 👋` 
-        })
+      await supabase
+        .from('whatsapp_conversations')
+        .delete()
+        .eq('id', conversationId)
+        .eq('company_id', req.user.company_id);
+    } else {
+      // Apenas atualizar a conversa atual
+      const { error: updateError } = await supabase
+        .from('whatsapp_conversations')
+        .update({ ...transferData, instance: creds.instanceName })
+        .eq('id', conversationId)
+        .eq('company_id', req.user.company_id);
+
+      if (updateError) throw updateError;
+
+      await supabase
+        .from('whatsapp_messages')
+        .update({ instance: creds.instanceName })
+        .eq('conversation_id', conversationId)
+        .eq('company_id', req.user.company_id);
+    }
+
+    // Inserir nota interna, se fornecida
+    if (internalNote && internalNote.trim() !== '') {
+      await supabase.from('whatsapp_messages').insert({
+        conversation_id: targetConvId,
+        phone: conv.phone,
+        message: `📌 NOTA DE TRANSFERÊNCIA: ${internalNote.trim()}`,
+        from_me: true,
+        is_internal: true,
+        timestamp: new Date().toISOString(),
+        instance: creds.instanceName,
+        company_id: req.user.company_id
       });
     }
 
+    const teamName = creds.instanceName === 'mtsolar' ? 'Administrativa' : 'de Atendimento';
+    const farewellMsg = `Olá! Seu atendimento foi encaminhado para nossa equipe ${teamName}. Em breve entraremos em contato. Obrigado!`;
+
+    // Enviar mensagem de aviso usando a instância de origem
+    const originCreds = await getEvolutionApiCredentials(req.user.company_id, conv.instance);
+    await fetch(`${originCreds.baseUrl}/message/sendText/${originCreds.instanceName}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': originCreds.apiKey },
+      body: JSON.stringify({ number: conv.phone, text: farewellMsg })
+    });
+
+    // Salvar mensagem de despedida no banco
+    await supabase.from('whatsapp_messages').insert({
+      conversation_id: targetConvId,
+      phone: conv.phone,
+      message: farewellMsg,
+      from_me: true,
+      timestamp: new Date().toISOString(),
+      status: 'sent',
+      instance: originCreds.instanceName,
+      company_id: req.user.company_id
+    });
+
     res.json({ success: true });
   } catch (err: any) {
-    console.error("Error transferring instance:", err);
-    res.status(500).json({ error: err.message });
+    console.error("[TRANSFER ERROR] Error transferring instance:", err);
+    res.status(400).json({ error: err.message });
   }
 });
 
@@ -1619,7 +1792,7 @@ app.post('/api/proposals/upload', authenticateToken, upload.single('pdf'), async
 });
 
 app.post('/api/proposal-history', authenticateToken, async (req: any, res) => {
-  const { client_name, margin, kit_value, proposal_number, url_arquivo } = req.body;
+  const { client_name, margin, kit_value, proposal_number, url_arquivo, raw_data } = req.body;
   const created_by = req.user?.name || req.user?.email || 'Desconhecido';
   
   // Define data de expiração para 7 dias a partir de agora
@@ -1635,6 +1808,7 @@ app.post('/api/proposal-history', authenticateToken, async (req: any, res) => {
       kit_value, 
       proposal_number, 
       url_arquivo,
+      raw_data, // Salvando o JSON com todos os dados da proposta
       data_geracao: data_geracao.toISOString(),
       data_expiracao: data_expiracao.toISOString(),
       created_by,
@@ -1647,6 +1821,46 @@ app.post('/api/proposal-history', authenticateToken, async (req: any, res) => {
     console.error('Erro ao salvar histórico:', error);
     return res.status(500).json({ error: error.message });
   }
+  res.json(data);
+});
+
+// Buscar uma proposta específica para edição
+app.get('/api/propostas/:id', authenticateToken, async (req: any, res) => {
+  const { id } = req.params;
+
+  const { data, error } = await supabase
+    .from('proposal_history')
+    .select('*')
+    .eq('id', id)
+    .eq('company_id', req.user.company_id)
+    .single();
+
+  if (error) return res.status(404).json({ error: 'Proposta não encontrada.' });
+  res.json(data);
+});
+
+// Atualizar uma proposta existente (Edição)
+app.put('/api/propostas/:id', authenticateToken, async (req: any, res) => {
+  const { id } = req.params;
+  const { client_name, margin, kit_value, url_arquivo, raw_data } = req.body;
+
+  const { data, error } = await supabase
+    .from('proposal_history')
+    .update({ 
+      client_name, 
+      margin, 
+      kit_value, 
+      url_arquivo,
+      raw_data
+      // Não mudamos a data de geração/expiração para preservar o histórico original, ou podemos resetar?
+      // Pelo fluxo atual, se o PDF foi recriado, talvez seja bom estender a validade, mas manteremos a original por segurança de histórico.
+    })
+    .eq('id', id)
+    .eq('company_id', req.user.company_id)
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
   res.json(data);
 });
 

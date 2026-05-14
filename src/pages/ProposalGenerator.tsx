@@ -20,7 +20,8 @@ import {
   Camera,
   History,
   Clock,
-  Layers
+  Layers,
+  Edit
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -149,6 +150,7 @@ export default function ProposalGenerator() {
   const { user } = useAuth();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<TabType>('dados');
+  const [editingProposalId, setEditingProposalId] = useState<number | null>(null);
 
   const [formData, setFormData] = useState<FormData>({
     clientName: '',
@@ -246,6 +248,23 @@ export default function ProposalGenerator() {
     }
   }, [activeTab]);
 
+  const loadForEdit = async (id: number) => {
+    try {
+      const res = await api.get(`/api/propostas/${id}`);
+      if (res.data && res.data.raw_data) {
+        setFormData(res.data.raw_data);
+        setEditingProposalId(id);
+        setActiveTab('dados');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        alert('Dados completos da proposta não encontrados no histórico antigo.');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar proposta para edição:', error);
+      alert('Erro ao carregar proposta.');
+    }
+  };
+
   const saveToHistory = async (proposalNumber: string, url_arquivo?: string) => {
     try {
       const kitCostNum = Number(formData.kitCost) || 0;
@@ -256,13 +275,20 @@ export default function ProposalGenerator() {
         return;
       }
 
-      await api.post('/api/proposal-history', {
+      const payload = {
         client_name: formData.clientName,
         margin: marginNum,
         kit_value: kitCostNum,
         proposal_number: proposalNumber,
-        url_arquivo: url_arquivo
-      });
+        url_arquivo: url_arquivo,
+        raw_data: formData
+      };
+
+      if (editingProposalId) {
+        await api.put(`/api/propostas/${editingProposalId}`, payload);
+      } else {
+        await api.post('/api/proposal-history', payload);
+      }
 
       // Também salva na tabela de propostas detalhadas para preenchimento automático
       await api.post('/api/proposals', {
@@ -1639,7 +1665,36 @@ export default function ProposalGenerator() {
       </html>
     `;
 
-    newWindow.document.write(htmlContent);
+    // Montar a página HTML de fotos separadamente para o print do navegador
+    let photosHtml = '';
+    if (formData.includePhotos && formData.photos && formData.photos.length > 0) {
+      photosHtml = `
+        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-before:always;
+          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;padding-bottom:10mm;">
+          <!-- FAIXA TOPO -->
+          <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
+            height:18mm;padding:0 14mm;display:flex;align-items:center;
+            justify-content:space-between;">
+            <span style="color:#fff;font-size:13pt;font-weight:900;">
+              Fotos de Vistoria Técnica</span>
+            <span style="color:#f59e0b;font-size:9pt;font-weight:bold;">MT Solar</span>
+          </div>
+          <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24,#f59e0b);"></div>
+          <div style="padding:8mm 14mm;text-align:center;">
+            ${formData.photos.map(url => `
+              <div style="margin-bottom:8mm;">
+                <img src="${url}" style="max-width:100%;max-height:100mm;object-fit:contain;border:1px solid #e5e7eb;padding:2mm;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,0.1);"/>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // Para o print no navegador, juntamos tudo
+    const htmlParaNavegador = htmlContent.replace('</body>', `${photosHtml}</body>`);
+
+    newWindow.document.write(htmlParaNavegador);
     newWindow.document.close();
     setTimeout(() => { newWindow.print(); }, 2000);
 
@@ -1649,7 +1704,7 @@ export default function ProposalGenerator() {
         const { jsPDF } = await import('jspdf');
         const doc = new jsPDF('p', 'mm', 'a4');
         
-        // Extrair apenas o conteúdo do body para o jsPDF.html
+        // Extrair apenas o conteúdo do body para o jsPDF.html (sem as fotos HTML)
         const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
         const content = bodyMatch ? bodyMatch[1] : html;
 
@@ -1660,6 +1715,87 @@ export default function ProposalGenerator() {
           windowWidth: 800,
           autoPaging: 'slice'
         });
+
+        // =========================================================
+        // ADICIONAR FOTOS MANUALMENTE COM jsPDF.addImage()
+        // =========================================================
+        if (formData.includePhotos && formData.photos && formData.photos.length > 0) {
+          doc.addPage();
+          
+          // Desenhar o cabeçalho idêntico à página anterior
+          doc.setFillColor(30, 58, 95); // #1e3a5f
+          doc.rect(0, 0, 210, 18, 'F');
+          doc.setFillColor(245, 158, 11); // #f59e0b (Linha dourada)
+          doc.rect(0, 18, 210, 1, 'F');
+
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(14);
+          doc.setFont('helvetica', 'bold');
+          doc.text("Fotos de Vistoria Técnica", 14, 12);
+          
+          doc.setTextColor(245, 158, 11);
+          doc.setFontSize(10);
+          doc.text("MT Solar", 180, 12);
+
+          let yPos = 25; // Começa abaixo do header
+          
+          for (let i = 0; i < formData.photos.length; i++) {
+            const photoUrl = formData.photos[i];
+            try {
+              // 1. Fetch da imagem (URL pública/assinada do Supabase)
+              const response = await fetch(photoUrl);
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              const blob = await response.blob();
+              
+              // 2. Converter para base64 via FileReader
+              const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+              
+              // Se a próxima foto ultrapassar o final da página (297mm), cria nova página
+              if (yPos > 190) {
+                doc.addPage();
+                doc.setFillColor(30, 58, 95);
+                doc.rect(0, 0, 210, 18, 'F');
+                doc.setFillColor(245, 158, 11);
+                doc.rect(0, 18, 210, 1, 'F');
+
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(14);
+                doc.setFont('helvetica', 'bold');
+                doc.text("Fotos de Vistoria Técnica (Cont.)", 14, 12);
+                doc.setTextColor(245, 158, 11);
+                doc.setFontSize(10);
+                doc.text("MT Solar", 180, 12);
+                
+                yPos = 25;
+              }
+              
+              // 3. Inserir no PDF
+              // Assumindo proporção landscape padrão (160mm x 100mm aprox) e centralizando (X=25)
+              doc.addImage(base64, 'JPEG', 25, yPos, 160, 100);
+              
+              // Borda decorativa leve em volta da foto
+              doc.setDrawColor(229, 231, 235); // gray-200
+              doc.rect(25, yPos, 160, 100, 'S');
+
+              yPos += 110; // Espaço para a próxima imagem
+              
+            } catch (err) {
+              console.error(`[PDF IMAGE ERROR] Falha ao carregar imagem ${i+1}:`, err);
+              // Feedback no PDF caso a imagem quebre
+              doc.setTextColor(239, 68, 68); // red-500
+              doc.setFontSize(10);
+              doc.setFont('helvetica', 'normal');
+              doc.text(`[Erro ao carregar a imagem da vistoria ${i+1}]`, 25, yPos + 10);
+              yPos += 20;
+            }
+          }
+        }
+        // =========================================================
 
         const pdfBlob = doc.output('blob');
         const fileName = `${proposalNumber}-${Date.now()}.pdf`;
@@ -1682,7 +1818,14 @@ export default function ProposalGenerator() {
     };
 
     uploadFullPDF(htmlContent).then(url => {
-      saveToHistory(proposalNumber, url || undefined);
+      saveToHistory(proposalNumber, url || undefined).then(() => {
+        // Se estava editando, limpa o estado após gerar e salvar com sucesso
+        if (editingProposalId) {
+          setEditingProposalId(null);
+          // Opcional: mostrar um alerta/toast de sucesso
+          // alert('Proposta atualizada com sucesso!');
+        }
+      });
     });
 
     // Retornar para tela inicial da proposta
@@ -1715,6 +1858,24 @@ export default function ProposalGenerator() {
               <h1 className="text-2xl font-bold text-white">Gerador de Proposta Solar</h1>
               <p className="text-amber-400 font-semibold tracking-wider uppercase text-xs">Engenharia MT Solar</p>
             </div>
+          </div>
+        </div>
+      </header>
+
+      {editingProposalId && activeTab !== 'historico' && (
+        <div className="bg-amber-100 border-l-4 border-amber-500 text-amber-800 p-4 rounded-xl shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div>
+            <h2 className="font-bold flex items-center gap-2"><Edit size={18} /> Modo de Edição Ativo</h2>
+            <p className="text-sm">Você está editando uma proposta existente do histórico. Caso salve, os dados originais serão atualizados.</p>
+          </div>
+          <button 
+            onClick={() => { setEditingProposalId(null); setFormData(prev => ({...prev})); }}
+            className="bg-white text-amber-700 border border-amber-300 hover:bg-amber-50 px-4 py-2 rounded-lg text-sm font-bold shadow-sm whitespace-nowrap transition-colors"
+          >
+            Cancelar Edição
+          </button>
+        </div>
+      )}
           </div>
           <div>
             {!formData.clientName || !formData.kitCost ? (
@@ -2941,6 +3102,13 @@ export default function ProposalGenerator() {
                                 <span className="text-[10px] text-gray-400 italic">PDF não disponível</span>
                               )}
                               <button
+                                onClick={() => loadForEdit(item.id)}
+                                className="text-amber-500 hover:text-amber-700 p-1.5 rounded-lg border border-amber-200 hover:bg-amber-50 transition-colors"
+                                title="Editar Proposta"
+                              >
+                                <Edit size={16} />
+                              </button>
+                              <button
                                 onClick={() => deleteHistory(item.id)}
                                 className="text-red-500 hover:text-red-700 p-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition-colors"
                                 title="Excluir registro"
@@ -2972,23 +3140,60 @@ export default function ProposalGenerator() {
 
 
       {/* Footer Action */}
-      <div className="flex justify-end pt-4">
-        <button
-          onClick={() => {
-            if (!isReady) return;
-            generatePDF();
-          }}
-          title={!isReady ? "Preencha os dados obrigatórios" : ""}
-          className={`flex items-center gap-2 px-8 py-4 font-bold rounded-lg shadow-lg transition-all ${
-            isReady 
-              ? 'bg-amber-400 text-blue-900 hover:bg-amber-500 hover:scale-105 active:scale-95' 
-              : 'bg-gray-300 text-gray-500 opacity-50 cursor-not-allowed'
-          }`}
-        >
-          <FileDown className="w-5 h-5" />
-          Baixar Proposta em PDF
-        </button>
-      </div>
+      {activeTab !== 'historico' && (
+        <div className="flex justify-end pt-4 gap-4">
+          {editingProposalId ? (
+            <>
+              <button
+                onClick={() => {
+                  if (!isReady) return;
+                  setEditingProposalId(null);
+                  setTimeout(() => generatePDF(), 100);
+                }}
+                title={!isReady ? "Preencha os dados obrigatórios" : ""}
+                className={`flex items-center gap-2 px-6 py-4 font-bold rounded-lg transition-all ${
+                  isReady 
+                    ? 'bg-white border-2 border-amber-400 text-amber-600 hover:bg-amber-50' 
+                    : 'bg-gray-100 text-gray-400 opacity-50 cursor-not-allowed'
+                }`}
+              >
+                Salvar como Nova
+              </button>
+              <button
+                onClick={() => {
+                  if (!isReady) return;
+                  generatePDF();
+                }}
+                title={!isReady ? "Preencha os dados obrigatórios" : ""}
+                className={`flex items-center gap-2 px-8 py-4 font-bold rounded-lg shadow-lg transition-all ${
+                  isReady 
+                    ? 'bg-amber-400 text-blue-900 hover:bg-amber-500 hover:scale-105 active:scale-95' 
+                    : 'bg-gray-300 text-gray-500 opacity-50 cursor-not-allowed'
+                }`}
+              >
+                <FileDown className="w-5 h-5" />
+                Atualizar Proposta
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => {
+                if (!isReady) return;
+                generatePDF();
+              }}
+              title={!isReady ? "Preencha os dados obrigatórios" : ""}
+              className={`flex items-center gap-2 px-8 py-4 font-bold rounded-lg shadow-lg transition-all ${
+                isReady 
+                  ? 'bg-amber-400 text-blue-900 hover:bg-amber-500 hover:scale-105 active:scale-95' 
+                  : 'bg-gray-300 text-gray-500 opacity-50 cursor-not-allowed'
+              }`}
+            >
+              <FileDown className="w-5 h-5" />
+              Baixar Proposta em PDF
+            </button>
+          )}
+        </div>
+      )}
 
     </div>
   );

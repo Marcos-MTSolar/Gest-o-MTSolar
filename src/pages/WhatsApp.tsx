@@ -273,34 +273,19 @@ export default function WhatsApp() {
           conversationId: selectedConversation.id
         });
       } else {
-        const result = await evolutionApi.sendMessage(selectedConversation.phone, messageText, selectedConversation.instance || undefined);
-        
-        // 2. Salvar no Supabase (apenas para mensagens de texto, mídia é salva no backend)
-        await supabase.from('whatsapp_messages').insert({
-          conversation_id: selectedConversation.id,
+        await api.post('/api/whatsapp/send', {
           phone: selectedConversation.phone,
-          message: messageText,
-          from_me: true,
-          message_id: result.key?.id || `sent-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          media_type: null,
-          company_id: user.company_id
+          text: messageText,
+          instance: selectedConversation.instance,
+          conversationId: selectedConversation.id
         });
-
-        // 3. Atualizar última mensagem na conversa
-        await supabase.from('whatsapp_conversations').update({
-          last_message: messageText,
-          last_message_at: new Date().toISOString()
-        })
-        .eq('id', selectedConversation.id)
-        .eq('company_id', user.company_id);
       }
       
       fetchMessages(selectedConversation.id);
 
     } catch (error: any) {
       console.error("Erro ao enviar mensagem:", error);
-      alert(error?.message || "Falha ao enviar mensagem.");
+      alert(error?.response?.data?.error || error?.message || "Falha ao enviar mensagem.");
     } finally {
       setIsSending(false);
     }
@@ -386,27 +371,7 @@ export default function WhatsApp() {
     }
   };
 
-  const handleTransferInstance = async () => {
-    if (!selectedConversation) return;
 
-    const targetInstance = selectedConversation.instance === evolutionApi.instances.ADMIN 
-      ? evolutionApi.instances.ATENDIMENTO 
-      : evolutionApi.instances.ADMIN;
-
-    try {
-      await api.post('/api/whatsapp/transfer', {
-        conversationId: selectedConversation.id,
-        targetInstance
-      });
-
-      setSelectedConversation(null);
-      setShowTransferInstanceModal(false);
-      fetchConversations();
-    } catch (error) {
-      console.error("Erro ao transferir instância:", error);
-      alert("Erro ao transferir atendimento.");
-    }
-  };
 
   const updateContactName = async () => {
     if (!selectedConversation || !tempName.trim()) return;
@@ -536,55 +501,20 @@ export default function WhatsApp() {
     
     setIsTransferring(true);
     try {
-      // 1. Enviar mensagem automática de despedida via Atendimento
-      const farewellMsg = "Olá! Seu atendimento foi encaminhado para nossa equipe administrativa. Em breve entraremos em contato. Obrigado!";
-      await evolutionApi.sendMessage(selectedConversation.phone, farewellMsg, 'atendimento-cliente');
-
-      // 2. Salvar mensagem de despedida no banco
-      await supabase.from('whatsapp_messages').insert({
-        conversation_id: selectedConversation.id,
-        phone: selectedConversation.phone,
-        message: farewellMsg,
-        from_me: true,
-        timestamp: new Date().toISOString(),
-        status: 'sent'
+      await api.post('/api/whatsapp/transfer', {
+        conversationId: selectedConversation.id,
+        targetInstance: evolutionApi.instances.ADMIN,
+        internalNote: transferObservation
       });
-
-      // 3. Salvar observação interna se existir
-      if (transferObservation.trim()) {
-        await supabase.from('whatsapp_messages').insert({
-          conversation_id: selectedConversation.id,
-          phone: selectedConversation.phone,
-          message: `📌 NOTA DE TRANSFERÊNCIA: ${transferObservation.trim()}`,
-          from_me: true,
-          is_internal: true,
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      // 4. Atualizar conversa: troca instância, coloca tag "Transferido", volta status para waiting? 
-      // O usuário disse: "Move a conversa para aparecer na fila do Administrativo".
-      // Para aparecer na fila (waiting), vamos resetar o assigned_to.
-      await supabase.from('whatsapp_conversations').update({
-        instance: 'mtsolar',
-        tag: 'Transferido',
-        status: 'waiting',
-        assigned_to: null,
-        assigned_name: null,
-        assigned_at: null,
-        last_message: '[Transferido para Administrativo]',
-        last_message_at: new Date().toISOString()
-      }).eq('id', selectedConversation.id);
 
       alert("Conversa transferida com sucesso para o Administrativo!");
       setSelectedConversation(null);
       setShowTransferInstanceModal(false);
       setTransferObservation('');
       fetchConversations();
-
     } catch (err: any) {
       console.error("Erro na transferência:", err);
-      alert("Falha ao transferir conversa.");
+      alert(err.response?.data?.error || "Falha ao transferir conversa.");
     } finally {
       setIsTransferring(false);
     }
@@ -1297,40 +1227,6 @@ export default function WhatsApp() {
         </div>
       )}
 
-      {/* Modal de Transferência de Instância */}
-      {showTransferInstanceModal && selectedConversation && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 text-center">
-              <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Repeat size={32} />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">Transferir Atendimento?</h3>
-              <p className="text-sm text-gray-500 mb-6">
-                Deseja transferir esta conversa para a equipe 
-                <span className="font-bold text-gray-800 mx-1">
-                  {selectedConversation.instance === evolutionApi.instances.ADMIN ? 'Atendimento' : 'Administrativa'}
-                </span>?
-              </p>
-              
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowTransferInstanceModal(false)}
-                  className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-bold hover:bg-gray-50 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleTransferInstance}
-                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200"
-                >
-                  Confirmar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Lightbox para Imagens */}
       {lightboxImage && (

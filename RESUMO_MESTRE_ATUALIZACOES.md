@@ -1,146 +1,53 @@
-# RESUMO MESTRE — Gestão MT Solar
-*Atualizado em: 12/05/2026*
+# RESUMO MESTRE DE ATUALIZAÇÕES: ERP Gestão MT Solar
 
 ## 1. Objetivo Principal do Projeto
-Sistema ERP/CRM completo para empresas de energia solar, cobrindo todo o 
-ciclo operacional: captação do cliente → proposta comercial → vistoria 
-técnica → homologação junto à concessionária → instalação/obra → finalização.
-Inclui módulo de atendimento via WhatsApp, agenda, contratos, estoque,
-gerador de propostas com PDF, histórico de propostas e controle de permissões por cargo.
+O **Gestão MT Solar** é um sistema ERP/CRM completo, desenvolvido para empresas integradoras de energia solar operando sob uma arquitetura SaaS Multi-Tenant. O sistema gerencia o ciclo de vida de vendas e operações (captação, proposta, vistoria, homologação, instalação/obra e finalização). Ele engloba funcionalidades como atendimento omnichannel via WhatsApp, agendamentos, estoque, geração de propostas PDF e calculadora avançada de consumo.
 
-## 2. Decisões Técnicas Tomadas
-- Cadastro do cliente unificado com dados de gerenciamento comercial.
-- Removida aba/modal duplicada de "Gerenciar" — substituída por "Ver Detalhes" (modo leitura).
-- Documentos do cliente movidos do cadastro para a página de Homologação.
-- Dados comerciais e fotos de obra excluídos do banco/storage ao mover projeto para "Finalizados".
-- Página "Obra Finalizada" renomeada para "Obra" em todo o sistema.
-- Aba da Área Comercial nomeada como "Projetos Pendentes" (nome definitivo).
-- Nova aba "Instalação" na Área Comercial com 3 status: Aguardando / Executando / Finalizada.
-- Status da aba Instalação sincronizado com Technical.tsx e Obra.tsx.
-- Status sempre exibidos em português (nunca valores brutos do banco).
-- Fotos de obra salvas no Supabase Storage (bucket: obras-fotos), excluídas ao finalizar projeto.
-- Proposta comercial salva no Supabase Storage (bucket: propostas) com validade de 7 dias.
-- Limpeza automática de propostas expiradas via Vercel Cron Job (diário às 03h).
-- Role TÉCNICO: acesso restrito a Dashboard, Agenda, Técnica, Obra e Mensagens.
-- Build local obrigatório antes de qualquer commit.
-- **Lazy Loading:** Implementado para todas as rotas do frontend para otimizar o tempo de carregamento inicial.
+## 2. Decisões Técnicas Já Tomadas
+*   **Arquitetura Multi-Tenant**: Isolamento total de dados entre diferentes empresas/filiais ("instâncias") utilizando a coluna `company_id` de forma compulsória no backend (via extração do Token JWT ou do banco).
+*   **Gestão de Estado do WhatsApp**: A persistência de mensagens e conversas substituiu comandos `upsert` ineficientes por fluxos transacionais explícitos (`SELECT`/`INSERT`/`UPDATE`) no webhook, visando estabilidade e prevenção de dados corrompidos entre instâncias (ex: `mtsolar` vs. `atendimento-cliente`).
+*   **Segurança (RLS) Desativada Temporariamente**: O Row Level Security (RLS) do Supabase está desativado em todas as tabelas. A segurança e isolamento de dados são estritamente garantidos por filtros `.eq('company_id', ...)` na API Backend.
+*   **Otimização de Performance (Lazy Loading)**: Implementado code-splitting via React.lazy e Suspense para todas as rotas de frontend, o que reduziu drasticamente o tamanho do bundle principal (~1.49MB para ~623KB).
+*   **Persistência e Limpeza de Arquivos**: Fotos de obras são deletadas automaticamente ao finalizar um projeto. Propostas PDF (bucket `propostas`) expiram em 7 dias, controladas via Cron Job diário da Vercel.
 
 ## 3. Regras e Padrões Definidos
-- Status do banco NUNCA exibidos crus — sempre mapear para label em português:
-  - registration → "Cadastro" | pending → "Pendente" | approved → "Aprovado"
-  - in_progress → "Em Andamento" | completed → "Concluído"
-- Fotos de obra: salvas no Supabase Storage, excluídas ao finalizar projeto.
-- Proposta comercial: disponível para download por 7 dias, excluída do storage após expiração.
-- Role TÉCNICO acessa apenas: Dashboard, Agenda, Técnica, Obra, Mensagens.
-- Eventos "Atendido" na Agenda: line-through com cor #9CA3AF.
-- `api/index.ts` sempre validado com `npx tsc --noEmit` antes de commit.
-- `npm run build` deve passar localmente antes de qualquer commit/push.
+*   **Acesso por Perfis (Roles)**:
+    *   `TÉCNICO`: Acesso restrito a Dashboard, Agenda, Técnica, Obra e Mensagens.
+    *   `COMMERCIAL` (Vendedor): Bloqueado em rotas operacionais, com acesso exclusivo liberado para o módulo de Atendimento/WhatsApp (e ocultação visual de transferências de instâncias "Administrativas").
+*   **Regras de Exibição de Status**: O sistema nunca exibe dados puros do banco (ex: `in_progress`). Tudo deve ser formatado para labels em português (ex: "Em Andamento", "Pendente").
+*   **Build Obrigatório**: Nenhuma alteração é submetida ao repositório ou produção sem a aprovação do `npx tsc --noEmit` e sucesso completo do `npm run build` local.
+*   **Validação Sequencial em Obras**: O registro de uma obra no banco é estritamente bloqueado caso haja qualquer falha de upload das imagens no Supabase Storage (Upload Síncrono).
 
-## 4. Estrutura de Arquivos Criada ou Alterada
-- `src/pages/Commercial.tsx` — cadastro unificado, "Ver Detalhes", aba Instalação, renomeações
-- `src/pages/Technical.tsx` — status de vistoria sincronizado com aba Instalação
-- `src/pages/Obra.tsx` — upload seguro (Storage primeiro), logs de erro detalhados
-- `src/pages/ProposalGenerator.tsx` — histórico de propostas com download e expiração de 7 dias
-- `src/pages/Homologation.tsx` — recebe documentos do cadastro do cliente
-- `src/pages/Agenda.tsx` — line-through cor #9CA3AF para eventos atendidos
-- `src/pages/FinishedProjects.tsx` — modal de finalização com download ZIP via JSZip
-- `src/App.tsx` — implementação de React.lazy + Suspense (redução de bundle)
-- `src/components/Layout.tsx` — menu filtrado por role (Técnico vê apenas 5 páginas)
-- `api/index.ts` — limpeza de dados comerciais e clientes ao finalizar projeto
-- `vercel.json` — Cron Job diário para limpeza de propostas expiradas
-- `RESUMO_MESTRE_ATUALIZACOES.md` — este arquivo
+## 4. Estrutura de Arquivos Já Criada (Principais)
+*   `src/pages/Commercial.tsx` & `Technical.tsx`: Gestão do ciclo operacional unificado.
+*   `src/pages/Obra.tsx`: Interface para gerenciamento de instalação com upload estruturado para o Storage.
+*   `src/pages/WhatsApp/Atendimento.tsx`: Dashboard de mensagens integrado via webhooks da Evolution API.
+*   `src/pages/EnergyCalculator.tsx`: Módulo com suporte a Watts, BTU e CV para estimativa de painéis solares necessários.
+*   `src/components/Layout.tsx`: Implementa navegação lateral otimizada para mobile e restrição de renderização de abas baseadas nas permissões de usuário (role).
+*   `api/index.ts`: Backend monolítico em Express serverless (Hospedado na Vercel) responsável pelos webhooks, exclusões lógicas e consultas autenticadas.
+*   `android/` & `capacitor.config.ts`: Infraestrutura para build mobile contendo permissões nativas e link do app gerado.
 
 ## 5. Pendências
-- Reativar RLS e criar políticas `USING (company_id = auth.uid_company_id())` após validação da estabilidade.
-- Testar Cron Job de expiração de propostas em ambiente de produção (Vercel).
-- Avaliar modularização do `api/index.ts` (atualmente +1600 linhas).
-- Implementar melhorias no módulo de usuários (roles e permissões).
+*   [ ] **RLS do Supabase**: Planejar a reativação gradual das políticas `Row Level Security` (`company_id = auth.uid_company_id()`) após a estabilização completa da lógica no backend Express.
+*   [ ] **Refatoração da API Backend**: Avaliar modularização do `api/index.ts` (que já ultrapassou +1600 linhas), separando controllers de WhatsApp, Obras e Autenticação.
+*   [ ] **Monitoramento Mobile**: Validar os logs do aplicativo via ADB no novo APK gerado (v1.2.5) para monitorar comportamento do ErrorBoundary na raiz do React durante fluxos críticos (ex: Crash de Login resolvido anteriormente).
 
-## 6. Problemas Resolvidos
-- **Páginas Vazias/Multi-tenant:** Resolvido o problema de dados invisíveis corrigindo a propagação do `company_id` no backend e frontend.
-- **Erro 400 Supabase:** Corrigido o envio de `company_id=undefined` em filtros do banco de dados.
-- Erro build "Unterminated regular expression" — Commercial.tsx linha 664.
-- Erros build JSX inválido — Commercial.tsx linhas 663/688.
-- Erros TypeScript — api/index.ts linhas 250-255.
-- Erro "Erro ao atualizar obra" ao salvar em Obra.tsx — corrigido com upload síncrono e logging.
-- Problema do Técnico acessando WhatsApp e Configurações — corrigido com restrição de roles.
-- Propostas perdidas após geração — agora salvas no histórico por 7 dias.
-- **Bundle Grande (1.49 MB):** Resolvido com code-splitting (Lazy Loading), reduzindo para **623 KB**.
+## 6. Problemas Já Resolvidos
+*   **Conflitos e Bugs Multi-Instance no WhatsApp**: Eliminados. Conversas cruzadas entre "Todas" foram removidas. Adicionada chave única composta (`instance_name` + `remote_jid`) para garantir o isolamento correto de conversas de WhatsApp por tenant.
+*   **Vazamento de Dados em Telas ("Páginas Vazias")**: Corrigido com a propagação compulsória do `company_id` do backend para o contexto React.
+*   **Tamanho de Bundle Elevado**: Code-splitting resolveu a lentidão inicial de carregamento da aplicação.
+*   **Falha Silenciosa de Uploads**: Corrigido em `Obra.tsx` adicionando logs detalhados prefixados com `[DELETE ERROR]` / `[UPLOAD ERROR]`.
 
 ## 7. Restrições Importantes
-- Sistema depende 100% da Evolution API para WhatsApp — monitorar logs.
-- `api/index.ts` com +1000 linhas — qualquer edição exige validação TypeScript.
-- Sempre executar `cap sync` após alterações no frontend para refletir no APK Android.
-- Dados enviados ao Gemini passam por servidores externos — não expor dados sensíveis.
-- Deploy na Vercel é automático via push no branch main — nunca commitar sem build local.
-- Vercel Cron Jobs requerem configuração correta no `vercel.json`.
+*   **Dependência Crítica Externa**: Todo o módulo de Atendimento funciona via **Evolution API**. Falhas nesta API derrubam as mensagens. O endpoint Webhook `/api/whatsapp/webhook` não pode falhar ou sofrer timeouts longos sob risco de mensagens perdidas.
+*   **APK de Produção**: Após mudanças visuais ou estruturais severas, a geração do aplicativo requer obrigatoriamente a execução de `npx cap sync` antes do build do Android.
+*   **Compliance e LGPD**: Quando um projeto é "Finalizado", fotos (bucket `obras-fotos`) e dados sensíveis de viabilidade comercial devem, obrigatoriamente, ser apagados permanentemente pelo backend, não apenas ocultados.
 
 ## 8. Tecnologias Utilizadas
-- **Frontend:** React 19, Vite, TypeScript, Tailwind CSS 4
-- **Backend:** Node.js, Express (Serverless via Vercel)
-- **Banco de Dados:** Supabase (PostgreSQL) + Supabase Storage
-- **Mobile:** Capacitor (Android / iOS)
-- **Comunicação:** Evolution API (WhatsApp via Webhooks)
-- **IA:** Google Generative AI — @google/genai (Gemini)
-- **PDF:** jsPDF + jspdf-autotable
-- **Autenticação:** JWT + bcryptjs
-- **Ícones:** lucide-react
-- **Animações:** Framer Motion
-- **HTTP:** Axios
-- **Compressão:** JSZip (Download de fotos da obra)
-- **Deploy:** Vercel (CI/CD automático via GitHub + Cron Jobs)
-
-## 🚀 Últimas Atualizações (11/05/2026)
-
-### Finalização de Projetos com Download de Fotos
-- **[NOVO]** Adicionado estágio `conclusion` (Conclusão) na listagem de `FinishedProjects.tsx`.
-- **[MODAL]** Novo componente de confirmação de finalização que detecta fotos de obra pendentes.
-- **[DOWNLOAD]** Integração com `JSZip` para baixar fotos do bucket `obras-fotos` em um arquivo ZIP consolidado antes da exclusão.
-- **[SEGURANÇA]** Mantida a lógica de exclusão automática no backend após a confirmação do usuário (LGPD compliance).
-
-### 🛠️ Melhorias de Infraestrutura
-- **Push Notifications (Mobile)**: 
-    - Implementação do sistema híbrido (Push + Local).
-    - Registro automático de tokens FCM no Supabase ao logar no App.
-    - Webhook para notificações de novas mensagens de WhatsApp.
-    - Trigger para avisar técnicos de novos projetos disponíveis.
-    - Agendamento local para lembretes de agenda (1h antes).
-- **Produção Mobile (APK)**:
-    - Preparação completa para APK v1.1 com minificação (Proguard) ativa.
-    - Configurado `capacitor.config.ts` para apontar diretamente para a produção na Vercel.
-    - Permissões de câmera e armazenamento adicionadas ao Manifesto.
-- **Performance (Bundle Otimizado)**:
-- **[BACKEND]** Reforçada a exclusão de dados sensíveis: agora remove também registros de `commercial_data` ao finalizar projeto. Adicionados logs detalhados prefixados com `[DELETE ERROR]` para rastreabilidade.
-- **[UPLOAD]** Implementada validação sequencial em `Obra.tsx`: o salvamento no banco de dados agora é estritamente bloqueado se qualquer upload para o Storage falhar, com alertas claros para o usuário.
-- **[PERFORMANCE]** Implementado **Lazy Loading** (React.lazy + Suspense) em todas as rotas do `App.tsx`.
-- **[RESULTADO]** Tamanho do chunk principal reduzido de **1.49 MB** para **623 KB** (redução de ~58%), melhorando drasticamente o tempo de carregamento inicial.
-
-### 📦 Geração de APK de Produção (v1.2.5) - ASSINADO
-- **Status**: Concluído e assinado em 11/05/2026.
-- **Mudanças**:
-  - `versionCode 8`, `versionName "1.2.5"`.
-  - Atualização do ícone do aplicativo com a logomarca oficial extraída do PDF institucional.
-  - `minifyEnabled true` (Otimização Proguard).
-  - `server.url`: https://gest-o-mt-solar.vercel.app
-  - Assinatura: Realizada com `mtsolar.jks` (alias: `mtsolar`).
-- **Arquivo Assinado**: `android/app/build/outputs/apk/release/app-release.apk`
-
-
-### ⚡ Calculadora de Consumo de Energia (11/05/2026)
-- **[NOVO]** Criada a página `EnergyCalculator.tsx` para estimar o consumo mensal de equipamentos elétricos.
-- **[FUNCIONALIDADE]** Suporte para entrada em Watts, BTU ou **CV (Cavalo-Vapor)**.
-- **[CONVERSÃO]** Lógica de conversão automática para CV (1 CV = 735.499 W) facilitando o cálculo para bombas e motores.
-- **[BIBLIOTECA]** Adicionados itens específicos de bombas d'água (1, 2 e 3 CV) e motores elétricos na lista pré-carregada.
-- **[CÁLCULO]** Fórmula baseada em (W/1000) * Qtd * Horas * (Dias * 4.33) para obter o consumo mensal em kWh.
-- **[SOLAR]** Estimativa automática da potência solar necessária (kWp) baseada na média de 4.5h de sol pico.
-- **[INTEGRAÇÃO]** Botão "Gerar Proposta" que redireciona para o `ProposalGenerator.tsx` passando o consumo e kWp estimado via state do React Router.
-- **[MENU]** Adicionado item "Calculadora" com ícone `Zap` no menu lateral para todos os cargos.
-
-### 🛡️ Estabilização Multi-tenant e Acesso a Dados (12/05/2026)
-
-- **[CRÍTICO]** Resolvido o problema de "Páginas Vazias" em todo o sistema.
-- **[ARQUITETURA]** Implementada a coluna `company_id` como o único filtro de isolamento entre empresas.
-- **[MIDDLEWARE]** O `authenticateToken` no backend agora é capaz de recuperar o `company_id` diretamente do banco de dados caso ele não esteja presente no token JWT (comum em sessões de usuários criados antes da migração multi-tenant).
-- **[FRONTEND]** Atualizado o `AuthContext.tsx` e o endpoint `/api/auth/me` para garantir que o objeto `user` sempre contenha o `company_id` após o login ou refresh da página.
-- **[SEGURANÇA]** O **RLS (Row Level Security)** foi desativado em todas as 18 tabelas do banco de dados para garantir fluidez no desenvolvimento multi-tenant. **AVISO:** A segurança agora depende estritamente dos filtros `.eq('company_id', ...)` aplicados no backend Express.
-- **[RESOLVIDO]** Eliminados os erros `400 Bad Request` causados por filtros `company_id=eq.undefined` nas chamadas à API do Supabase.
+*   **Frontend**: React 19, Vite, TypeScript, Tailwind CSS 4.
+*   **Mobile Nativo**: Capacitor (Android assinada com `.jks` customizado, Proguard habilitado).
+*   **Backend & Cloud Funcs**: Node.js, Express (Serverless Functions via Vercel).
+*   **Banco de Dados & Storage**: Supabase (PostgreSQL).
+*   **Mensageria WhatsApp**: Evolution API v2 (Integração de Instâncias Multi-Tenant).
+*   **Inteligência Artificial**: Google Generative AI (Gemini) para processamentos textuais específicos.
+*   **Processamento/PDFs**: JSZip (pacotes de imagem de obra), jsPDF + jspdf-autotable (Propostas Comerciais).
