@@ -1247,6 +1247,14 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
     instanceName = instanceName.instanceName;
   }
 
+  // Limpar prefixo "Instance Name: " se presente
+  if (typeof instanceName === 'string' && instanceName.includes('Instance Name:')) {
+    instanceName = instanceName.replace('Instance Name:', '').trim();
+  }
+
+  // Normalizar para lowercase e remover espaços extras
+  instanceName = instanceName.toString().trim().toLowerCase().replace(/\s+/g, '-');
+
   const messageType = body.event;
   console.log('[WEBHOOK] Payload recebido:', instanceName, messageType);
 
@@ -1440,6 +1448,16 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
       }
     }
   }
+
+  await supabase
+    .from('whatsapp_conversations')
+    .update({ instance: 'atendimento-cliente' })
+    .eq('instance', 'Instance Name: atendimento-cliente');
+
+  await supabase
+    .from('whatsapp_messages')
+    .update({ instance: 'atendimento-cliente' })
+    .eq('instance', 'Instance Name: atendimento-cliente');
 
   res.json({ success: true });
 });
