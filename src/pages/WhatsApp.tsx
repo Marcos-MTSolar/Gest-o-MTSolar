@@ -185,25 +185,22 @@ export default function WhatsApp() {
   };
 
   const fetchConversations = async () => {
-    let query = supabase
-      .from('whatsapp_conversations')
-      .select('*')
-      .eq('company_id', user?.company_id);
+    try {
+      const instance = activeInstance === 'admin' 
+        ? evolutionApi.instances.ADMIN 
+        : evolutionApi.instances.ATENDIMENTO;
 
-    if (activeInstance === 'admin') {
-      query = query.eq('instance', evolutionApi.instances.ADMIN);
-    } else if (activeInstance === 'atendimento') {
-      query = query.eq('instance', evolutionApi.instances.ATENDIMENTO);
+      const { data } = await api.get(`/api/conversations?instance=${instance}`);
+      
+      if (data) {
+        console.log('[CONVERSAS] Total recebido:', data.length);
+        setConversations(data);
+      }
+    } catch (error) {
+      console.error("Erro ao buscar conversas:", error);
+    } finally {
+      setLoading(false);
     }
-
-    const { data, error } = await query.order('last_message_at', { ascending: false });
-
-    if (!error && data) {
-      console.log('[CONVERSAS] Total recebido:', data.length);
-      console.log('[CONVERSAS] Dados:', data);
-      setConversations(data);
-    }
-    setLoading(false);
   };
 
   const fetchAgents = async () => {

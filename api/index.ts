@@ -956,6 +956,24 @@ app.post('/api/messages', authenticateToken, async (req: any, res) => {
   res.json(payload);
 });
 
+// WhatsApp Conversations
+app.get('/api/conversations', authenticateToken, async (req: any, res) => {
+  const { instance } = req.query;
+  let query = supabase
+    .from('whatsapp_conversations')
+    .select('*')
+    .eq('company_id', req.user.company_id);
+
+  if (instance) {
+    query = query.eq('instance', instance);
+  }
+
+  const { data, error } = await query.order('last_message_at', { ascending: false });
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
+});
+
 // WhatsApp - Assume Conversation
 app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
   const { conversationId, userId } = req.body;
@@ -1023,26 +1041,20 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
 
 app.post('/api/webhooks/whatsapp', async (req, res) => {
   const payload = req.body;
-  let instance = payload.instance || 'mtsolar';
+  // Evolution API v2 payload structure: { instance: { instanceName: '...' }, ... }
+  let instanceName = payload.instance?.instanceName || payload.instance || 'mtsolar';
   
-  // Normalização de nome de instância (ex: "Instance Name: atendimento-cliente" -> "atendimento-cliente")
-  if (instance.includes('atendimento-cliente') || instance.includes('atendimento_cliente')) {
-    instance = 'atendimento-cliente';
-  } else if (instance.includes('mtsolar')) {
-    instance = 'mtsolar';
-  }
-
   const messageType = payload.event;
-  console.log('[WEBHOOK] Payload recebido:', instance, messageType);
+  console.log('[WEBHOOK] Payload recebido:', instanceName, messageType);
 
   // Resolvendo company_id pela instância
   let companyId = null;
   try {
-    // 1. Tentar buscar na nova tabela de vínculos de instância
+    // 1. Tentar buscar na tabela de vínculos de instância (company_instances)
     const { data: instanceLink } = await supabase
-      .from('companies_instances')
+      .from('company_instances')
       .select('company_id')
-      .eq('instance_name', instance)
+      .eq('instance_name', instanceName)
       .single();
     
     if (instanceLink) {
@@ -1052,7 +1064,7 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
       const { data: company } = await supabase
         .from('companies')
         .select('id')
-        .eq('whatsapp_instance', instance)
+        .eq('whatsapp_instance', instanceName)
         .single();
       
       if (company) {
@@ -1067,10 +1079,10 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
     console.error('[WEBHOOK] Erro ao buscar empresa:', e);
   }
 
-  console.log('[WEBHOOK] company_id resolvido:', companyId);
+  console.log('[WEBHOOK] company_id resolvido:', companyId, 'para instância:', instanceName);
 
   if (!companyId) {
-    console.error('[WEBHOOK] Erro: Não foi possível resolver o company_id para a instância:', instance);
+    console.error('[WEBHOOK] Erro: Não foi possível resolver o company_id para a instância:', instanceName);
     return res.status(200).json({ success: false, error: 'Company not found' }); // Return 200 to avoid Evolution API retries
   }
   
@@ -1114,19 +1126,20 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
 
     if (text) {
       console.log('[WEBHOOK] Tentando processar conversa/mensagem...');
-      console.log('[WEBHOOK] Dados da conversa:', JSON.stringify({ phone, pushName, companyId, instance }));
+      console.log('[WEBHOOK] Dados da conversa:', JSON.stringify({ phone, pushName, companyId, instanceName }));
       // 1. Find or Create Conversation (UPSERT)
       let conversationId = null;
       let conv: any = null;
       try {
         console.log('[WEBHOOK] Fazendo upsert da conversa para:', phone);
         
-        // Primeiro buscamos a conversa para saber o status atual
+        // Primeiro buscamos a conversa para saber o status atual filtrando também por instância
         const { data: existingConv } = await supabase
           .from('whatsapp_conversations')
           .select('*')
           .eq('phone', phone)
           .eq('company_id', companyId)
+          .eq('instance', instanceName)
           .single();
 
         // Determinar o novo status: 
@@ -1145,9 +1158,9 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
             last_message: text,
             last_message_at: new Date().toISOString(),
             status: newStatus,
-            instance: instance
+            instance: instanceName
           }, { 
-            onConflict: 'phone,company_id' 
+            onConflict: 'phone,company_id,instance' 
           })
           .select()
           .single();
@@ -1181,7 +1194,7 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
             media_url: mediaUrl,
             file_name: fileName,
             file_size: fileSize,
-            instance: instance,
+            instance: instanceName,
             company_id: companyId
           });
 
