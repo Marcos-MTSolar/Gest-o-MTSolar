@@ -296,7 +296,7 @@ export default function WhatsApp() {
         .eq('company_id', user.company_id);
       }
       
-      fetchMessages();
+      fetchMessages(selectedConversation.id);
 
     } catch (error: any) {
       console.error("Erro ao enviar mensagem:", error);
@@ -366,7 +366,7 @@ export default function WhatsApp() {
       });
       
       // O backend já salva no banco e atualiza a conversa
-      fetchMessages(); 
+      fetchMessages(selectedConversation.id); 
     } catch (error: any) {
       console.error("Erro ao enviar áudio:", error);
     }

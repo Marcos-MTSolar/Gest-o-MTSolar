@@ -52,6 +52,11 @@ const supabase = createClient(
   supabaseServiceKey || 'dummy_key'
 );
 
+const INSTANCE_COMPANY_MAP: Record<string, string> = {
+  'mtsolar': 'e4bf6f22-6182-414d-afa4-c5449c014323',
+  'atendimento-cliente': 'e4bf6f22-6182-414d-afa4-c5449c014323'
+};
+
 // Middleware
 app.use(express.json());
 const allowedOrigins = [
@@ -1227,43 +1232,60 @@ app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
 
 
 app.post('/api/webhooks/whatsapp', async (req, res) => {
-  const payload = req.body;
-  // Evolution API v2 payload structure: { instance: { instanceName: '...' }, ... }
-  let instanceName = payload.instance?.instanceName || payload.instance || 'mtsolar';
+  const body = req.body;
   
-  const messageType = payload.event;
+  // LOGS DE DIAGNÓSTICO SOLICITADOS
+  console.log('[WEBHOOK DEBUG] payload keys:', JSON.stringify(Object.keys(body)));
+  console.log('[WEBHOOK DEBUG] instance details:', body.instance, body.instanceName, body.data?.instance);
+
+  // Evolução API v2 payload structure: { instance: { instanceName: '...' }, ... } 
+  // v2.3.7 pode vir em diferentes locais
+  let instanceName = body.instance?.instanceName || body.instanceName || body.instance || body.data?.instance || 'mtsolar';
+  
+  // Normalização caso venha como objeto na v2
+  if (typeof instanceName === 'object' && instanceName?.instanceName) {
+    instanceName = instanceName.instanceName;
+  }
+
+  const messageType = body.event;
   console.log('[WEBHOOK] Payload recebido:', instanceName, messageType);
 
   // Resolvendo company_id pela instância
-  let companyId = null;
-  try {
-    // 1. Tentar buscar na tabela de vínculos de instância (company_instances)
-    const { data: instanceLink } = await supabase
-      .from('company_instances')
-      .select('company_id')
-      .eq('instance_name', instanceName)
-      .single();
-    
-    if (instanceLink) {
-      companyId = instanceLink.company_id;
-    } else {
-      // 2. Fallback para a coluna whatsapp_instance legado na tabela companies
-      const { data: company } = await supabase
-        .from('companies')
-        .select('id')
-        .eq('whatsapp_instance', instanceName)
+  // 1. Prioridade: Mapeamento fixo (Correção 2)
+  let companyId = INSTANCE_COMPANY_MAP[instanceName as string] || null;
+
+  if (!companyId) {
+    try {
+      // 2. Tentar buscar na tabela de vínculos de instância (company_instances)
+      const { data: instanceLink } = await supabase
+        .from('company_instances')
+        .select('company_id')
+        .eq('instance_name', instanceName)
         .single();
       
-      if (company) {
-        companyId = company.id;
+      if (instanceLink) {
+        companyId = instanceLink.company_id;
       } else {
-        // 3. Fallback final para a primeira empresa (modo single-tenant)
-        const { data: firstCompany } = await supabase.from('companies').select('id').limit(1).single();
-        companyId = firstCompany?.id;
+        // 3. Fallback para a coluna whatsapp_instance legado na tabela companies
+        const { data: company } = await supabase
+          .from('companies')
+          .select('id')
+          .eq('whatsapp_instance', instanceName)
+          .single();
+        
+        if (company) {
+          companyId = company.id;
+        }
       }
+    } catch (e) {
+      console.error('[WEBHOOK] Erro ao buscar empresa:', e);
     }
-  } catch (e) {
-    console.error('[WEBHOOK] Erro ao buscar empresa:', e);
+  }
+
+  // 4. Fallback final (MT Solar) se nada funcionar
+  if (!companyId) {
+    console.log('[WEBHOOK] company_id não encontrado para instância:', instanceName, '- Usando padrão MT Solar');
+    companyId = 'e4bf6f22-6182-414d-afa4-c5449c014323';
   }
 
   console.log('[WEBHOOK] company_id resolvido:', companyId, 'para instância:', instanceName);
@@ -1274,8 +1296,8 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
   }
   
   // Logic to handle incoming message from Evolution API
-  if (payload.event === 'messages.upsert') {
-    const message = payload.data;
+  if (body.event === 'messages.upsert') {
+    const message = body.data;
     const phone = message.key.remoteJid.split('@')[0];
     const fromMe = message.key.fromMe;
     const messageId = message.key.id;
