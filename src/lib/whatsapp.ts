@@ -1,6 +1,6 @@
 const EVOLUTION_URL = import.meta.env.VITE_EVOLUTION_URL || '';
 const EVOLUTION_KEY = import.meta.env.VITE_EVOLUTION_KEY || '';
-const INSTANCE_ADMIN = import.meta.env.VITE_EVOLUTION_INSTANCE_ADMIN || import.meta.env.VITE_EVOLUTION_INSTANCE || 'mtsolar';
+const INSTANCE_ADMIN = import.meta.env.VITE_EVOLUTION_INSTANCE_ADMIN || 'mtsolar';
 const INSTANCE_ATENDIMENTO = import.meta.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO || 'atendimento-cliente';
 const TOKEN_ATENDIMENTO = import.meta.env.VITE_EVOLUTION_TOKEN_ATENDIMENTO || '';
 
