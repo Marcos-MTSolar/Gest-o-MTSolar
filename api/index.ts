@@ -1038,6 +1038,193 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
   }
 });
 
+// WhatsApp - Send Audio
+app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) => {
+  const { phone, audio, instance, conversationId } = req.body;
+
+  try {
+    const EVOLUTION_URL = process.env.VITE_EVOLUTION_URL;
+    const INSTANCE_NAME = instance || process.env.VITE_EVOLUTION_INSTANCE;
+    const EVOLUTION_KEY = INSTANCE_NAME === process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO 
+      ? (process.env.VITE_EVOLUTION_TOKEN_ATENDIMENTO || process.env.VITE_EVOLUTION_KEY)
+      : process.env.VITE_EVOLUTION_KEY;
+
+    if (!EVOLUTION_URL || !EVOLUTION_KEY) {
+      throw new Error('Configuração da Evolution API incompleta no servidor.');
+    }
+
+    const response = await fetch(`${EVOLUTION_URL}/message/sendWhatsAppAudio/${INSTANCE_NAME}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': EVOLUTION_KEY },
+      body: JSON.stringify({
+        number: phone,
+        audio: audio, // base64
+        delay: 1200,
+        encoding: true
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Erro Evolution API: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+
+    // Salvar no banco
+    if (conversationId) {
+      await supabase.from('whatsapp_messages').insert({
+        conversation_id: conversationId,
+        phone: phone,
+        message: '[Áudio]',
+        from_me: true,
+        message_id: result.key?.id || `sent-audio-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        media_type: 'audio',
+        file_name: 'audio.mp3',
+        instance: INSTANCE_NAME,
+        company_id: req.user.company_id
+      });
+
+      await supabase.from('whatsapp_conversations').update({
+        last_message: '[Áudio]',
+        last_message_at: new Date().toISOString()
+      })
+      .eq('id', conversationId)
+      .eq('company_id', req.user.company_id);
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    console.error("Error sending audio:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// WhatsApp - Send Media (Image/Document)
+app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) => {
+  const { phone, fileBase64, mimetype, filename, caption, instance, conversationId } = req.body;
+
+  try {
+    const EVOLUTION_URL = process.env.VITE_EVOLUTION_URL;
+    const INSTANCE_NAME = instance || process.env.VITE_EVOLUTION_INSTANCE;
+    const EVOLUTION_KEY = INSTANCE_NAME === process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO 
+      ? (process.env.VITE_EVOLUTION_TOKEN_ATENDIMENTO || process.env.VITE_EVOLUTION_KEY)
+      : process.env.VITE_EVOLUTION_KEY;
+
+    if (!EVOLUTION_URL || !EVOLUTION_KEY) {
+      throw new Error('Configuração da Evolution API incompleta no servidor.');
+    }
+
+    const mediatype = mimetype.startsWith('image/') ? 'image' : 'document';
+
+    const response = await fetch(`${EVOLUTION_URL}/message/sendMedia/${INSTANCE_NAME}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': EVOLUTION_KEY },
+      body: JSON.stringify({
+        number: phone,
+        mediaMessage: {
+          mediatype: mediatype,
+          caption: caption || '',
+          media: fileBase64,
+          fileName: filename
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Erro Evolution API: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+
+    // Salvar no banco
+    if (conversationId) {
+      await supabase.from('whatsapp_messages').insert({
+        conversation_id: conversationId,
+        phone: phone,
+        message: caption || `[${mediatype}]`,
+        from_me: true,
+        message_id: result.key?.id || `sent-media-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        media_type: mediatype,
+        file_name: filename,
+        instance: INSTANCE_NAME,
+        company_id: req.user.company_id
+      });
+
+      await supabase.from('whatsapp_conversations').update({
+        last_message: caption || `[${mediatype}]`,
+        last_message_at: new Date().toISOString()
+      })
+      .eq('id', conversationId)
+      .eq('company_id', req.user.company_id);
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    console.error("Error sending media:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// WhatsApp - Transfer Instance
+app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
+  const { conversationId, targetInstance } = req.body;
+
+  try {
+    // 1. Get conversation info
+    const { data: conv, error: fetchError } = await supabase
+      .from('whatsapp_conversations')
+      .select('*')
+      .eq('id', conversationId)
+      .eq('company_id', req.user.company_id)
+      .single();
+
+    if (fetchError || !conv) throw new Error('Conversa não encontrada');
+
+    // 2. Update conversation and messages
+    const { error: updateError } = await supabase
+      .from('whatsapp_conversations')
+      .update({ instance: targetInstance })
+      .eq('id', conversationId)
+      .eq('company_id', req.user.company_id);
+
+    if (updateError) throw updateError;
+
+    await supabase
+      .from('whatsapp_messages')
+      .update({ instance: targetInstance })
+      .eq('conversation_id', conversationId);
+
+    // 3. Send automated message from target instance
+    const EVOLUTION_URL = process.env.VITE_EVOLUTION_URL;
+    const INSTANCE_NAME = targetInstance;
+    const EVOLUTION_KEY = INSTANCE_NAME === process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO 
+      ? (process.env.VITE_EVOLUTION_TOKEN_ATENDIMENTO || process.env.VITE_EVOLUTION_KEY)
+      : process.env.VITE_EVOLUTION_KEY;
+
+    const teamName = targetInstance === process.env.VITE_EVOLUTION_INSTANCE_ADMIN ? 'Administrativa' : 'de Atendimento';
+
+    if (EVOLUTION_URL && EVOLUTION_KEY) {
+      await fetch(`${EVOLUTION_URL}/message/sendText/${INSTANCE_NAME}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': EVOLUTION_KEY },
+        body: JSON.stringify({ 
+          number: conv.phone, 
+          text: `Seu atendimento foi transferido para nossa equipe ${teamName}. Em breve entraremos em contato. 👋` 
+        })
+      });
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error transferring instance:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 app.post('/api/webhooks/whatsapp', async (req, res) => {
   const payload = req.body;
