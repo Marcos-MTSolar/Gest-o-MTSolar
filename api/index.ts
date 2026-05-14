@@ -1342,46 +1342,60 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
       try {
         console.log('[WEBHOOK] Fazendo upsert da conversa para:', phone);
         
-        // Primeiro buscamos a conversa para saber o status atual filtrando também por instância
         const { data: existingConv } = await supabase
           .from('whatsapp_conversations')
           .select('*')
           .eq('phone', phone)
           .eq('company_id', companyId)
           .eq('instance', instanceName)
-          .single();
+          .maybeSingle();
 
-        // Determinar o novo status: 
-        // Se for mensagem recebida e não estiver 'in_progress', vira 'waiting'
-        let newStatus = existingConv?.status || 'waiting';
-        if (!fromMe && newStatus !== 'in_progress') {
-          newStatus = 'waiting';
-        }
+        let conv: any = null;
+        let conversationId = null;
 
-        const { data: conversationResult, error: upsertError } = await supabase
-          .from('whatsapp_conversations')
-          .upsert({
-            phone,
-            company_id: companyId,
-            contact_name: pushName || existingConv?.contact_name,
-            last_message: text,
-            last_message_at: new Date().toISOString(),
-            status: newStatus,
-            instance: instanceName
-          }, { 
-            onConflict: 'phone,company_id,instance' 
-          })
-          .select()
-          .single();
+        if (existingConv) {
+          // Atualizar conversa existente
+          let newStatus = existingConv.status;
+          if (!fromMe && newStatus !== 'in_progress') newStatus = 'waiting';
 
-        console.log('[WEBHOOK] Resultado upsert conversa:', JSON.stringify(conversationResult));
-        
-        if (upsertError) {
-          console.error('[WEBHOOK ERROR] Falha ao salvar conversa (upsert):', upsertError.message, upsertError.details);
+          const { data: updated } = await supabase
+            .from('whatsapp_conversations')
+            .update({
+              contact_name: pushName || existingConv.contact_name,
+              last_message: text,
+              last_message_at: new Date().toISOString(),
+              status: newStatus
+            })
+            .eq('id', existingConv.id)
+            .select()
+            .single();
+
+          conv = updated;
+          conversationId = existingConv.id;
+          console.log('[WEBHOOK] Conversa existente atualizada. ID:', conversationId, 'instance:', instanceName);
         } else {
-          conv = conversationResult;
-          conversationId = conv.id;
-          console.log('[WEBHOOK] Conversa salva/atualizada com sucesso');
+          // Criar nova conversa
+          const { data: inserted, error: insertError } = await supabase
+            .from('whatsapp_conversations')
+            .insert({
+              phone,
+              company_id: companyId,
+              contact_name: pushName || null,
+              last_message: text,
+              last_message_at: new Date().toISOString(),
+              status: fromMe ? 'in_progress' : 'waiting',
+              instance: instanceName
+            })
+            .select()
+            .single();
+
+          if (insertError) {
+            console.error('[WEBHOOK ERROR] Falha ao criar conversa:', insertError.message);
+          } else {
+            conv = inserted;
+            conversationId = inserted.id;
+            console.log('[WEBHOOK] Nova conversa criada. ID:', conversationId, 'instance:', instanceName);
+          }
         }
       } catch (err: any) {
         console.error('[WEBHOOK ERROR] Erro inesperado ao processar conversa:', err.message, err.details);
