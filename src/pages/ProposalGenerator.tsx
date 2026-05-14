@@ -1859,6 +1859,19 @@ export default function ProposalGenerator() {
               <p className="text-amber-400 font-semibold tracking-wider uppercase text-xs">Engenharia MT Solar</p>
             </div>
           </div>
+          <div>
+            {!formData.clientName || !formData.kitCost ? (
+              <span className="bg-amber-400 text-blue-900 text-xs font-bold px-4 py-1.5 rounded-full flex items-center gap-2">
+                <div className="w-2 h-2 bg-blue-900 rounded-full animate-ping"></div>
+                Preencha os dados
+              </span>
+            ) : (
+              <span className="bg-green-500 text-white text-xs font-bold px-4 py-1.5 rounded-full flex items-center gap-2">
+                <Check size={14} />
+                Proposta Pronta
+              </span>
+            )}
+          </div>
         </div>
       </header>
 
@@ -1876,22 +1889,6 @@ export default function ProposalGenerator() {
           </button>
         </div>
       )}
-          </div>
-          <div>
-            {!formData.clientName || !formData.kitCost ? (
-              <span className="bg-amber-400 text-blue-900 text-xs font-bold px-4 py-1.5 rounded-full flex items-center gap-2">
-                <div className="w-2 h-2 bg-blue-900 rounded-full animate-ping"></div>
-                Preencha os dados
-              </span>
-            ) : (
-              <span className="bg-green-500 text-white text-xs font-bold px-4 py-1.5 rounded-full flex items-center gap-2">
-                <Check size={14} />
-                Proposta Pronta
-              </span>
-            )}
-          </div>
-        </div>
-      </header>
 
       {/* Stepper */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
