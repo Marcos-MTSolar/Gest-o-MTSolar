@@ -668,7 +668,10 @@ export default function WhatsApp() {
   return (
     <div className="flex h-[calc(100vh-140px)] bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
       {/* Painel Esquerdo - Lista de Conversas */}
-      <div className="w-80 flex-shrink-0 border-r border-gray-200 flex flex-col bg-gray-50">
+      <div className={cn(
+        "w-full lg:w-80 flex-shrink-0 border-r border-gray-200 flex flex-col bg-gray-50",
+        selectedConversation ? "hidden lg:flex" : "flex"
+      )}>
         <div className="p-4 bg-white border-b border-gray-200">
           <h1 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
             <MessageCircle className="text-blue-600" />
@@ -783,12 +786,21 @@ export default function WhatsApp() {
       </div>
 
       {/* Painel Central - Chat */}
-      <div className="flex-1 flex flex-col bg-white">
+      <div className={cn(
+        "flex-1 flex flex-col bg-white",
+        !selectedConversation ? "hidden lg:flex" : "flex"
+      )}>
         {selectedConversation ? (
           <>
             {/* Header do Chat */}
             <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-white shadow-sm z-10">
-              <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => setSelectedConversation(null)}
+                  className="lg:hidden p-2 -ml-2 mr-1 text-gray-500 hover:text-blue-600 transition-colors"
+                >
+                  <ArrowLeft size={24} />
+                </button>
                 <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700">
                   <User size={20} />
                 </div>
@@ -1081,7 +1093,7 @@ export default function WhatsApp() {
 
       {/* Painel Direito - Ações do Ticket */}
       {selectedConversation && (
-        <div className="w-72 flex-shrink-0 border-l border-gray-200 bg-white flex flex-col">
+        <div className="w-72 flex-shrink-0 border-l border-gray-200 bg-white flex flex-col hidden lg:flex">
           <div className="p-6 border-b border-gray-200 text-center relative group">
             <div className="w-20 h-20 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 mx-auto mb-4 border-2 border-blue-100">
               <User size={32} />

@@ -1530,8 +1530,9 @@ app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
       });
     }
 
+    const clientName = conv.contact_name ? conv.contact_name.trim() : 'prezado(a) cliente';
     const teamName = creds.instanceName === 'mtsolar' ? 'Administrativa' : 'de Atendimento';
-    const farewellMsg = `Olá! 😊 Obrigado por entrar em contato com a MT Solar. Seu atendimento foi encaminhado para nossa equipe Administrativa, que dará continuidade com todo o cuidado que você merece. Em breve um de nossos especialistas entrará em contato. Qualquer dúvida, estamos à disposição! 🌟`;
+    const farewellMsg = `Olá, ${clientName}! 😊 Seu atendimento foi encaminhado para nossa equipe ${teamName}. Em breve um de nossos especialistas entrará em contato. Qualquer dúvida, estamos à disposição! 🌟`;
 
     // Enviar mensagem de aviso usando a instância de origem
     const originCreds = await getEvolutionApiCredentials(req.user.company_id, conv.instance);
