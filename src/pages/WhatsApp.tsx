@@ -115,7 +115,7 @@ export default function WhatsApp() {
   const isAgent = isAdmin || user?.role?.toUpperCase() === 'COMMERCIAL';
   const isCommercial = user?.role?.toUpperCase() === 'COMMERCIAL';
   const [activeInstance, setActiveInstance] = useState<'admin' | 'atendimento'>('atendimento');
-  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [activeTag, setActiveTag] = useState<string | null>(WHATSAPP_TAGS[0].id);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [showTagDropdown, setShowTagDropdown] = useState(false);
   const [showTransferInstanceModal, setShowTransferInstanceModal] = useState(false);
@@ -709,15 +709,7 @@ export default function WhatsApp() {
           </div>
 
           <div className="mt-3 overflow-x-auto no-scrollbar flex gap-2 pb-1">
-            <button
-              onClick={() => setActiveTag(null)}
-              className={cn(
-                "whitespace-nowrap px-3 py-1 rounded-full text-[10px] font-bold border transition-all",
-                activeTag === null ? "bg-gray-600 text-white border-transparent shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
-              )}
-            >
-              Todas
-            </button>
+
             {WHATSAPP_TAGS.map(tag => (
               <button
                 key={tag.id}

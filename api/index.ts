@@ -1657,8 +1657,10 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
 
   // 4. Fallback final (MT Solar) se nada funcionar
   if (!companyId) {
-    console.log('[WEBHOOK] company_id não encontrado para instância:', instanceName, '- Usando padrão MT Solar');
-    companyId = 'e4bf6f22-6182-414d-afa4-c5449c014323';
+    console.error('[WEBHOOK FALLBACK] ATENÇÃO: instance_name não encontrado em company_instances nem em companies:', instanceName);
+    console.error('[WEBHOOK FALLBACK] Verifique se a instância está cadastrada na tabela company_instances.');
+    // NÃO processar mensagem de instância desconhecida — retornar 200 para não gerar retries
+    return res.status(200).json({ success: false, error: 'Instance not mapped to any company' });
   }
 
   console.log('[WEBHOOK] company_id resolvido:', companyId, 'para instância:', instanceName);
