@@ -676,7 +676,6 @@ export default function WhatsApp() {
   };
 
   return (
-  return (
     <div className="flex h-[calc(100vh-140px)] lg:h-[calc(100vh-140px)] w-full max-w-full overflow-hidden bg-white lg:rounded-2xl lg:shadow-xl lg:border border-gray-200">
       {/* Painel Esquerdo - Lista de Conversas */}
       <div className={cn(
