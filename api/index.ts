@@ -1735,8 +1735,6 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
           .eq('instance', instanceName)
           .maybeSingle();
 
-        let conv: any = null;
-        let conversationId = null;
 
         if (existingConv) {
           // Atualizar conversa existente
