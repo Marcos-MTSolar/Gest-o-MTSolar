@@ -1694,6 +1694,9 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
       mediaUrl = message.message.documentMessage.url || message.message.documentMessage.directPath;
       fileName = message.message.documentMessage.fileName || 'document';
       fileSize = message.message.documentMessage.fileLength;
+    } else if (message.message?.videoMessage) {
+      mediaType = 'video';
+      mediaUrl = message.message.videoMessage.url || message.message.videoMessage.directPath;
       fileName = message.message.videoMessage.fileName || 'video.mp4';
     } else if (message.message?.documentWithCaptionMessage) {
       const docMsg = message.message.documentWithCaptionMessage.message?.documentMessage;
