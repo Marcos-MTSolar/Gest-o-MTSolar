@@ -1108,6 +1108,8 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
     // 4. Send WhatsApp message
     try {
       const creds = await getEvolutionApiCredentials(req.user.company_id, conv.instance);
+      console.log('[WA DEBUG EVOLUTION] URL:', `${creds.baseUrl}/message/sendText/${creds.instanceName}`);
+      console.log('[WA DEBUG EVOLUTION] apikey (primeiros 8 chars):', creds.apiKey?.substring(0, 8));
       console.log('[WA DEBUG] instance_name que será usado:', creds.instanceName);
       console.log('[WA DEBUG] URL Evolution:', creds.baseUrl);
       console.log(`[WA SEND] instance_name resolvido: ${creds.instanceName}`);
@@ -1253,6 +1255,8 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
     }
 
     const creds = await getEvolutionApiCredentials(req.user.company_id, instance);
+    console.log('[WA DEBUG EVOLUTION] URL:', `${creds.baseUrl}/message/sendMedia/${creds.instanceName}`);
+    console.log('[WA DEBUG EVOLUTION] apikey (primeiros 8 chars):', creds.apiKey?.substring(0, 8));
     console.log('[WA DEBUG] instance_name que será usado:', creds.instanceName);
     console.log('[WA DEBUG] URL Evolution:', creds.baseUrl);
     console.log(`[WA SEND] instance_name resolvido: ${creds.instanceName}`);
@@ -1344,6 +1348,8 @@ app.post('/api/whatsapp/send', authenticateToken, async (req: any, res) => {
     }
 
     const creds = await getEvolutionApiCredentials(req.user.company_id, instance);
+    console.log('[WA DEBUG EVOLUTION] URL:', `${creds.baseUrl}/message/sendText/${creds.instanceName}`);
+    console.log('[WA DEBUG EVOLUTION] apikey (primeiros 8 chars):', creds.apiKey?.substring(0, 8));
     console.log('[WA DEBUG] instance_name que será usado:', creds.instanceName);
     console.log('[WA DEBUG] URL Evolution:', creds.baseUrl);
     console.log(`[WA SEND] Enviando texto na instância: ${creds.instanceName} para ${phone}`);
