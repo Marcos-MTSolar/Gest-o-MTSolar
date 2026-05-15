@@ -115,7 +115,7 @@ export default function WhatsApp() {
   const isAgent = isAdmin || user?.role?.toUpperCase() === 'COMMERCIAL';
   const isCommercial = user?.role?.toUpperCase() === 'COMMERCIAL';
   const [activeInstance, setActiveInstance] = useState<'admin' | 'atendimento'>('atendimento');
-  const [activeTag, setActiveTag] = useState<string | null>(WHATSAPP_TAGS[0].id);
+  const [activeTag, setActiveTag] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [showTagDropdown, setShowTagDropdown] = useState(false);
   const [showTransferInstanceModal, setShowTransferInstanceModal] = useState(false);
@@ -555,7 +555,7 @@ export default function WhatsApp() {
   const allFiltered = conversations.filter(conv => {
     const matchesSearch = (conv.contact_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            conv.phone.includes(searchQuery));
-    const matchesTag = activeTag ? conv.tag === activeTag : true;
+    const matchesTag = !activeTag || conv.tag === activeTag;
     return matchesSearch && matchesTag;
   });
 
