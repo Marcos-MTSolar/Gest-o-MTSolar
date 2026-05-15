@@ -1132,7 +1132,7 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
         headers: { 'Content-Type': 'application/json', 'apikey': creds.apiKey },
         body: JSON.stringify({ 
           number: conv.phone, 
-          text: `✅ Olá! Seu atendimento foi transferido para nossa equipe administrativa. Você está sendo atendido por ${userName}!` 
+          text: `Olá! 😊 Seja bem-vindo(a) à MT Solar. Meu nome é ${userName} e estou aqui para te ajudar. Como posso ser útil hoje?` 
         })
       });
 
@@ -1531,7 +1531,7 @@ app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
     }
 
     const teamName = creds.instanceName === 'mtsolar' ? 'Administrativa' : 'de Atendimento';
-    const farewellMsg = `Olá! Seu atendimento foi encaminhado para nossa equipe ${teamName}. Em breve entraremos em contato. Obrigado!`;
+    const farewellMsg = `Olá! 😊 Obrigado por entrar em contato com a MT Solar. Seu atendimento foi encaminhado para nossa equipe Administrativa, que dará continuidade com todo o cuidado que você merece. Em breve um de nossos especialistas entrará em contato. Qualquer dúvida, estamos à disposição! 🌟`;
 
     // Enviar mensagem de aviso usando a instância de origem
     const originCreds = await getEvolutionApiCredentials(req.user.company_id, conv.instance);
