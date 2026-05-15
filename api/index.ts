@@ -1144,6 +1144,35 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
   }
 });
 
+// Helper to resolve WhatsApp media type
+function resolveMediaType(mimetype: string, filename: string): string {
+  if (!mimetype) return 'document';
+  if (mimetype.startsWith('image/')) return 'image';
+  if (mimetype.startsWith('video/')) return 'video';
+  if (mimetype.startsWith('audio/')) return 'audio';
+  
+  // Documentos — todos vão como 'document'
+  if (
+    mimetype === 'application/pdf' ||
+    mimetype.includes('word') ||
+    mimetype.includes('excel') ||
+    mimetype.includes('spreadsheet') ||
+    mimetype.includes('presentation') ||
+    mimetype.includes('powerpoint') ||
+    mimetype.includes('zip') ||
+    mimetype.includes('compressed') ||
+    mimetype === 'text/plain' ||
+    mimetype === 'text/csv'
+  ) return 'document';
+  
+  // Fallback por extensão do arquivo
+  const ext = filename?.split('.').pop()?.toLowerCase();
+  const docExts = ['pdf','doc','docx','xls','xlsx','ppt','pptx','txt','csv','zip','rar'];
+  if (ext && docExts.includes(ext)) return 'document';
+  
+  return 'document'; // fallback seguro
+}
+
 // WhatsApp - Send Audio
 app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) => {
   const { phone, audio, conversationId } = req.body;
@@ -1187,6 +1216,7 @@ app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) =>
         from_me: true,
         message_id: result.key?.id || `sent-audio-${Date.now()}`,
         timestamp: new Date().toISOString(),
+        status: 'sent',
         media_type: 'audio',
         file_name: 'audio.mp3',
         instance: creds.instanceName,
@@ -1269,7 +1299,7 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
     console.log(`[WA SEND] instance_name resolvido: ${creds.instanceName}`);
     console.log(`[WA SEND] Enviando mídia na instância: ${creds.instanceName} para ${phone}`);
 
-    const mediatype = mimetype.startsWith('image/') ? 'image' : 'document';
+    const mediatype = resolveMediaType(mimetype, filename);
 
     const response = await fetch(`${creds.baseUrl}/message/sendMedia/${creds.instanceName}`, {
       method: 'POST',
@@ -1299,6 +1329,7 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
         from_me: true,
         message_id: result.key?.id || `sent-media-${Date.now()}`,
         timestamp: new Date().toISOString(),
+        status: 'sent',
         media_type: mediatype,
         file_name: filename,
         instance: creds.instanceName,
@@ -1381,6 +1412,7 @@ app.post('/api/whatsapp/send', authenticateToken, async (req: any, res) => {
         from_me: true,
         message_id: result.key?.id || `sent-text-${Date.now()}`,
         timestamp: new Date().toISOString(),
+        status: 'sent',
         media_type: null,
         instance: creds.instanceName,
         company_id: req.user.company_id
@@ -1524,6 +1556,37 @@ app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
 
 app.post('/api/webhooks/whatsapp', async (req, res) => {
   const body = req.body;
+
+  // 0. Atualização de Status da Mensagem (Event messages.update)
+  if (body.event === 'messages.update') {
+    // Normalizar instanceName para resolver company_id
+    let instanceName = body.instance?.instanceName || body.instanceName || body.instance || body.data?.instance;
+    if (typeof instanceName === 'object' && instanceName?.instanceName) instanceName = instanceName.instanceName;
+    if (typeof instanceName === 'string' && instanceName.includes('Instance Name:')) instanceName = instanceName.replace('Instance Name:', '').trim();
+    const normalizedInstance = instanceName?.toString().trim().toLowerCase().replace(/\s+/g, '-');
+
+    if (normalizedInstance) {
+      // Tentar resolver company_id para auditar logs se necessário
+      const updates = body.data;
+      if (Array.isArray(updates)) {
+        for (const upd of updates) {
+          if (upd.key?.id && upd.update?.status !== undefined) {
+            const newStatus = 
+              upd.update.status === 3 ? 'read' :
+              upd.update.status === 2 ? 'delivered' :
+              upd.update.status === 1 ? 'sent' : null;
+
+            if (newStatus) {
+              await supabase
+                .from('whatsapp_messages')
+                .update({ status: newStatus })
+                .eq('message_id', upd.key.id);
+            }
+          }
+        }
+      }
+    }
+  }
   
   // LOGS DE DIAGNÓSTICO SOLICITADOS
   console.log('[WEBHOOK DEBUG] payload keys:', JSON.stringify(Object.keys(body)));
@@ -1624,10 +1687,17 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
       mediaUrl = message.message.documentMessage.url || message.message.documentMessage.directPath;
       fileName = message.message.documentMessage.fileName || 'document';
       fileSize = message.message.documentMessage.fileLength;
-    } else if (message.message?.videoMessage) {
-      mediaType = 'video';
-      mediaUrl = message.message.videoMessage.url || message.message.videoMessage.directPath;
-      fileName = 'video.mp4';
+      fileName = message.message.videoMessage.fileName || 'video.mp4';
+    } else if (message.message?.documentWithCaptionMessage) {
+      const docMsg = message.message.documentWithCaptionMessage.message?.documentMessage;
+      mediaType = 'document';
+      mediaUrl = docMsg?.url || docMsg?.directPath;
+      fileName = docMsg?.fileName || 'document';
+      fileSize = docMsg?.fileLength;
+    } else if (message.message?.stickerMessage) {
+      mediaType = 'sticker';
+      mediaUrl = message.message.stickerMessage.url;
+      fileName = 'sticker.webp';
     }
 
     const text = message.message?.conversation || 

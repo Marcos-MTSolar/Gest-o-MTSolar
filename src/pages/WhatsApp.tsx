@@ -927,8 +927,20 @@ export default function WhatsApp() {
                       <div className="whitespace-pre-wrap">{msg.message}</div>
                     )}
                     
-                    <div className="text-[9px] text-gray-400 mt-1 text-right">
-                      {format(new Date(msg.timestamp), 'HH:mm', { locale: ptBR })}
+                    <div className="flex items-center justify-end gap-1 mt-1">
+                      <span className="text-[9px] text-gray-400">
+                        {format(new Date(msg.timestamp), 'HH:mm', { locale: ptBR })}
+                      </span>
+                      {msg.from_me && !msg.is_internal && (
+                        <span className={cn(
+                          "text-[10px] font-bold",
+                          msg.status === 'read' ? "text-blue-500" : "text-gray-400"
+                        )}>
+                          {msg.status === 'read' ? '✓✓' : 
+                           msg.status === 'delivered' ? '✓✓' : 
+                           msg.status === 'sent' ? '✓' : '🕐'}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
