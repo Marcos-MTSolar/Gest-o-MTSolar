@@ -52,11 +52,6 @@ const supabase = createClient(
   supabaseServiceKey || 'dummy_key'
 );
 
-const INSTANCE_COMPANY_MAP: Record<string, string> = {
-  'mtsolar': 'e4bf6f22-6182-414d-afa4-c5449c014323',
-  'atendimento-cliente': 'e4bf6f22-6182-414d-afa4-c5449c014323'
-};
-
 // Middleware
 app.use(express.json());
 const allowedOrigins = [
@@ -1018,13 +1013,6 @@ async function getEvolutionApiCredentials(companyId: string, requestedInstance?:
         validatedInstance = company.whatsapp_instance;
       }
     }
-
-    if (!validatedInstance) {
-      const isHardcodedTenant = Object.entries(INSTANCE_COMPANY_MAP).find(([inst, cid]) => inst === requestedInstance && cid === companyId);
-      if (isHardcodedTenant) {
-        validatedInstance = requestedInstance;
-      }
-    }
   } else {
     const { data: anyInstance } = await supabase
       .from('company_instances')
@@ -1104,6 +1092,7 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
     // 4. Send WhatsApp message
     try {
       const creds = await getEvolutionApiCredentials(req.user.company_id, conv.instance);
+      console.log(`[WA SEND] instance_name resolvido: ${creds.instanceName}`);
       console.log(`[WA SEND] Assume (Token: ${token}) na instância: ${creds.instanceName}`);
       const response = await fetch(`${creds.baseUrl}/message/sendText/${creds.instanceName}`, {
         method: 'POST',
@@ -1141,6 +1130,7 @@ app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) =>
     }
 
     const creds = await getEvolutionApiCredentials(req.user.company_id, instance);
+    console.log(`[WA SEND] instance_name resolvido: ${creds.instanceName}`);
     console.log(`[WA SEND] Enviando áudio na instância: ${creds.instanceName} para ${phone}`);
 
     const response = await fetch(`${creds.baseUrl}/message/sendWhatsAppAudio/${creds.instanceName}`, {
@@ -1204,6 +1194,7 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
     }
 
     const creds = await getEvolutionApiCredentials(req.user.company_id, instance);
+    console.log(`[WA SEND] instance_name resolvido: ${creds.instanceName}`);
     console.log(`[WA SEND] Enviando mídia na instância: ${creds.instanceName} para ${phone}`);
 
     const mediatype = mimetype.startsWith('image/') ? 'image' : 'document';
@@ -1450,8 +1441,13 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
 
   // Evolução API v2 payload structure: { instance: { instanceName: '...' }, ... } 
   // v2.3.7 pode vir em diferentes locais
-  let instanceName = body.instance?.instanceName || body.instanceName || body.instance || body.data?.instance || 'mtsolar';
+  let instanceName = body.instance?.instanceName || body.instanceName || body.instance || body.data?.instance;
   
+  if (!instanceName) {
+    console.error('[WEBHOOK ERROR] Instance name não encontrado no payload.');
+    return res.status(200).send('Instance name missing');
+  }
+
   // Normalização caso venha como objeto na v2
   if (typeof instanceName === 'object' && instanceName?.instanceName) {
     instanceName = instanceName.instanceName;
@@ -1469,8 +1465,7 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
   console.log('[WEBHOOK] Payload recebido:', instanceName, messageType);
 
   // Resolvendo company_id pela instância
-  // 1. Prioridade: Mapeamento fixo (Correção 2)
-  let companyId = INSTANCE_COMPANY_MAP[instanceName as string] || null;
+  let companyId = null;
 
   if (!companyId) {
     try {

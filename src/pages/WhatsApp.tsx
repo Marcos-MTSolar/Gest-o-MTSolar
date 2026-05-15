@@ -265,22 +265,32 @@ export default function WhatsApp() {
         // 1. Upload to Supabase Storage to bypass Vercel 4.5MB limit
         const fileExt = currentFile.name.split('.').pop();
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-        const filePath = `whatsapp-media/${user.company_id}/${fileName}`;
+        const filePath = `${user.company_id}/${fileName}`;
 
+        console.log(`[WA MEDIA UPLOAD] Tentando upload no bucket: whatsapp-media, path: ${filePath}`);
         const { error: uploadError } = await supabase.storage
           .from('whatsapp-media')
           .upload(filePath, currentFile);
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error(`[WA MEDIA UPLOAD] Falha no upload:`, uploadError);
+          throw uploadError;
+        }
 
-        const { data: { publicUrl } } = supabase.storage
+        console.log(`[WA MEDIA UPLOAD] Upload concluído com sucesso. Gerando URL assinada...`);
+        const { data: signedData, error: signedError } = await supabase.storage
           .from('whatsapp-media')
-          .getPublicUrl(filePath);
+          .createSignedUrl(filePath, 300);
 
-        // 2. Send the public URL to the backend
+        if (signedError) {
+          console.error(`[WA MEDIA UPLOAD] Falha ao gerar URL assinada:`, signedError);
+          throw signedError;
+        }
+
+        // 2. Send the signed URL to the backend
         await api.post('/api/whatsapp/send-media', {
           phone: selectedConversation.phone,
-          mediaUrl: publicUrl,
+          mediaUrl: signedData.signedUrl,
           mimetype: currentFile.type,
           filename: currentFile.name,
           caption: messageText,

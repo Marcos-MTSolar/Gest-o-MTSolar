@@ -23,6 +23,7 @@ interface Equipment {
   powerRaw: number; // Valor cru digitado
   powerMode: 'W' | 'BTU' | 'CV';
   hoursPerDay: number;
+  isInverter?: boolean;
 }
 
 const PREDEFINED_EQUIPMENT = [
@@ -37,8 +38,10 @@ const PREDEFINED_EQUIPMENT = [
   { name: 'Notebook', power: 65, category: 'Escritório' },
   { name: 'Lâmpada LED', power: 10, category: 'Iluminação' },
   { name: "Bomba d'água 1 CV", power: 1, category: 'Diversos', isCV: true },
-  { name: 'Ar-condicionado 9.000', power: 9000, category: 'Climatização', isBTU: true },
-  { name: 'Ar-condicionado 12.000', power: 12000, category: 'Climatização', isBTU: true }
+  { name: 'Ar-condicionado 9.000', power: 9000, category: 'Climatização', isBTU: true, isInverter: false },
+  { name: 'Ar-condicionado 12.000', power: 12000, category: 'Climatização', isBTU: true, isInverter: false },
+  { name: 'Ar-condicionado 9.000 Inverter', power: 9000, category: 'Climatização', isBTU: true, isInverter: true },
+  { name: 'Ar-condicionado 12.000 Inverter', power: 12000, category: 'Climatização', isBTU: true, isInverter: true }
 ];
 
 export default function EnergyCalculator() {
@@ -50,7 +53,8 @@ export default function EnergyCalculator() {
       quantity: 1,
       powerRaw: 0,
       powerMode: 'W',
-      hoursPerDay: 8
+      hoursPerDay: 8,
+      isInverter: false
     }
   ]);
   const [showPredefinedModal, setShowPredefinedModal] = useState(false);
@@ -70,7 +74,8 @@ export default function EnergyCalculator() {
         quantity: 1,
         powerRaw: 0,
         powerMode: 'W',
-        hoursPerDay: 1
+        hoursPerDay: 1,
+        isInverter: false
       }
     ]);
   };
@@ -86,7 +91,8 @@ export default function EnergyCalculator() {
       quantity: 1,
       powerRaw: 0,
       powerMode: 'W',
-      hoursPerDay: 1
+      hoursPerDay: 1,
+      isInverter: false
     }]);
   };
 
@@ -101,7 +107,8 @@ export default function EnergyCalculator() {
       quantity: 1,
       powerRaw: item.power,
       powerMode: item.isBTU ? 'BTU' : (item.isCV ? 'CV' : 'W'),
-      hoursPerDay: item.isBTU ? 8 : 1
+      hoursPerDay: item.isBTU ? 8 : 1,
+      isInverter: item.isInverter || false
     };
 
     if (equipments.length === 1 && equipments[0].name === '' && equipments[0].powerRaw === 0) {
@@ -118,7 +125,8 @@ export default function EnergyCalculator() {
       if (e.powerMode === 'W') {
         powerInW = e.powerRaw;
       } else if (e.powerMode === 'BTU') {
-        powerInW = e.powerRaw / 3.41214;
+        const EER = e.isInverter ? 3.5 : 2.8;
+        powerInW = e.powerRaw / (EER * 3.41214);
       } else if (e.powerMode === 'CV') {
         powerInW = e.powerRaw * 735.499;
       }
@@ -269,6 +277,35 @@ export default function EnergyCalculator() {
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">{equip.powerMode}</span>
                   </div>
+
+                  {equip.powerMode === 'BTU' && (
+                    <div className="mt-3">
+                      <div className="flex bg-gray-100 p-1 rounded-xl text-xs font-bold w-full">
+                        <button
+                          onClick={() => updateEquipment(equip.id, { isInverter: false })}
+                          className={cn(
+                            "flex-1 py-2 rounded-lg transition-all",
+                            !equip.isInverter ? "bg-white shadow-sm text-blue-900" : "text-gray-500"
+                          )}
+                        >
+                          Convencional
+                        </button>
+                        <button
+                          onClick={() => updateEquipment(equip.id, { isInverter: true })}
+                          className={cn(
+                            "flex-1 py-2 rounded-lg transition-all",
+                            equip.isInverter ? "bg-white shadow-sm text-blue-900" : "text-gray-500"
+                          )}
+                        >
+                          Inverter
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-blue-600/70 mt-2 flex items-start gap-1">
+                        <Info size={12} className="shrink-0 mt-0.5" />
+                        O consumo elétrico é calculado usando o EER médio INMETRO ({equip.isInverter ? '3.5' : '2.8'}).
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Uso Temporário */}
@@ -283,6 +320,17 @@ export default function EnergyCalculator() {
                     onChange={(e) => updateEquipment(equip.id, { hoursPerDay: parseFloat(e.target.value) || 0 })}
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                   />
+                </div>
+
+                {/* Potência Real (Feedback) */}
+                <div className="w-full md:w-28 flex flex-col justify-center">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Consumo Elétrico</p>
+                  <p className="text-sm font-black text-blue-600">
+                    {(() => {
+                      const res = results.items.find(r => r.id === equip.id);
+                      return res ? `≈ ${Math.round(res.powerInW)}W` : '0W';
+                    })()}
+                  </p>
                 </div>
 
                 {/* Ações */}
@@ -386,8 +434,8 @@ export default function EnergyCalculator() {
             </div>
             <div className="flex-1 text-center md:text-left">
               <h4 className="text-xl font-black text-blue-900 mb-1">Oportunidade Solar!</h4>
-              <p className="text-blue-900/70">
-                Para suprir este consumo, você precisaria de aproximadamente <strong>{results.estimatedKWp.toFixed(2)} kWp</strong> de energia solar.
+              <p className="text-blue-900/70 text-sm">
+                Para suprir este consumo de <strong>{results.totalMonthly.toFixed(1)} kWh/mês</strong>, você precisaria de aproximadamente <strong>{results.estimatedKWp.toFixed(2)} kWp</strong> de energia solar.
               </p>
             </div>
             <button
@@ -447,9 +495,14 @@ export default function EnergyCalculator() {
               </div>
               <div className="mt-8 bg-blue-50 p-4 rounded-xl flex gap-3 items-start">
                 <Info size={20} className="text-blue-600 shrink-0" />
-                <p className="text-xs text-blue-700 leading-relaxed">
-                  Os valores acima são médias de mercado. Para um cálculo mais preciso, verifique a etiqueta de consumo ou manual do seu equipamento específico.
-                </p>
+                <div className="space-y-1">
+                  <p className="text-xs text-blue-700 leading-relaxed font-bold">
+                    Nota sobre Ar-Condicionado:
+                  </p>
+                  <p className="text-xs text-blue-700 leading-relaxed">
+                    Para aparelhos de ar-condicionado, informe a capacidade em BTU/h indicada na etiqueta. O consumo elétrico real em Watts é calculado automaticamente usando o EER médio INMETRO Brasil.
+                  </p>
+                </div>
               </div>
             </div>
           </motion.div>
