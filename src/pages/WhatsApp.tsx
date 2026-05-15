@@ -131,9 +131,18 @@ export default function WhatsApp() {
   const [uploadProgress, setUploadProgress] = useState(0);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const [showChat, setShowChat] = useState(false);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (selectedConversation) {
+      setShowChat(true);
+    } else {
+      setShowChat(false);
+    }
+  }, [selectedConversation?.id]);
 
   useEffect(() => {
     fetchConversations();
@@ -590,6 +599,7 @@ export default function WhatsApp() {
             return;
           } else {
             setSelectedConversation(conv);
+            setShowChat(true);
           }
         }}
         className={cn(
@@ -666,11 +676,12 @@ export default function WhatsApp() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-140px)] bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
+  return (
+    <div className="flex h-[calc(100vh-140px)] lg:h-[calc(100vh-140px)] w-full max-w-full overflow-hidden bg-white lg:rounded-2xl lg:shadow-xl lg:border border-gray-200">
       {/* Painel Esquerdo - Lista de Conversas */}
       <div className={cn(
         "w-full lg:w-80 flex-shrink-0 border-r border-gray-200 flex flex-col bg-gray-50",
-        selectedConversation ? "hidden lg:flex" : "flex"
+        showChat ? "hidden lg:flex" : "flex"
       )}>
         <div className="p-4 bg-white border-b border-gray-200">
           <h1 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
@@ -781,109 +792,103 @@ export default function WhatsApp() {
                 <div className="p-4 text-center text-gray-500 text-sm">Nenhuma conversa encontrada.</div>
               )}
             </>
-          )}
-        </div>
-      </div>
-
-      {/* Painel Central - Chat */}
+             {/* Painel Central - Chat */}
       <div className={cn(
-        "flex-1 flex flex-col bg-white",
-        !selectedConversation ? "hidden lg:flex" : "flex"
+        "flex-1 flex flex-col bg-white w-full overflow-hidden",
+        !showChat ? "hidden lg:flex" : "flex"
       )}>
         {selectedConversation ? (
           <>
             {/* Header do Chat */}
-            <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-white shadow-sm z-10">
-            <div className="flex items-center gap-3">
-                <button 
-                  onClick={() => setSelectedConversation(null)}
-                  className="lg:hidden p-2 -ml-2 mr-1 text-gray-500 hover:text-blue-600 transition-colors"
-                >
-                  <ArrowLeft size={24} />
-                </button>
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700">
-                  <User size={20} />
-                </div>
-                <div>
-                  <h2 className="font-bold text-gray-800">{selectedConversation.contact_name || selectedConversation.phone}</h2>
-                  <div className="flex items-center gap-2">
-                    <p className="text-xs text-gray-400 flex items-center gap-1">
+            <div className="p-3 lg:p-4 border-b border-gray-200 bg-white shadow-sm z-10">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <button 
+                    onClick={() => {
+                      setShowChat(false);
+                      setSelectedConversation(null);
+                    }}
+                    className="lg:hidden p-1 -ml-1 text-gray-500 hover:text-blue-600"
+                  >
+                    <ArrowLeft size={24} />
+                  </button>
+                  <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-full bg-blue-100 flex-shrink-0 flex items-center justify-center text-blue-700">
+                    <User size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="font-bold text-gray-800 text-sm lg:text-base truncate">
+                      {selectedConversation.contact_name || selectedConversation.phone}
+                    </h2>
+                    <p className="text-[10px] lg:text-xs text-gray-400 truncate flex items-center gap-1">
                       <Phone size={10} /> {selectedConversation.phone}
                     </p>
-                    {selectedConversation.tag && (
-                      <span 
-                        className="text-[9px] font-bold text-white px-1.5 py-0.5 rounded uppercase tracking-tighter"
-                        style={{ backgroundColor: WHATSAPP_TAGS.find(t => t.id === selectedConversation.tag)?.color }}
-                      >
-                        {selectedConversation.tag}
-                      </span>
-                    )}
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="relative">
+
+                {/* Ações Desktop */}
+                <div className="hidden lg:flex items-center gap-2">
                   <button 
                     onClick={() => setShowTransferInstanceModal(true)}
                     className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition-all border border-blue-100"
-                    title="Transferir para outra instância"
                   >
-                    <Repeat size={12} />
-                    Transferir
+                    <Repeat size={12} /> Transferir
                   </button>
-                </div>
-
-                <div className="relative">
                   <button 
                     onClick={() => setShowTagDropdown(!showTagDropdown)}
                     className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition-all"
                   >
                     Etiqueta
-                    <ArrowLeft size={12} className={cn("transition-transform", showTagDropdown ? "-rotate-90" : "")} />
                   </button>
-
-                  {showTagDropdown && (
-                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 z-50 animate-in fade-in zoom-in duration-100">
-                      <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Selecionar Etiqueta</div>
-                      {WHATSAPP_TAGS.map(tag => (
-                        <button
-                          key={tag.id}
-                          onClick={() => updateTag(tag.id)}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs hover:bg-gray-50 transition-colors"
-                        >
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }}></div>
-                          {tag.label}
-                          {selectedConversation.tag === tag.id && <Check size={12} className="ml-auto text-blue-600" />}
-                        </button>
-                      ))}
-                      <div className="border-t border-gray-100 mt-2 pt-2">
-                        <button
-                          onClick={() => updateTag(null)}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs hover:bg-red-50 text-red-600 transition-colors"
-                        >
-                          <X size={12} />
-                          Remover Etiqueta
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  <button className="p-2 text-gray-400 hover:text-blue-600">
+                    <MoreVertical size={20} />
+                  </button>
                 </div>
-                <button className="p-2 text-gray-400 hover:text-blue-600 transition-colors">
-                  <MoreVertical size={20} />
-                </button>
+              </div>
+
+              {/* Barra de Ações Mobile */}
+              <div className="lg:hidden flex items-center gap-2 mt-3 pt-2 border-t border-gray-50 overflow-x-auto no-scrollbar">
+                {selectedConversation.status === 'in_progress' && (Number(selectedConversation.assigned_to) === Number(user?.id) || isAdmin) ? (
+                  <>
+                    <button 
+                      onClick={() => setShowTransferModal(true)}
+                      className="flex-1 whitespace-nowrap flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-[10px] font-bold"
+                    >
+                      <RefreshCcw size={12} /> Transferir
+                    </button>
+                    <button 
+                      onClick={closeConversation}
+                      className="flex-1 whitespace-nowrap flex items-center justify-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg text-[10px] font-bold shadow-sm"
+                    >
+                      <CheckCircle2 size={12} /> Encerrar
+                    </button>
+                  </>
+                ) : selectedConversation.status === 'waiting' ? (
+                  <button 
+                    onClick={() => assumeConversation(selectedConversation)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white rounded-lg text-xs font-bold"
+                  >
+                    <UserPlus size={16} /> Assumir Atendimento
+                  </button>
+                ) : null}
+                
+                {selectedConversation.tag && (
+                  <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-[9px] font-bold uppercase whitespace-nowrap">
+                    {selectedConversation.tag}
+                  </span>
+                )}
               </div>
             </div>
 
             {/* Mensagens */}
             <div 
               ref={messagesContainerRef}
-              className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#f0f2f5] custom-scrollbar"
+              className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#f0f2f5] custom-scrollbar w-full overflow-x-hidden"
             >
               {messages.map((msg) => (
                 <div 
                   key={msg.id}
                   className={cn(
-                    "flex flex-col max-w-[80%] break-words",
+                    "flex flex-col max-w-[85%] lg:max-w-[80%] break-words",
                     msg.from_me ? "ml-auto items-end" : "mr-auto items-start"
                   )}
                 >
@@ -1004,7 +1009,7 @@ export default function WhatsApp() {
             )}
 
             {/* Campo de Envio */}
-            <div className="p-4 bg-white border-t border-gray-200">
+            <div className="p-3 lg:p-4 bg-white border-t border-gray-200 pb-10 lg:pb-4">
               {selectedConversation.status === 'in_progress' && (Number(selectedConversation.assigned_to) === Number(user?.id) || isAdmin) ? (
                 <div className="flex items-end gap-2">
                   <input 
