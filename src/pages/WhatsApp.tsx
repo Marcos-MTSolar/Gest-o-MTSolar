@@ -262,21 +262,34 @@ export default function WhatsApp() {
 
     try {
       if (currentFile) {
-        const base64 = await fileToBase64(currentFile);
+        // 1. Upload to Supabase Storage to bypass Vercel 4.5MB limit
+        const fileExt = currentFile.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+        const filePath = `whatsapp-media/${user.company_id}/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('whatsapp-media')
+          .upload(filePath, currentFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('whatsapp-media')
+          .getPublicUrl(filePath);
+
+        // 2. Send the public URL to the backend
         await api.post('/api/whatsapp/send-media', {
           phone: selectedConversation.phone,
-          fileBase64: base64,
+          mediaUrl: publicUrl,
           mimetype: currentFile.type,
           filename: currentFile.name,
           caption: messageText,
-          instance: selectedConversation.instance,
           conversationId: selectedConversation.id
         });
       } else {
         await api.post('/api/whatsapp/send', {
           phone: selectedConversation.phone,
           text: messageText,
-          instance: selectedConversation.instance,
           conversationId: selectedConversation.id
         });
       }
@@ -346,7 +359,6 @@ export default function WhatsApp() {
       await api.post('/api/whatsapp/send-audio', {
         phone: selectedConversation.phone,
         audio: base64,
-        instance: selectedConversation.instance,
         conversationId: selectedConversation.id
       });
       

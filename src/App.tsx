@@ -48,7 +48,7 @@ function PrivateRoute({ children, roles }: { children: React.ReactNode, roles?: 
   // Se for VENDEDOR (COMMERCIAL), acesso restrito a Dashboard, WhatsApp, Agenda e Proposta
   const isCommercial = user.role.toUpperCase() === 'COMMERCIAL';
   const currentPath = window.location.pathname;
-  const allowedCommercialPaths = ['/', '/whatsapp', '/agenda', '/proposal-generator'];
+  const allowedCommercialPaths = ['/', '/whatsapp', '/agenda', '/proposal-generator', '/calculadora'];
   
   if (isCommercial && !allowedCommercialPaths.includes(currentPath)) {
     return <Navigate to="/" />;
@@ -180,7 +180,7 @@ export default function App() {
               } />
 
               <Route path="/calculadora" element={
-                <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
+                <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL']}>
                   <EnergyCalculator />
                 </PrivateRoute>
               } />

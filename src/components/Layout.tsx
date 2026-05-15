@@ -109,6 +109,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: 'Cronograma', path: '/cronograma', icon: Calendar, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Protocolos Neoenergia', path: '/neoenergia', icon: ClipboardList, roles: ['CEO', 'ADMIN'] },
     { name: 'Gerador de Proposta', path: '/proposal-generator', icon: FileSpreadsheet, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
+    { name: 'Calculadora', path: '/calculadora', icon: Zap, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Comercial', path: '/commercial', icon: Briefcase, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Kit Solar', path: '/kit-purchase', icon: ShoppingCart, roles: ['CEO', 'ADMIN'] },
     { name: 'Contratos', path: '/contracts', icon: FileSignature, roles: ['CEO', 'ADMIN'] },
@@ -126,8 +127,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const filteredItems = menuItems.filter(item => {
     const hasRole = !item.roles || item.roles.includes(user?.role || '');
     if (isCommercial) {
-      // Vendedor: Dashboard, Atendimento, Agenda e Gerador de Proposta
-      const allowedPaths = ['/', '/whatsapp', '/agenda', '/proposal-generator'];
+      // Vendedor: Dashboard, Atendimento, Agenda, Gerador de Proposta e Calculadora
+      const allowedPaths = ['/', '/whatsapp', '/agenda', '/proposal-generator', '/calculadora'];
       return allowedPaths.includes(item.path);
     }
     return hasRole;

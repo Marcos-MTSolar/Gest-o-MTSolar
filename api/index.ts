@@ -62,6 +62,8 @@ app.use(express.json());
 const allowedOrigins = [
   'capacitor://localhost',
   'http://localhost',
+  'http://localhost:5173',
+  'http://localhost:3000',
   'https://gest-o-mt-solar.vercel.app'
 ];
 
@@ -149,6 +151,15 @@ async function uploadFile(file: Express.Multer.File, bucket: string = 'uploads')
 }
 
 // API Routes
+
+// Health check & Root
+app.get('/api', (req, res) => {
+  res.json({ status: 'ok', message: 'MT Solar API is running', time: new Date().toISOString() });
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', time: new Date().toISOString() });
+});
 
 // Login
 app.post('/api/auth/login', async (req, res) => {
@@ -1034,7 +1045,8 @@ async function getEvolutionApiCredentials(companyId: string, requestedInstance?:
     throw new Error('Instância WhatsApp não configurada para este tenant.');
   }
 
-  validatedInstance = validatedInstance.toString().trim().toLowerCase().replace(/\s+/g, '-');
+  // Use exactly as registered, but trim and remove double spaces if any
+  validatedInstance = validatedInstance.toString().trim();
 
   const EVOLUTION_URL = process.env.VITE_EVOLUTION_URL;
   let EVOLUTION_KEY = process.env.VITE_EVOLUTION_KEY;
@@ -1118,9 +1130,16 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
 
 // WhatsApp - Send Audio
 app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) => {
-  const { phone, audio, instance, conversationId } = req.body;
+  const { phone, audio, conversationId } = req.body;
+  console.log(`[WA SEND] Audio request received: phone=${phone}, conversationId=${conversationId}`);
 
   try {
+    let instance = null;
+    if (conversationId) {
+      const { data: conv } = await supabase.from('whatsapp_conversations').select('instance').eq('id', conversationId).eq('company_id', req.user.company_id).single();
+      if (conv) instance = conv.instance;
+    }
+
     const creds = await getEvolutionApiCredentials(req.user.company_id, instance);
     console.log(`[WA SEND] Enviando áudio na instância: ${creds.instanceName} para ${phone}`);
 
@@ -1174,9 +1193,16 @@ app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) =>
 
 // WhatsApp - Send Media (Image/Document)
 app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) => {
-  const { phone, fileBase64, mimetype, filename, caption, instance, conversationId } = req.body;
+  const { phone, mediaUrl, mimetype, filename, caption, conversationId } = req.body;
+  console.log(`[WA MEDIA] Media request received: phone=${phone}, mimetype=${mimetype}, url=${mediaUrl}`);
 
   try {
+    let instance = null;
+    if (conversationId) {
+      const { data: conv } = await supabase.from('whatsapp_conversations').select('instance').eq('id', conversationId).eq('company_id', req.user.company_id).single();
+      if (conv) instance = conv.instance;
+    }
+
     const creds = await getEvolutionApiCredentials(req.user.company_id, instance);
     console.log(`[WA SEND] Enviando mídia na instância: ${creds.instanceName} para ${phone}`);
 
@@ -1190,7 +1216,7 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
         mediaMessage: {
           mediatype: mediatype,
           caption: caption || '',
-          media: fileBase64,
+          media: mediaUrl,
           fileName: filename
         }
       })
@@ -1235,9 +1261,20 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
 
 // WhatsApp - Send Text (New Endpoint)
 app.post('/api/whatsapp/send', authenticateToken, async (req: any, res) => {
-  const { phone, text, instance, conversationId } = req.body;
+  const { phone, text, conversationId } = req.body;
+  console.log(`[WA SEND] Text request received: phone=${phone}, text="${text?.substring(0, 20)}...", conversationId=${conversationId}`);
+
+  // Validação básica
+  if (!phone) return res.status(400).json({ error: 'phone ausente' });
+  if (!text) return res.status(400).json({ error: 'message ausente (text)' });
 
   try {
+    let instance = null;
+    if (conversationId) {
+      const { data: conv } = await supabase.from('whatsapp_conversations').select('instance').eq('id', conversationId).eq('company_id', req.user.company_id).single();
+      if (conv) instance = conv.instance;
+    }
+
     const creds = await getEvolutionApiCredentials(req.user.company_id, instance);
     console.log(`[WA SEND] Enviando texto na instância: ${creds.instanceName} para ${phone}`);
 
@@ -2152,8 +2189,11 @@ app.put('/api/stock/:id', authenticateToken, async (req: any, res) => {
   res.json({ success: true });
 });
 
-// Settings - accessible to all authenticated users
-app.get('/api/settings', authenticateToken, async (req: any, res) => {
+// Settings - logo_url is public so it can load on Login page
+app.get('/api/settings', async (req: any, res) => {
+  const authHeader = req.headers['authorization'];
+  console.log(`[SETTINGS] Auth Header: ${authHeader ? authHeader.substring(0, 20) + '...' : 'none'}`);
+
   try {
     const { data: settings } = await supabase.from('settings').select('*');
     const dict: any = {};
@@ -2164,6 +2204,7 @@ app.get('/api/settings', authenticateToken, async (req: any, res) => {
     }
     res.json({ logo_url: dict.logo_url || null });
   } catch (e) {
+    console.error('[SETTINGS] Error fetching settings:', e);
     res.json({ logo_url: null });
   }
 });
@@ -2246,10 +2287,6 @@ app.get('/api/cleanup-proposals', async (req, res) => {
   }
 });
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', time: new Date().toISOString() });
-});
 
 // Catch-all for API routes to prevent falling through to SPA HTML
 app.all('/api/*', (req, res) => {
