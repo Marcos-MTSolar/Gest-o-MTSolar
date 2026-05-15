@@ -991,6 +991,7 @@ async function getEvolutionApiCredentials(companyId: string, requestedInstance?:
   
   let validatedInstance = null;
 
+  // 1. Se uma instância específica foi solicitada (ex: vinda da conversa)
   if (requestedInstance) {
     const { data: instanceLink } = await supabase
       .from('company_instances')
@@ -1002,6 +1003,7 @@ async function getEvolutionApiCredentials(companyId: string, requestedInstance?:
     if (instanceLink) {
       validatedInstance = instanceLink.instance_name;
     } else {
+      // Tentar no campo legado da tabela companies
       const { data: company } = await supabase
         .from('companies')
         .select('whatsapp_instance')
@@ -1013,32 +1015,44 @@ async function getEvolutionApiCredentials(companyId: string, requestedInstance?:
         validatedInstance = company.whatsapp_instance;
       }
     }
-  } else {
+  }
+
+  // 2. Se não encontrou ou não foi solicitada, pegar a padrão/primeira da empresa
+  if (!validatedInstance) {
     const { data: anyInstance } = await supabase
       .from('company_instances')
       .select('instance_name')
       .eq('company_id', companyId)
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (anyInstance) {
       validatedInstance = anyInstance.instance_name;
     } else {
-      const { data: company } = await supabase.from('companies').select('whatsapp_instance').eq('id', companyId).maybeSingle();
-      if (company && company.whatsapp_instance) validatedInstance = company.whatsapp_instance;
+      const { data: company } = await supabase
+        .from('companies')
+        .select('whatsapp_instance')
+        .eq('id', companyId)
+        .maybeSingle();
+      
+      if (company && company.whatsapp_instance) {
+        validatedInstance = company.whatsapp_instance;
+      }
     }
   }
 
   if (!validatedInstance) {
+    console.error('[WA SEND] Nenhuma instância WhatsApp encontrada para company_id:', companyId);
     throw new Error('Instância WhatsApp não configurada para este tenant.');
   }
 
-  // Use exactly as registered, but trim and remove double spaces if any
+  // Normalização final
   validatedInstance = validatedInstance.toString().trim();
 
   const EVOLUTION_URL = process.env.VITE_EVOLUTION_URL;
   let EVOLUTION_KEY = process.env.VITE_EVOLUTION_KEY;
 
+  // Lógica de token específico para a instância de atendimento (se aplicável)
   if (validatedInstance === process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO) {
     EVOLUTION_KEY = process.env.VITE_EVOLUTION_TOKEN_ATENDIMENTO || process.env.VITE_EVOLUTION_KEY;
   }
@@ -1054,6 +1068,8 @@ async function getEvolutionApiCredentials(companyId: string, requestedInstance?:
 
 // WhatsApp - Assume Conversation
 app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
+  console.log('[WA DEBUG] body recebido (ASSUME):', JSON.stringify(req.body));
+  console.log('[WA DEBUG] company_id do JWT:', req.user?.company_id ?? 'NÃO ENCONTRADO');
   const { conversationId, userId } = req.body;
 
   try {
@@ -1092,6 +1108,8 @@ app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {
     // 4. Send WhatsApp message
     try {
       const creds = await getEvolutionApiCredentials(req.user.company_id, conv.instance);
+      console.log('[WA DEBUG] instance_name que será usado:', creds.instanceName);
+      console.log('[WA DEBUG] URL Evolution:', creds.baseUrl);
       console.log(`[WA SEND] instance_name resolvido: ${creds.instanceName}`);
       console.log(`[WA SEND] Assume (Token: ${token}) na instância: ${creds.instanceName}`);
       const response = await fetch(`${creds.baseUrl}/message/sendText/${creds.instanceName}`, {
@@ -1181,9 +1199,50 @@ app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) =>
   }
 });
 
-// WhatsApp - Send Media (Image/Document)
+// WhatsApp - Upload Media (Backend bypass for RLS)
+app.post('/api/whatsapp/upload-media', authenticateToken, upload.single('file'), async (req: any, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Arquivo ausente' });
+  const companyId = req.user.company_id;
+  const fileName = `${Date.now()}_${req.file.originalname}`;
+  const filePath = `${companyId}/${fileName}`;
+
+  console.log(`[WA UPLOAD] Recebido arquivo: ${req.file.originalname} para tenant ${companyId}`);
+
+  try {
+    const { error: uploadError } = await supabase.storage
+      .from('whatsapp-media')
+      .upload(filePath, req.file.buffer, {
+        contentType: req.file.mimetype,
+        upsert: true
+      });
+
+    if (uploadError) {
+      console.error("[WA UPLOAD] Erro no upload do Supabase:", uploadError);
+      throw uploadError;
+    }
+
+    const { data: signedUrlData, error: signedError } = await supabase.storage
+      .from('whatsapp-media')
+      .createSignedUrl(filePath, 300);
+
+    if (signedError) {
+      console.error("[WA UPLOAD] Erro ao gerar URL assinada:", signedError);
+      throw signedError;
+    }
+
+    console.log(`[WA UPLOAD] Upload concluído: ${filePath}. URL assinada gerada.`);
+    res.json({ mediaUrl: signedUrlData.signedUrl, filePath });
+  } catch (err: any) {
+    console.error("[WA UPLOAD ERROR]", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// WhatsApp - Send Media
 app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) => {
-  const { phone, mediaUrl, mimetype, filename, caption, conversationId } = req.body;
+  console.log('[WA DEBUG] body recebido (MEDIA):', JSON.stringify(req.body));
+  console.log('[WA DEBUG] company_id do JWT:', req.user?.company_id ?? 'NÃO ENCONTRADO');
+  const { phone, mediaUrl, mimetype, filename, caption, conversationId, filePath } = req.body;
   console.log(`[WA MEDIA] Media request received: phone=${phone}, mimetype=${mimetype}, url=${mediaUrl}`);
 
   try {
@@ -1194,6 +1253,8 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
     }
 
     const creds = await getEvolutionApiCredentials(req.user.company_id, instance);
+    console.log('[WA DEBUG] instance_name que será usado:', creds.instanceName);
+    console.log('[WA DEBUG] URL Evolution:', creds.baseUrl);
     console.log(`[WA SEND] instance_name resolvido: ${creds.instanceName}`);
     console.log(`[WA SEND] Enviando mídia na instância: ${creds.instanceName} para ${phone}`);
 
@@ -1244,6 +1305,20 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
     }
 
     res.json(result);
+
+    // Limpeza automática do storage após envio
+    if (filePath) {
+      try {
+        const { error: deleteError } = await supabase.storage.from('whatsapp-media').remove([filePath]);
+        if (deleteError) {
+          console.warn(`[WA SEND] Aviso: Falha ao deletar arquivo temporário ${filePath}:`, deleteError.message);
+        } else {
+          console.log(`[WA SEND] Arquivo temporário removido do Storage: ${filePath}`);
+        }
+      } catch (e) {
+        console.warn(`[WA SEND] Erro inesperado ao limpar storage:`, e);
+      }
+    }
   } catch (err: any) {
     console.error("[WA SEND ERROR] Error sending media:", err);
     res.status(400).json({ error: err.message });
@@ -1252,6 +1327,8 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
 
 // WhatsApp - Send Text (New Endpoint)
 app.post('/api/whatsapp/send', authenticateToken, async (req: any, res) => {
+  console.log('[WA DEBUG] body recebido (TEXT):', JSON.stringify(req.body));
+  console.log('[WA DEBUG] company_id do JWT:', req.user?.company_id ?? 'NÃO ENCONTRADO');
   const { phone, text, conversationId } = req.body;
   console.log(`[WA SEND] Text request received: phone=${phone}, text="${text?.substring(0, 20)}...", conversationId=${conversationId}`);
 
@@ -1267,6 +1344,8 @@ app.post('/api/whatsapp/send', authenticateToken, async (req: any, res) => {
     }
 
     const creds = await getEvolutionApiCredentials(req.user.company_id, instance);
+    console.log('[WA DEBUG] instance_name que será usado:', creds.instanceName);
+    console.log('[WA DEBUG] URL Evolution:', creds.baseUrl);
     console.log(`[WA SEND] Enviando texto na instância: ${creds.instanceName} para ${phone}`);
 
     const response = await fetch(`${creds.baseUrl}/message/sendText/${creds.instanceName}`, {
@@ -1653,16 +1732,6 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
       }
     }
   }
-
-  await supabase
-    .from('whatsapp_conversations')
-    .update({ instance: 'atendimento-cliente' })
-    .eq('instance', 'Instance Name: atendimento-cliente');
-
-  await supabase
-    .from('whatsapp_messages')
-    .update({ instance: 'atendimento-cliente' })
-    .eq('instance', 'Instance Name: atendimento-cliente');
 
   res.json({ success: true });
 });

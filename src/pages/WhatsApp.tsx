@@ -262,35 +262,20 @@ export default function WhatsApp() {
 
     try {
       if (currentFile) {
-        // 1. Upload to Supabase Storage to bypass Vercel 4.5MB limit
-        const fileExt = currentFile.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-        const filePath = `${user.company_id}/${fileName}`;
+        // 1. Upload para o backend (bypass RLS via service_role no servidor)
+        const formData = new FormData();
+        formData.append('file', currentFile);
+        
+        console.log(`[WA MEDIA UPLOAD] Enviando arquivo para o backend...`);
+        const { data: uploadData } = await api.post('/api/whatsapp/upload-media', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
 
-        console.log(`[WA MEDIA UPLOAD] Tentando upload no bucket: whatsapp-media, path: ${filePath}`);
-        const { error: uploadError } = await supabase.storage
-          .from('whatsapp-media')
-          .upload(filePath, currentFile);
-
-        if (uploadError) {
-          console.error(`[WA MEDIA UPLOAD] Falha no upload:`, uploadError);
-          throw uploadError;
-        }
-
-        console.log(`[WA MEDIA UPLOAD] Upload concluído com sucesso. Gerando URL assinada...`);
-        const { data: signedData, error: signedError } = await supabase.storage
-          .from('whatsapp-media')
-          .createSignedUrl(filePath, 300);
-
-        if (signedError) {
-          console.error(`[WA MEDIA UPLOAD] Falha ao gerar URL assinada:`, signedError);
-          throw signedError;
-        }
-
-        // 2. Send the signed URL to the backend
+        // 2. Enviar a URL assinada para o backend para disparo via Evolution API
         await api.post('/api/whatsapp/send-media', {
           phone: selectedConversation.phone,
-          mediaUrl: signedData.signedUrl,
+          mediaUrl: uploadData.mediaUrl,
+          filePath: uploadData.filePath,
           mimetype: currentFile.type,
           filename: currentFile.name,
           caption: messageText,
