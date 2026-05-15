@@ -677,6 +677,7 @@ export default function WhatsApp() {
 
   return (
     <div className="flex h-[calc(100vh-140px)] lg:h-[calc(100vh-140px)] w-full max-w-full overflow-hidden bg-white lg:rounded-2xl lg:shadow-xl lg:border border-gray-200">
+      <>
       {/* Painel Esquerdo - Lista de Conversas */}
       <div className={cn(
         "w-full lg:w-80 flex-shrink-0 border-r border-gray-200 flex flex-col bg-gray-50",
@@ -791,7 +792,11 @@ export default function WhatsApp() {
                 <div className="p-4 text-center text-gray-500 text-sm">Nenhuma conversa encontrada.</div>
               )}
             </>
-             {/* Painel Central - Chat */}
+          )}
+        </div>
+      </div>
+
+      {/* Painel Central - Chat */}
       <div className={cn(
         "flex-1 flex flex-col bg-white w-full overflow-hidden",
         !showChat ? "hidden lg:flex" : "flex"
@@ -1354,6 +1359,7 @@ export default function WhatsApp() {
           </div>
         </div>
       )}
+      </>
     </div>
   );
 }
