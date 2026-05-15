@@ -77,6 +77,27 @@ const WHATSAPP_TAGS = [
   { id: 'Transferido', label: 'Transferido', color: '#1D4ED8' },
 ];
 
+async function compressImage(file: File): Promise<File> {
+  if (!file.type.startsWith('image/')) return file; // só comprime imagens
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 1280;
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => {
+        resolve(new File([blob!], file.name, { type: 'image/jpeg' }));
+      }, 'image/jpeg', 0.82);
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  });
+}
+
 export default function WhatsApp() {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -262,11 +283,14 @@ export default function WhatsApp() {
 
     try {
       if (currentFile) {
-        // 1. Upload para o backend (bypass RLS via service_role no servidor)
-        const formData = new FormData();
-        formData.append('file', currentFile);
+        // 1. Comprimir imagem se necessário
+        const fileToSend = await compressImage(currentFile);
         
-        console.log(`[WA MEDIA UPLOAD] Enviando arquivo para o backend...`);
+        // 2. Upload para o backend (bypass RLS via service_role no servidor)
+        const formData = new FormData();
+        formData.append('file', fileToSend);
+        
+        console.log(`[WA MEDIA UPLOAD] Enviando arquivo para o backend (Original: ${currentFile.size}, Comprimido: ${fileToSend.size})...`);
         const { data: uploadData } = await api.post('/api/whatsapp/upload-media', formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });

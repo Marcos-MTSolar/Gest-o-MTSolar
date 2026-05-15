@@ -52,6 +52,12 @@ const supabase = createClient(
   supabaseServiceKey || 'dummy_key'
 );
 
+// Admin client for Storage bypass (RLS)
+const supabaseAdmin = createClient(
+  process.env.VITE_SUPABASE_URL || 'https://dummy.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key'
+);
+
 // Middleware
 app.use(express.json());
 const allowedOrigins = [
@@ -1246,13 +1252,14 @@ app.post('/api/whatsapp/upload-media', authenticateToken, upload.single('file'),
   const filePath = `${companyId}/${fileName}`;
 
   console.log(`[WA UPLOAD] Recebido arquivo: ${req.file.originalname} para tenant ${companyId}`);
+  console.log('[WA UPLOAD] service_role_key presente:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   try {
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabaseAdmin.storage
       .from('whatsapp-media')
       .upload(filePath, req.file.buffer, {
         contentType: req.file.mimetype,
-        upsert: true
+        upsert: false
       });
 
     if (uploadError) {
@@ -1260,9 +1267,9 @@ app.post('/api/whatsapp/upload-media', authenticateToken, upload.single('file'),
       throw uploadError;
     }
 
-    const { data: signedUrlData, error: signedError } = await supabase.storage
+    const { data: signedUrlData, error: signedError } = await supabaseAdmin.storage
       .from('whatsapp-media')
-      .createSignedUrl(filePath, 300);
+      .createSignedUrl(filePath, 600);
 
     if (signedError) {
       console.error("[WA UPLOAD] Erro ao gerar URL assinada:", signedError);
@@ -1272,7 +1279,7 @@ app.post('/api/whatsapp/upload-media', authenticateToken, upload.single('file'),
     console.log(`[WA UPLOAD] Upload concluído: ${filePath}. URL assinada gerada.`);
     res.json({ mediaUrl: signedUrlData.signedUrl, filePath });
   } catch (err: any) {
-    console.error("[WA UPLOAD ERROR]", err.message);
+    console.error("[WA UPLOAD ERROR] Detalhes:", err);
     res.status(500).json({ error: err.message });
   }
 });
