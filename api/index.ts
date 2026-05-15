@@ -1049,15 +1049,22 @@ async function getEvolutionApiCredentials(companyId: string, requestedInstance?:
   // Normalização final
   validatedInstance = validatedInstance.toString().trim();
 
-  const EVOLUTION_URL = process.env.VITE_EVOLUTION_URL;
-  let EVOLUTION_KEY = process.env.VITE_EVOLUTION_KEY;
+  // 3. Obter credenciais corretas por instância
+  const EVOLUTION_URL = process.env.VITE_EVOLUTION_URL || process.env.EVOLUTION_API_URL;
+  const INSTANCE_ATENDIMENTO = process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO || 'atendimento-cliente';
+  
+  let EVOLUTION_KEY = '';
 
-  // Lógica de token específico para a instância de atendimento (se aplicável)
-  if (validatedInstance === process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO) {
-    EVOLUTION_KEY = process.env.VITE_EVOLUTION_TOKEN_ATENDIMENTO || process.env.VITE_EVOLUTION_KEY;
+  if (validatedInstance === INSTANCE_ATENDIMENTO) {
+    // Instância Comercial / Atendimento
+    EVOLUTION_KEY = process.env.VITE_EVOLUTION_TOKEN_ATENDIMENTO || process.env.EVOLUTION_TOKEN_ATENDIMENTO || '';
+  } else {
+    // Instância Administrativa (mtsolar) ou Default
+    EVOLUTION_KEY = process.env.VITE_EVOLUTION_KEY || process.env.EVOLUTION_API_KEY || '';
   }
 
   if (!EVOLUTION_URL || !EVOLUTION_KEY) {
+    console.error(`[WA ERROR] Configuração ausente para instância: ${validatedInstance}`);
     throw new Error('Configuração da Evolution API incompleta no servidor.');
   }
 
