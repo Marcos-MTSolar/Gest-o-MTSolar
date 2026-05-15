@@ -1276,12 +1276,10 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
       headers: { 'Content-Type': 'application/json', 'apikey': creds.apiKey },
       body: JSON.stringify({
         number: phone,
-        mediaMessage: {
-          mediatype: mediatype,
-          caption: caption || '',
-          media: mediaUrl,
-          fileName: filename
-        }
+        mediatype: mediatype,
+        caption: caption || '',
+        media: mediaUrl,
+        fileName: filename
       })
     });
 
