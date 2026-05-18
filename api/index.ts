@@ -1579,6 +1579,7 @@ app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
 
 app.post('/api/webhooks/whatsapp', async (req, res) => {
   const body = req.body;
+  console.log('[WA-WEBHOOK] payload recebido:', JSON.stringify(req.body).slice(0, 500));
 
   // 0. Atualização de Status da Mensagem (Event messages.update)
   if (body.event === 'messages.update') {
@@ -1728,6 +1729,8 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
       fileName = 'sticker.webp';
     }
 
+    console.log('[WA-MEDIA] tipo:', mediaType, '| url original:', mediaUrl);
+
     // --- DOWNLOAD E RE-UPLOAD DE MÍDIA PARA SUPABASE STORAGE ---
     // Função auxiliar: baixa a mídia via Evolution API e faz upload para o bucket whatsapp-media
     async function downloadAndUploadMedia(
@@ -1774,6 +1777,7 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
         }
 
         const evoData: any = await evoResponse.json();
+        console.log('[WA-DOWNLOAD] status:', evoResponse.status, '| body:', JSON.stringify(evoData).slice(0, 300));
         const base64String: string | undefined = evoData?.base64;
 
         if (!base64String) {
@@ -1809,9 +1813,11 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
 
         console.log(`[WEBHOOK MEDIA] Fazendo upload para whatsapp-media/${storagePath}`);
 
-        const { error: uploadError } = await supabaseAdmin.storage
+        const uploadResult = await supabaseAdmin.storage
           .from('whatsapp-media')
           .upload(storagePath, buffer, { contentType, upsert: true });
+        console.log('[WA-UPLOAD] resultado:', JSON.stringify(uploadResult).slice(0, 200));
+        const { error: uploadError } = uploadResult;
 
         if (uploadError) {
           console.warn('[WEBHOOK MEDIA] Erro no upload para Supabase Storage:', uploadError.message, '— usando URL original.');
