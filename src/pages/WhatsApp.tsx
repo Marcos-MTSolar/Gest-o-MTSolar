@@ -119,6 +119,7 @@ export default function WhatsApp() {
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [showTagDropdown, setShowTagDropdown] = useState(false);
   const [showTransferInstanceModal, setShowTransferInstanceModal] = useState(false);
+  const [showTransferToAtendimentoModal, setShowTransferToAtendimentoModal] = useState(false);
   const [transferObservation, setTransferObservation] = useState('');
   const [isTransferring, setIsTransferring] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -554,6 +555,30 @@ export default function WhatsApp() {
       alert("Conversa transferida com sucesso para o Administrativo!");
       setSelectedConversation(null);
       setShowTransferInstanceModal(false);
+      setTransferObservation('');
+      fetchConversations();
+    } catch (err: any) {
+      console.error("Erro na transferência:", err);
+      alert(err.response?.data?.error || "Falha ao transferir conversa.");
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
+  const transferToAtendimento = async () => {
+    if (!selectedConversation || !user) return;
+    
+    setIsTransferring(true);
+    try {
+      await api.post('/api/whatsapp/transfer', {
+        conversationId: selectedConversation.id,
+        targetInstance: evolutionApi.instances.ATENDIMENTO,
+        internalNote: transferObservation
+      });
+
+      alert("Conversa transferida com sucesso para o Atendimento!");
+      setSelectedConversation(null);
+      setShowTransferToAtendimentoModal(false);
       setTransferObservation('');
       fetchConversations();
     } catch (err: any) {
@@ -1209,6 +1234,15 @@ export default function WhatsApp() {
                       <RefreshCcw size={16} /> Transferir para Administrativo
                     </button>
                   )}
+
+                  {selectedConversation.instance !== 'atendimento-cliente' && isAdmin && (
+                    <button 
+                      onClick={() => setShowTransferToAtendimentoModal(true)}
+                      className="w-full flex items-center justify-center gap-2 py-3 bg-green-700 text-white rounded-xl text-xs font-bold hover:bg-green-800 transition-all shadow-md"
+                    >
+                      <RefreshCcw size={16} /> Transferir para Atendimento
+                    </button>
+                  )}
                 </>
               ) : selectedConversation.status === 'closed' ? (
                 <button 
@@ -1280,6 +1314,56 @@ export default function WhatsApp() {
                 onClick={transferToAdministrative}
                 disabled={isTransferring}
                 className="px-6 py-2 bg-blue-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-all shadow-md disabled:opacity-50 flex items-center gap-2"
+              >
+                {isTransferring ? 'Transferindo...' : 'Confirmar Transferência'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Transferência para Atendimento */}
+      {showTransferToAtendimentoModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-green-700 text-white">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <RefreshCcw size={20} />
+                Transferir para Atendimento
+              </h3>
+              <button onClick={() => setShowTransferToAtendimentoModal(false)} className="hover:bg-white/10 p-1 rounded-lg transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="p-4 bg-green-50 rounded-xl border border-green-100 text-green-900 text-sm">
+                <p>Você está transferindo este atendimento para a instância <strong>Atendimento ao Cliente</strong>.</p>
+                <p className="mt-2 text-xs opacity-80">O cliente receberá uma mensagem automática informando a transferência.</p>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Observação Interna (Opcional)</label>
+                <textarea 
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 transition-all h-24 resize-none"
+                  placeholder="Ex: Cliente reabriu contato para dúvidas comerciais..."
+                  value={transferObservation}
+                  onChange={(e) => setTransferObservation(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowTransferToAtendimentoModal(false)}
+                className="px-6 py-2 text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={transferToAtendimento}
+                disabled={isTransferring}
+                className="px-6 py-2 bg-green-700 text-white rounded-xl text-sm font-bold hover:bg-green-800 transition-all shadow-md disabled:opacity-50 flex items-center gap-2"
               >
                 {isTransferring ? 'Transferindo...' : 'Confirmar Transferência'}
               </button>

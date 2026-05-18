@@ -1459,6 +1459,10 @@ app.post('/api/whatsapp/send', authenticateToken, async (req: any, res) => {
 app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
   const { conversationId, targetInstance, internalNote } = req.body;
 
+  // Validação de entrada
+  if (!conversationId) return res.status(400).json({ error: 'conversationId é obrigatório.' });
+  if (!targetInstance) return res.status(400).json({ error: 'targetInstance é obrigatório.' });
+
   try {
     const { data: conv, error: fetchError } = await supabase
       .from('whatsapp_conversations')
@@ -1470,7 +1474,8 @@ app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
     if (fetchError || !conv) throw new Error('Conversa não encontrada');
 
     const creds = await getEvolutionApiCredentials(req.user.company_id, targetInstance);
-    console.log(`[TRANSFER] Transferindo conversa ${conversationId} para a instância: ${creds.instanceName}`);
+    const transferDirection = `${conv.instance || 'origem'} → ${creds.instanceName}`;
+    console.log(`[TRANSFER] Direção: ${transferDirection} | conversa: ${conversationId}`);
 
     // Verificar se já existe conversa na instância de destino (respeitando chave única)
     const { data: existingTarget } = await supabase
@@ -1546,7 +1551,8 @@ app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
     }
 
     const clientName = conv.contact_name ? conv.contact_name.trim() : 'prezado(a) cliente';
-    const teamName = creds.instanceName === 'mtsolar' ? 'Administrativa' : 'de Atendimento';
+    const INSTANCE_ATENDIMENTO_NAME = process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO || 'atendimento-cliente';
+    const teamName = creds.instanceName === INSTANCE_ATENDIMENTO_NAME ? 'de Atendimento' : 'Administrativa';
     const farewellMsg = `Olá, ${clientName}! 😊 Seu atendimento foi encaminhado para nossa equipe ${teamName}. Em breve um de nossos especialistas entrará em contato. Qualquer dúvida, estamos à disposição! 🌟`;
 
     // Enviar mensagem de aviso usando a instância de origem
