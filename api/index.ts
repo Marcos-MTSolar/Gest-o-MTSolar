@@ -991,6 +991,21 @@ app.get('/api/conversations', authenticateToken, async (req: any, res) => {
   res.json(data || []);
 });
 
+// WhatsApp - Update Tag
+app.put('/api/conversations/:id/tag', authenticateToken, async (req: any, res) => {
+  const { id } = req.params;
+  const { tag } = req.body;
+
+  const { error } = await supabase
+    .from('whatsapp_conversations')
+    .update({ tag: tag ?? null })
+    .eq('id', id)
+    .eq('company_id', req.user.company_id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
 // Helper para resolver a instância WhatsApp e as credenciais do tenant autenticado
 async function getEvolutionApiCredentials(companyId: string, requestedInstance?: string) {
   if (!companyId) throw new Error('Company ID ausente no contexto.');
@@ -1713,6 +1728,109 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
       fileName = 'sticker.webp';
     }
 
+    // --- DOWNLOAD E RE-UPLOAD DE MÍDIA PARA SUPABASE STORAGE ---
+    // Função auxiliar: baixa a mídia via Evolution API e faz upload para o bucket whatsapp-media
+    async function downloadAndUploadMedia(
+      evInstanceName: string,
+      msgKey: any,
+      msgContent: any,
+      mType: string,
+      cId: string,
+      convId: string | null,
+      mId: string,
+      fallbackUrl: string | null
+    ): Promise<string | null> {
+      try {
+        // Resolver API key correta para esta instância
+        const EVOLUTION_URL = process.env.VITE_EVOLUTION_URL || process.env.EVOLUTION_API_URL || '';
+        const INSTANCE_ATENDIMENTO = process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO || 'atendimento-cliente';
+        let apiKey = '';
+        if (evInstanceName === INSTANCE_ATENDIMENTO) {
+          apiKey = process.env.VITE_EVOLUTION_TOKEN_ATENDIMENTO || process.env.EVOLUTION_TOKEN_ATENDIMENTO || '';
+        } else {
+          apiKey = process.env.VITE_EVOLUTION_KEY || process.env.EVOLUTION_API_KEY || '';
+        }
+
+        if (!EVOLUTION_URL || !apiKey) {
+          console.warn('[WEBHOOK MEDIA] Credenciais da Evolution API ausentes — mantendo URL original.');
+          return fallbackUrl;
+        }
+
+        const baseUrl = EVOLUTION_URL.endsWith('/') ? EVOLUTION_URL.slice(0, -1) : EVOLUTION_URL;
+        const endpoint = `${baseUrl}/chat/getBase64FromMediaMessage/${evInstanceName}`;
+
+        console.log(`[WEBHOOK MEDIA] Baixando mídia via Evolution API: ${endpoint}`);
+
+        const evoResponse = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': apiKey },
+          body: JSON.stringify({ message: { key: msgKey, message: msgContent } }),
+          signal: AbortSignal.timeout(15000) // timeout 15s
+        });
+
+        if (!evoResponse.ok) {
+          console.warn(`[WEBHOOK MEDIA] Evolution API retornou ${evoResponse.status} — usando URL original.`);
+          return fallbackUrl;
+        }
+
+        const evoData: any = await evoResponse.json();
+        const base64String: string | undefined = evoData?.base64;
+
+        if (!base64String) {
+          console.warn('[WEBHOOK MEDIA] Campo base64 ausente na resposta — usando URL original.');
+          return fallbackUrl;
+        }
+
+        // Converter base64 para Buffer
+        const buffer = Buffer.from(base64String, 'base64');
+
+        // Determinar extensão pelo mediaType
+        const extMap: Record<string, string> = {
+          image: 'jpg',
+          video: 'mp4',
+          audio: 'mp3',
+          document: 'pdf',
+          sticker: 'webp'
+        };
+        const ext = extMap[mType] || 'bin';
+
+        // Determinar contentType
+        const mimeMap: Record<string, string> = {
+          image: 'image/jpeg',
+          video: 'video/mp4',
+          audio: 'audio/mpeg',
+          document: 'application/pdf',
+          sticker: 'image/webp'
+        };
+        const contentType = mimeMap[mType] || 'application/octet-stream';
+
+        // Path no bucket: {companyId}/{conversationId}/{messageId}.{ext}
+        const storagePath = `${cId}/${convId || 'no-conv'}/${mId}.${ext}`;
+
+        console.log(`[WEBHOOK MEDIA] Fazendo upload para whatsapp-media/${storagePath}`);
+
+        const { error: uploadError } = await supabaseAdmin.storage
+          .from('whatsapp-media')
+          .upload(storagePath, buffer, { contentType, upsert: true });
+
+        if (uploadError) {
+          console.warn('[WEBHOOK MEDIA] Erro no upload para Supabase Storage:', uploadError.message, '— usando URL original.');
+          return fallbackUrl;
+        }
+
+        const { data: publicUrlData } = supabaseAdmin.storage
+          .from('whatsapp-media')
+          .getPublicUrl(storagePath);
+
+        console.log(`[WEBHOOK MEDIA] Upload concluído. URL pública: ${publicUrlData.publicUrl}`);
+        return publicUrlData.publicUrl;
+      } catch (err: any) {
+        console.warn('[WEBHOOK MEDIA] Erro inesperado no download/upload de mídia:', err.message, '— usando URL original.');
+        return fallbackUrl;
+      }
+    }
+    // --- FIM DA FUNÇÃO AUXILIAR ---
+
     const text = message.message?.conversation || 
                  message.message?.extendedTextMessage?.text || 
                  message.message?.imageMessage?.caption || 
@@ -1788,6 +1906,21 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
       // 2. Save Message
       if (conversationId) {
         console.log('[WEBHOOK] Tentando salvar mensagem...');
+
+        // 2a. Se é uma mensagem de mídia, baixa da Evolution API e re-faz upload para o Supabase Storage
+        if (mediaType) {
+          mediaUrl = await downloadAndUploadMedia(
+            instanceName,
+            message.key,
+            message.message,
+            mediaType,
+            companyId,
+            conversationId,
+            messageId,
+            mediaUrl
+          );
+        }
+
         try {
           const { error: msgError } = await supabase.from('whatsapp_messages').insert({
             conversation_id: conversationId,

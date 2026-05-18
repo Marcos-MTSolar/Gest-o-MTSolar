@@ -522,17 +522,13 @@ export default function WhatsApp() {
 
   const updateTag = async (tag: string | null) => {
     if (!selectedConversation) return;
-
-    const { error } = await supabase
-      .from('whatsapp_conversations')
-      .update({ tag })
-      .eq('id', selectedConversation.id)
-      .eq('company_id', user?.company_id);
-
-    if (!error) {
+    try {
+      await api.put(`/api/conversations/${selectedConversation.id}/tag`, { tag });
       setSelectedConversation({ ...selectedConversation, tag });
       setShowTagDropdown(false);
       fetchConversations();
+    } catch (err) {
+      console.error('Erro ao atualizar etiqueta:', err);
     }
   };
 
