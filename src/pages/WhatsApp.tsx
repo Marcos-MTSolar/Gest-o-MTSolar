@@ -199,8 +199,15 @@ export default function WhatsApp() {
         })
         .subscribe();
 
+      const pollInterval = setInterval(() => {
+        if (selectedConversation?.id) {
+          fetchMessages(selectedConversation.id);
+        }
+      }, 3000);
+
       return () => {
         supabase.removeChannel(messageSubscription);
+        clearInterval(pollInterval);
       };
     } else {
       setMessages([]);
