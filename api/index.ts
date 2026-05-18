@@ -1712,17 +1712,21 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
       mediaType = 'document';
       mediaUrl = message.message.documentMessage.url || message.message.documentMessage.directPath;
       fileName = message.message.documentMessage.fileName || 'document';
-      fileSize = message.message.documentMessage.fileLength;
+      const flDoc = message.message.documentMessage.fileLength;
+      fileSize = flDoc ? (typeof flDoc === 'object' ? Number(flDoc.low) : Number(flDoc)) : null;
     } else if (message.message?.videoMessage) {
       mediaType = 'video';
       mediaUrl = message.message.videoMessage.url || message.message.videoMessage.directPath;
       fileName = message.message.videoMessage.fileName || 'video.mp4';
+      const flVid = message.message.videoMessage.fileLength;
+      fileSize = flVid ? (typeof flVid === 'object' ? Number(flVid.low) : Number(flVid)) : null;
     } else if (message.message?.documentWithCaptionMessage) {
       const docMsg = message.message.documentWithCaptionMessage.message?.documentMessage;
       mediaType = 'document';
       mediaUrl = docMsg?.url || docMsg?.directPath;
       fileName = docMsg?.fileName || 'document';
-      fileSize = docMsg?.fileLength;
+      const flDocCap = docMsg?.fileLength;
+      fileSize = flDocCap ? (typeof flDocCap === 'object' ? Number(flDocCap.low) : Number(flDocCap)) : null;
     } else if (message.message?.stickerMessage) {
       mediaType = 'sticker';
       mediaUrl = message.message.stickerMessage.url;
