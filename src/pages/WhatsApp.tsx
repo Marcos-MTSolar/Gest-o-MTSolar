@@ -230,7 +230,7 @@ export default function WhatsApp() {
         ? evolutionApi.instances.ADMIN 
         : evolutionApi.instances.ATENDIMENTO;
 
-      const { data } = await api.get(`/api/conversations?instance=${instance}`);
+      const { data } = await api.get(`/api/conversations?instance=${instance}&t=${Date.now()}`);
       
       if (data) {
         console.log('[CONVERSAS] Total recebido:', data.length);
@@ -260,7 +260,8 @@ export default function WhatsApp() {
       .from('whatsapp_messages')
       .select('*')
       .eq('conversation_id', conversationId)
-      .order('timestamp', { ascending: true });
+      .order('timestamp', { ascending: true })
+      .limit(500);
 
     if (!error && data) {
       setMessages(data);
