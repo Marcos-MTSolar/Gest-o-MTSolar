@@ -932,11 +932,11 @@ export default function WhatsApp() {
 
                     {msg.media_type === 'audio' && (
                       <div className="mb-2 min-w-[240px]">
-                        <audio 
-                          src={msg.media_url || ''} 
-                          controls 
-                          className="w-full h-10 accent-blue-600"
-                        />
+                        <audio controls className="w-full h-10 accent-blue-600">
+                          <source src={msg.media_url || ''} type="audio/ogg; codecs=opus" />
+                          <source src={msg.media_url || ''} type="audio/mpeg" />
+                          <source src={msg.media_url || ''} type="audio/mp4" />
+                        </audio>
                       </div>
                     )}
 
