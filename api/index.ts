@@ -59,7 +59,7 @@ const supabaseAdmin = createClient(
 );
 
 // Middleware
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 const allowedOrigins = [
   'capacitor://localhost',
   'http://localhost',
@@ -82,7 +82,7 @@ app.use(cors({
 }));
 app.use(cookieParser());
 app.set('trust proxy', 1);
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // File Upload Setup (Memory Storage for Vercel -> Supabase Storage)
 const storage = multer.memoryStorage();
