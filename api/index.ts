@@ -1796,7 +1796,7 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
         const extMap: Record<string, string> = {
           image: 'jpg',
           video: 'mp4',
-          audio: 'mp3',
+          audio: 'ogg',
           document: 'pdf',
           sticker: 'webp'
         };

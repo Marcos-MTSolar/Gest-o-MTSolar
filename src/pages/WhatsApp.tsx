@@ -921,6 +921,7 @@ export default function WhatsApp() {
                           className="rounded-lg max-h-64 object-cover cursor-pointer hover:opacity-90 transition-opacity"
                           onClick={() => setLightboxImage(msg.media_url || null)}
                           onError={(e) => {
+                            console.error('[IMG ERROR] URL:', msg.media_url);
                             // If media_url is missing or broken, we can't show it easily without proxying
                             // but for now we just hide it or show a placeholder
                             (e.target as HTMLImageElement).style.display = 'none';
