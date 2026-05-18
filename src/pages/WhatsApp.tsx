@@ -172,12 +172,6 @@ export default function WhatsApp() {
     };
   }, []);
 
-  const fetchMessagesRef = useRef<((id: string) => void) | null>(null);
-
-  useEffect(() => {
-    fetchMessagesRef.current = fetchMessages;
-  }, [fetchMessages]);
-
   useEffect(() => {
     if (selectedConversation) {
       const hasAccess =
@@ -207,7 +201,7 @@ export default function WhatsApp() {
 
       const pollInterval = setInterval(() => {
         if (selectedConversation?.id) {
-          fetchMessagesRef.current?.(selectedConversation.id);
+          fetchMessages(selectedConversation.id);
         }
       }, 3000);
 
