@@ -136,6 +136,7 @@ export default function WhatsApp() {
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const shouldAutoScrollRef = useRef(true);
 
   useEffect(() => {
     if (selectedConversation) {
@@ -175,6 +176,7 @@ export default function WhatsApp() {
 
   useEffect(() => {
     if (selectedConversation) {
+      shouldAutoScrollRef.current = true;
       const hasAccess =
         selectedConversation.status === 'waiting' ||
         selectedConversation.status === 'closed' ||
@@ -220,8 +222,17 @@ export default function WhatsApp() {
   }, [messages]);
 
   const scrollToBottom = () => {
-    if (messagesContainerRef.current) {
+    if (messagesContainerRef.current && shouldAutoScrollRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  };
+
+  const handleScroll = () => {
+    if (messagesContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+      // Tolerância de 50px do fim
+      const isAtBottom = scrollHeight - scrollTop - clientHeight <= 50;
+      shouldAutoScrollRef.current = isAtBottom;
     }
   };
 
@@ -915,6 +926,7 @@ export default function WhatsApp() {
             {/* Mensagens */}
             <div 
               ref={messagesContainerRef}
+              onScroll={handleScroll}
               className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#f0f2f5] custom-scrollbar w-full overflow-x-hidden"
             >
               {messages.map((msg) => (
