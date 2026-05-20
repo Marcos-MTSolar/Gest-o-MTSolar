@@ -1072,7 +1072,7 @@ async function getEvolutionApiCredentials(companyId: string, requestedInstance?:
 
   // 3. Obter credenciais corretas por instância
   const EVOLUTION_URL = process.env.VITE_EVOLUTION_URL || process.env.EVOLUTION_API_URL;
-  const INSTANCE_ATENDIMENTO = process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO || 'atendimento-cliente';
+  const INSTANCE_ATENDIMENTO = process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO || 'cliente';
   
   let EVOLUTION_KEY = '';
 
@@ -1551,7 +1551,7 @@ app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
     }
 
     const clientName = conv.contact_name ? conv.contact_name.trim() : 'prezado(a) cliente';
-    const INSTANCE_ATENDIMENTO_NAME = process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO || 'atendimento-cliente';
+    const INSTANCE_ATENDIMENTO_NAME = process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO || 'cliente';
     const teamName = creds.instanceName === INSTANCE_ATENDIMENTO_NAME ? 'de Atendimento' : 'Administrativa';
     const farewellMsg = `Olá, ${clientName}! 😊 Seu atendimento foi encaminhado para nossa equipe ${teamName}. Em breve um de nossos especialistas entrará em contato. Qualquer dúvida, estamos à disposição! 🌟`;
 
@@ -1756,7 +1756,7 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
       try {
         // Resolver API key correta para esta instância
         const EVOLUTION_URL = process.env.VITE_EVOLUTION_URL || process.env.EVOLUTION_API_URL || '';
-        const INSTANCE_ATENDIMENTO = process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO || 'atendimento-cliente';
+        const INSTANCE_ATENDIMENTO = process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO || 'cliente';
         let apiKey = '';
         if (evInstanceName === INSTANCE_ATENDIMENTO) {
           apiKey = process.env.VITE_EVOLUTION_TOKEN_ATENDIMENTO || process.env.EVOLUTION_TOKEN_ATENDIMENTO || '';
