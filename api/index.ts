@@ -1230,6 +1230,19 @@ app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) =>
 
     // Salvar no banco
     if (conversationId) {
+      const audioBuffer = Buffer.from(audio, 'base64');
+      const audioFileName = `${req.user.company_id}/${conversationId}/audio-${Date.now()}.ogg`;
+      await supabaseAdmin.storage
+        .from('whatsapp-media')
+        .upload(audioFileName, audioBuffer, {
+          contentType: 'audio/ogg',
+          upsert: false
+        });
+      const { data: audioPublicUrlData } = supabaseAdmin.storage
+        .from('whatsapp-media')
+        .getPublicUrl(audioFileName);
+      const audioPublicUrl = audioPublicUrlData.publicUrl;
+
       await supabase.from('whatsapp_messages').insert({
         conversation_id: conversationId,
         phone: phone,
@@ -1239,7 +1252,8 @@ app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) =>
         timestamp: new Date().toISOString(),
         status: 'sent',
         media_type: 'audio',
-        file_name: 'audio.mp3',
+        media_url: audioPublicUrl,
+        file_name: 'audio.ogg',
         instance: creds.instanceName,
         company_id: req.user.company_id
       });
