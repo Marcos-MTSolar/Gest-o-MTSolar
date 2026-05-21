@@ -1,152 +1,451 @@
-# Resumo Mestre do Projeto: Gestão MTSolar
+# RESUMO MESTRE — GESTÃO MTSOLAR
 
-Este documento consolida a análise detalhada do sistema **Gestão MTSolar**, cobrindo sua arquitetura, tecnologias, regras de negócio e integrações, servindo como a principal fonte de verdade técnica do projeto.
-
----
-
-## 1. Visão Geral
-O **Gestão MTSolar** é um sistema ERP/CRM completo desenvolvido para otimizar o fluxo de trabalho de empresas de energia solar fotovoltaica. 
-Seu propósito é centralizar todas as etapas do ciclo de vida de um cliente e de um projeto solar, resolvendo problemas de desorganização, perda de leads, falta de rastreabilidade na engenharia e comunicação ineficiente.
-
-**Público-alvo:** Equipes comerciais (vendedores), técnicas (engenheiros/instaladores) e administração (CEOs) de franquias e distribuidoras de energia solar. A arquitetura foi adaptada para suportar um modelo SaaS Multi-Tenant (múltiplas empresas isoladas logicamente).
+Este documento consolida a análise detalhada e atualizada da arquitetura, stack de tecnologias, estrutura do banco de dados, regras de negócio e integrações do sistema **Gestão MTSolar**, servindo como a principal fonte de verdade técnica do projeto.
 
 ---
 
-## 2. Tecnologias Utilizadas
-O projeto utiliza um stack moderno, orientado ao ecossistema JavaScript/TypeScript:
+## 1. VISÃO GERAL
 
-**Frontend (Web & Mobile):**
-- **React 19** com **Vite 6**
-- **TypeScript** (tipagem estática)
-- **TailwindCSS 4** (estilização) + **Lucide React** (ícones)
-- **React Router DOM 7** (roteamento SPA)
-- **Capacitor 8** (`@capacitor/core`, `android`, `ios`) para envelopar a aplicação web em aplicativos nativos.
-
-**Backend:**
-- **Node.js** + **Express 4.21** (executado como Serverless Function na Vercel)
-- **Multer** (manipulação de uploads de arquivos em memória)
-- **Bcryptjs** e **JSONWebToken (JWT)** (autenticação e segurança)
-- **Axios** (requisições HTTP internas)
-
-**Banco de Dados & Storage:**
-- **Supabase** (PostgreSQL gerido, utilizando o `@supabase/supabase-js`)
-- **Supabase Storage** (armazenamento de arquivos e mídias)
-
-**APIs e Integrações de Terceiros:**
-- **Evolution API v2** (Motor de integração com WhatsApp via Webhooks)
-- **Firebase Admin SDK** (Envio de Push Notifications para o app mobile Capacitor)
-- **Google GenAI** (Integrações com inteligência artificial, possivelmente para análise ou chatbots)
-- **jsPDF** (Geração de propostas comerciais em PDF no cliente/servidor)
+* **Propósito do Sistema:** O **Gestão MTSolar** é um sistema ERP/CRM completo desenvolvido para otimizar e gerenciar o ciclo de vida de projetos de energia solar fotovoltaica. Ele unifica a captação de leads, o funil comercial (CRM), dimensionamento técnico, geração automatizada de propostas em PDF, homologação junto a concessionárias de energia, controle de estoque de kits/componentes e o atendimento omnichannel integrado via WhatsApp.
+* **Público-alvo:** Equipes comerciais (vendedores/parceiros), equipe técnica/engenharia (instaladores, projetistas) e a administração (gestores e CEOs) de franquias ou distribuidoras de energia solar.
+* **Estágio Atual do Projeto:** O projeto encontra-se em estágio avançado de produção. A aplicação web/desktop está totalmente operacional, integrada com a Evolution API v2 para atendimento e com o Supabase para banco de dados e arquivos. Possui também um wrapper mobile com Capacitor configurado para builds nativos Android e iOS. A arquitetura foi adaptada para um modelo SaaS **Multi-Tenant** funcional, isolando dados de diferentes empresas/franquias.
 
 ---
 
-## 3. Estrutura de Arquivos
-A estrutura reflete um monorepo que contém tanto o frontend (Vite) quanto o backend (Express) e o wrapper mobile (Capacitor):
+## 2. STACK TECNOLÓGICA
+
+O projeto utiliza um conjunto de tecnologias modernas baseadas em TypeScript em todas as camadas:
+
+### Frontend
+* **Core:** React 19 + Vite 6
+* **Estilização:** TailwindCSS v4.1.14 para estilização baseada em utilitários CSS rápidos e modernos, em conjunto com o `lucide-react` para ícones.
+* **Roteamento:** React Router DOM v7.13.0 para navegação SPA (Single Page Application).
+* **Animações:** Motion (antigo Framer Motion) para micro-transições fluidas na interface.
+* **Biblioteca Gráfica/PDFs:** `jspdf` para montagem dinâmica de propostas e relatórios no lado do cliente.
+
+### Backend
+* **Servidor:** Node.js com Express v4.21.2 executado em ambiente Serverless na **Vercel** (conforme mapeamento do arquivo `vercel.json`).
+* **Compilação/Execução local:** `tsx` (TypeScript Execute) rodando em modo nativo ES Modules (`"type": "module"`).
+* **Segurança e Utilitários:** `bcryptjs` para hashing de senhas, `jsonwebtoken` para emissão e validação de tokens JWT, e `cookie-parser` / `cors` para gestão de requisições.
+* **Uploads de Arquivos:** `multer` configurado para receber uploads multipart/form-data em memória no Express antes de repassá-los para o Supabase.
+
+### Banco de Dados e Storage
+* **Banco:** Supabase (PostgreSQL gerido na nuvem), acessado via SDK `@supabase/supabase-js` v2.97.0.
+* **Storage (Buckets):** Supabase Storage para persistência permanente de documentos e arquivos de vistoria e propostas.
+
+### Integrações Externas
+* **WhatsApp:** Evolution API v2 instalada em servidor próprio (geralmente hospedado na Railway), funcionando bidirecionalmente via requisições HTTP REST (envio) e Webhooks configurados (recebimento).
+* **Firebase:** Firebase Admin SDK v13.9.0 para disparar Push Notifications nativas a dispositivos móveis.
+
+### Mobile
+* **Wrapper Nativo:** Capacitor v8.0.2 (`@capacitor/core`, `@capacitor/cli`, `@capacitor/android`, `@capacitor/ios`) envelopando a aplicação web SPA e expondo APIs de hardware (como `@capacitor/camera` para vistorias em campo e `@capacitor/push-notifications`).
+
+---
+
+## 3. ESTRUTURA DE ARQUIVOS
+
+O projeto segue a estrutura de monorepo integrando o frontend, backend (pasta `/api`) e as configurações do Capacitor.
 
 ```text
 /Gest-o-MTSolar
 ├── api/
-│   └── index.ts               # Servidor backend monolítico Express (Rotas da API e Webhooks)
-├── android/                   # Projeto Android gerado pelo Capacitor
+│   └── index.ts               # Servidor backend central Express (Rotas da API, Cronjobs e Webhooks)
+├── android/                   # Código nativo Android gerado pelo Capacitor
+├── ios/                       # Código nativo iOS gerado pelo Capacitor (se sincronizado)
 ├── src/
-│   ├── components/            # Componentes reutilizáveis (Layout.tsx, barra lateral, modais de estoque)
-│   ├── context/               # Contextos do React (AuthContext para gerenciamento de sessão)
-│   ├── hooks/                 # Custom hooks do React
-│   ├── lib/                   # Configurações de clientes (api.ts, supabase.ts, whatsapp.ts)
-│   ├── pages/                 # Telas da aplicação (Dashboard, WhatsApp, Commercial, Technical, etc.)
-│   ├── types/                 # Definições de interfaces e tipos TypeScript
-│   ├── App.tsx & main.tsx     # Pontos de entrada e rotas do Frontend
-│   └── index.css              # Estilos globais (Tailwind)
-├── supabase_schema.sql        # Arquivo de definição do esquema de banco de dados
-├── vercel.json                # Configuração de rotas de deploy Serverless da Vercel
-├── capacitor.config.ts        # Configurações do wrapper mobile
-└── package.json               # Dependências e scripts de build
+│   ├── components/            # Componentes reutilizáveis globais da UI
+│   │   ├── Layout.tsx         # Estrutura principal da página (Navbar, Sidebar responsiva e Container)
+│   │   └── stock/             # Componentes específicos de estoque (Modais de retirada, alertas, etc.)
+│   ├── context/               # Contextos de estado global
+│   │   ├── AuthContext.tsx    # Controle de autenticação (Login, Logout, Sessão do Usuário)
+│   │   └── SocketContext.tsx  # Contexto de socket/realtime (se aplicável ao painel)
+│   ├── db/
+│   │   └── schema.sql         # Esquema de banco de dados mockado/local (SQLite de desenvolvimento)
+│   ├── hooks/                 # Hooks customizados para abstração de regras e buscas de dados
+│   │   ├── useHomologacaoDocs.ts
+│   │   └── useStock.ts        # Gerenciamento de itens de estoque e escutas de realtime
+│   ├── lib/                   # Inicialização de SDKs e APIs de terceiros
+│   │   ├── api.ts             # Cliente Axios configurado para requisições ao backend da Vercel
+│   │   ├── documentCapture.ts # Utilitários de captura e redimensionamento de imagens de câmera
+│   │   ├── notifications.ts   # Configuração nativa de push notifications e agendamento local
+│   │   ├── supabase.ts        # Inicialização do cliente Supabase (Public Anon Client)
+│   │   ├── utils.ts           # Funções utilitárias (Tailwind Merge, Clsx)
+│   │   └── whatsapp.ts        # Cliente utilitário de WhatsApp do Frontend (legado/fallback)
+│   ├── pages/                 # Telas da aplicação
+│   │   ├── Dashboard.tsx      # Métricas financeiras, funil simplificado e estatísticas de vendas
+│   │   ├── Commercial.tsx     # CRM com funil Kanban, gestão de leads e projetos comerciais
+│   │   ├── ProposalGenerator.tsx # Configuração e geração dinâmica da proposta em PDF
+│   │   ├── EnergyCalculator.tsx  # Ferramenta de estimativa de kWh baseado no consumo dos equipamentos
+│   │   ├── Technical.tsx      # Ficha técnica do projeto e envio de fotos georreferenciadas
+│   │   ├── Obra.tsx           # Checklist de instalação e acompanhamento de obras em tempo real
+│   │   ├── ObraSchedule.tsx   # Calendário e agendamentos de equipes de montagem/obra
+│   │   ├── Homologation.tsx   # Acompanhamento do status de homologação de projetos fotovoltaicos
+│   │   ├── NeoenergiaProtocols.tsx # Controle interno de protocolos na concessionária (Ex: Neoenergia)
+│   │   ├── Stock.tsx          # Controle visual de estoque, alertas de nível crítico e histórico
+│   │   ├── KitPurchase.tsx    # Registro de compra de kits fotovoltaicos vinculados aos projetos
+│   │   ├── Agenda.tsx         # Calendário de compromissos para vendedores e engenheiros
+│   │   ├── Settings.tsx       # Configuração de dados e preferências da empresa
+│   │   ├── Users.tsx          # Painel de gestão de membros da equipe (vendedores, engenheiros, admin)
+│   │   ├── WhatsApp.tsx       # Chat central de atendimento ao cliente integrado ao WhatsApp
+│   │   ├── Login.tsx          # Tela de autenticação por e-mail e senha
+│   │   └── Messages.tsx       # Interface interna de recados/mensagens da equipe
+│   ├── types/                 # Tipagens estáticas do TypeScript (Ex: stock.ts)
+│   ├── App.tsx                # Definição de rotas do React Router DOM e carregador do AuthProvider
+│   ├── main.tsx               # Ponto de entrada do React
+│   └── index.css              # Importação e configuração do Tailwind CSS
+├── supabase_schema.sql        # Esquema oficial com tabelas do PostgreSQL executado no Supabase
+├── vercel.json                # Configurações de rotas de deploy e agendamentos de Cron no backend Vercel
+├── capacitor.config.ts        # Configurações de build do wrapper Capacitor Mobile
+├── package.json               # Gerenciamento de scripts NPM e dependências de pacotes
+└── .env                       # Variáveis de ambiente locais (sensíveis)
 ```
 
 ---
 
-## 4. Módulos e Funcionalidades
+## 4. MÓDULOS E FUNCIONALIDADES
 
-O sistema é dividido em "Módulos de Negócio" acessíveis via navegação lateral:
+O sistema é dividido em fluxos de negócios integrados que cobrem todas as fases de uma venda solar:
 
-1. **Dashboard (`Dashboard.tsx`):** Exibe métricas de desempenho, funil de vendas, projetos em andamento e faturamento.
-2. **CRM/Comercial (`Commercial.tsx`):** Funil de vendas em formato Kanban. Permite mover cards de leads, qualificar e fechar vendas.
-3. **Gerador de Propostas (`ProposalGenerator.tsx`):** Um módulo avançado para gerar orçamentos em PDF com dados do kit solar, gráficos e tabelas de ROI.
-4. **Calculadora de Energia (`EnergyCalculator.tsx`):** Ferramenta que converte consumos de equipamentos (Watts, BTU, CV) para estimativa de kWh mensal.
-5. **WhatsApp (`WhatsApp.tsx`):** Interface de atendimento omnichannel integrada ao CRM. Permite enviar textos, áudios e mídias, gerenciar filas, transferir tickets e filtrar por etiquetas.
-6. **Engenharia e Obras (`Technical.tsx`, `Obra.tsx`):** Gestão de documentação de projeto, vistoria técnica e checklists com upload de fotos georreferenciadas.
-7. **Homologação (`Homologation.tsx`, `NeoenergiaProtocols.tsx`):** Acompanhamento burocrático nas concessionárias de energia.
-8. **Estoque e Compras (`Stock.tsx`, `KitPurchase.tsx`):** Controle de inventário de painéis, inversores e cabos.
-9. **Agenda (`Agenda.tsx`):** Calendário integrado para visitas técnicas e comerciais.
-
----
-
-## 5. Banco de Dados
-A infraestrutura roda no **Supabase (PostgreSQL)**, modelada para suportar o conceito de *Multi-Tenant* (isolamento por `company_id`).
-
-**Principais Entidades:**
-- `users`: Armazena credenciais (hash bcrypt), roles (CEO, ADMIN, COMMERCIAL, TECHNICAL) e o `company_id`.
-- `clients` & `projects`: Relacionamento 1:N. Um cliente pode ter vários projetos de usinas solares.
-- `commercial_data`, `technical_data`: Extensões da tabela de projetos (1:1), particionando os dados do projeto conforme a etapa do funil.
-- `documents` & `media`: Rastreabilidade de arquivos upados (fotos do telhado, contratos, PDFs).
-- `whatsapp_conversations` & `whatsapp_messages`: Tabela espelho das interações do CRM com o cliente.
-- `company_instances`: Relaciona a empresa do sistema a uma instância rodando no motor do WhatsApp (Evolution API).
+1. **Autenticação (`Login.tsx`):**
+   * Tela inicial para inserção de credenciais de e-mail e senha. Valida o usuário e estabelece o JWT seguro.
+2. **Dashboard Geral (`Dashboard.tsx`):**
+   * Gráficos financeiros, resumo do funil de vendas ativo, volume de geração projetado e atalhos rápidos para novas ações.
+3. **CRM / Comercial (`Commercial.tsx`):**
+   * Kanban interativo contendo colunas customizáveis (ex: Lead, Vistoria Agendada, Proposta Elaborada, Fechamento). Os vendedores criam cards de clientes e arrastam entre fases. Permite o upload do contrato assinado.
+4. **Calculadora de Consumo (`EnergyCalculator.tsx`):**
+   * Permite cadastrar múltiplos aparelhos elétricos (lâmpadas, ar-condicionados, motores), suas potências, horas de uso diário e dias de uso mensal para calcular o consumo total em kWh de forma automática.
+5. **Gerador de Propostas (`ProposalGenerator.tsx`):**
+   * Formulário passo-a-passo no qual o vendedor informa os dados de consumo do cliente, seleciona o kit (painéis, inversores, estruturas), configura financiamentos e gera uma proposta comercial personalizada no formato de arquivo PDF (salva no storage do Supabase).
+6. **WhatsApp / Chat Center (`WhatsApp.tsx`):**
+   * Painel de atendimento em tempo real. Exibe conversas em andamento agrupadas por status (Aguardando, Em Atendimento, Resolvidas). Permite envio de textos, áudios e mídias, bem como transferência de tickets entre vendedores e departamentos.
+7. **Ficha Técnica e Vistoria (`Technical.tsx`):**
+   * Acesso aos dados físicos do local do cliente (tipo de telhado, orientação, padrão de entrada, disjuntores). Permite o envio de fotos comprobatórias obrigatórias do local da instalação.
+8. **Gestão de Obras (`Obra.tsx` e `ObraSchedule.tsx`):**
+   * Cronograma de montagem do sistema. Acompanhamento visual de status (Não Iniciado, Em Andamento, Concluído) e atribuição de técnicos responsáveis.
+9. **Homologação e Concessionárias (`Homologation.tsx` e `NeoenergiaProtocols.tsx`):**
+   * Tela burocrática para anexar solicitações de conexão, pareceres de acesso e protocolos de vistoria junto a distribuidoras (ex: Neoenergia).
+10. **Estoque (`Stock.tsx`):**
+    * Gestão física de equipamentos como módulos solares, inversores e estruturas. Emite alertas de estoque baixo baseado em limites (threshold) cadastrados.
 
 ---
 
-## 6. Integrações Externas
+## 5. BANCO DE DADOS
 
-### A. Evolution API (WhatsApp)
-- **Fluxo de Envio:** O frontend chama `api.post('/api/whatsapp/send')`. O Express envia para o endpoint da Evolution.
-- **Fluxo de Recebimento (Webhook):** A Evolution faz um `POST` no webhook `/api/webhooks/whatsapp`.
-- **Tratamento de Mídia:** Como a CDN do WhatsApp expira rápido e o webhook da Evolution (por configuração) não envia base64 nativamente, o backend da MTSolar intercepta o evento, faz um fetch reverso (`/chat/getBase64FromMediaMessage`), pega o binário da imagem/áudio/doc e re-upa no **Supabase Storage** (Bucket: `whatsapp-media`), substituindo por um link público permanente.
+O banco de dados é hospedado no **Supabase (PostgreSQL)** e implementa uma estrutura rígida de multi-tenancy.
 
-### B. Firebase Admin (Push Notifications)
-O servidor Node utiliza credenciais de serviço para disparar notificações em tempo real para os apps iOS/Android (Capacitor) da equipe comercial e técnica quando eventos importantes acontecem (novo lead, mensagem de cliente, mudança de status de obra).
+### Principais Tabelas e Colunas
+
+#### `companies` (Tenants)
+* `id` (UUID - Primary Key)
+* `name` (TEXT)
+* `whatsapp_instance` (TEXT - Nome legado da instância principal de WhatsApp)
+* `created_at` (TIMESTAMPTZ)
+
+#### `company_instances` (Vínculo de Instâncias WhatsApp)
+* `id` (UUID - Primary Key)
+* `company_id` (UUID - References `companies.id`)
+* `instance_name` (TEXT - Nome normalizado da instância da Evolution API)
+* `created_at` (TIMESTAMPTZ)
+
+#### `users` (Usuários / Colaboradores)
+* `id` (SERIAL - Primary Key)
+* `company_id` (UUID - References `companies.id`)
+* `name` (TEXT)
+* `email` (TEXT - UNIQUE)
+* `password_hash` (TEXT)
+* `role` (TEXT - Restrito via CHECK: `'CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'`)
+* `active` (BOOLEAN - Padrão TRUE)
+* `avatar_url` (TEXT)
+* `push_token` (TEXT - Token nativo Firebase/FCM)
+* `created_at` (TIMESTAMPTZ)
+
+#### `clients` (Clientes)
+* `id` (SERIAL - Primary Key)
+* `company_id` (UUID - References `companies.id`)
+* `name` (TEXT)
+* `cpf_cnpj` (TEXT)
+* `phone` (TEXT)
+* `email` (TEXT)
+* `address` (TEXT)
+* `city` (TEXT)
+* `state` (TEXT)
+* `status` (TEXT)
+* `created_by` (INTEGER - References `users.id`)
+* `created_at` (TIMESTAMPTZ)
+
+#### `projects` (Projetos / Usinas)
+* `id` (SERIAL - Primary Key)
+* `company_id` (UUID - References `companies.id`)
+* `client_id` (INTEGER - References `clients.id`)
+* `title` (TEXT)
+* `description` (TEXT)
+* `status` (TEXT - `'pending', 'in_progress', 'completed', 'cancelled'`)
+* `current_stage` (TEXT - `'registration', 'proposal', 'documentation', 'payment', 'kit_purchase', 'inspection', 'homologation', 'conclusion'`)
+* `installation_status` (TEXT)
+* `homologation_status` (TEXT)
+* `inverter_model` (TEXT)
+* `inverter_power` (TEXT)
+* `module_model` (TEXT)
+* `module_power` (TEXT)
+* `created_at` (TIMESTAMPTZ)
+* `updated_at` (TIMESTAMPTZ)
+
+#### `commercial_data` (Dados Comerciais do Projeto - 1:1 com `projects`)
+* `id` (SERIAL - Primary Key)
+* `project_id` (INTEGER - UNIQUE - References `projects.id`)
+* `company_id` (UUID - References `companies.id`)
+* `proposal_value` (REAL)
+* `payment_method` (TEXT)
+* `contract_url` (TEXT)
+* `notes` (TEXT)
+* `status` (TEXT)
+
+#### `technical_data` (Dados de Engenharia/Vistoria do Projeto - 1:1 com `projects`)
+* `id` (SERIAL - Primary Key)
+* `project_id` (INTEGER - UNIQUE - References `projects.id`)
+* `company_id` (UUID - References `companies.id`)
+* `roof_structure` (TEXT)
+* `structure_type` (TEXT)
+* `module_quantity` (INTEGER)
+* `observations` (TEXT)
+* `photo_modules` (TEXT)
+* `photo_inverter` (TEXT)
+* `photo_roof_sealing` (TEXT)
+
+#### `proposal_history` (Histórico de Propostas Geradas)
+* `id` (SERIAL - Primary Key)
+* `company_id` (UUID - References `companies.id`)
+* `client_name` (TEXT)
+* `proposal_number` (TEXT)
+* `url_arquivo` (TEXT - Link do arquivo PDF)
+* `raw_data` (JSON - Objeto contendo todas as variáveis utilizadas na geração)
+* `data_geracao` (TIMESTAMPTZ)
+* `data_expiracao` (TIMESTAMPTZ - Padrão de 7 dias úteis após geração)
+* `created_by` (INTEGER)
+
+#### `stock_items` (Itens de Estoque)
+* `id` (SERIAL - Primary Key)
+* `company_id` (UUID - References `companies.id`)
+* `category` (TEXT)
+* `specification` (TEXT)
+* `unit` (TEXT)
+* `current_quantity` (NUMERIC)
+* `ideal_quantity` (NUMERIC)
+* `low_stock_threshold` (NUMERIC)
+* `created_at` (TIMESTAMPTZ)
+
+#### `stock_withdrawals` (Saídas de Estoque)
+* `id` (SERIAL - Primary Key)
+* `company_id` (UUID - References `companies.id`)
+* `stock_item_id` (INTEGER - References `stock_items.id`)
+* `quantity` (NUMERIC)
+* `withdrawal_date` (TIMESTAMPTZ)
+* `installation_name` (TEXT)
+* `technician_name` (TEXT)
+* `notes` (TEXT)
+* `created_by` (UUID / INTEGER)
+
+#### `whatsapp_conversations` (Conversas de WhatsApp)
+* `id` (UUID - Primary Key)
+* `company_id` (UUID - References `companies.id`)
+* `phone` (TEXT)
+* `name` (TEXT)
+* `unread_count` (INTEGER - Padrão 0)
+* `last_message` (TEXT)
+* `last_message_at` (TIMESTAMPTZ)
+* `status` (TEXT - `'waiting', 'open', 'closed'`)
+* `assigned_to` (INTEGER - References `users.id`)
+* `instance` (TEXT - Nome normalizado da instância responsável)
+* `tags` (TEXT[] - Etiquetas aplicadas à conversa)
+
+#### `whatsapp_messages` (Mensagens de WhatsApp)
+* `id` (UUID - Primary Key)
+* `company_id` (UUID - References `companies.id`)
+* `conversation_id` (UUID - References `whatsapp_conversations.id`)
+* `phone` (TEXT)
+* `message` (TEXT)
+* `from_me` (BOOLEAN)
+* `message_id` (TEXT - ID interno gerado pela Evolution API)
+* `timestamp` (TIMESTAMPTZ)
+* `status` (TEXT - `'sent', 'delivered', 'read'`)
+* `media_type` (TEXT - `'image', 'audio', 'document', 'video', 'sticker'`)
+* `media_url` (TEXT - Link público e permanente no Supabase Storage)
+* `file_name` (TEXT)
+* `file_size` (NUMERIC)
+* `is_internal` (BOOLEAN - Se a mensagem foi escrita como anotação interna e não enviada ao cliente)
+
+### Regras de Isolamento Multi-Tenant (company_id)
+* **Preenchimento:** Todas as inserções nas tabelas críticas incluem a coluna `company_id` obtida no lado do servidor via decodificação do JWT Token do usuário conectado.
+* **Isolamento:** Toda requisição `SELECT`, `UPDATE` ou `DELETE` no backend Express injeta a cláusula `.eq('company_id', req.user.company_id)` para impedir vazamento ou alteração de dados entre diferentes empresas contratantes.
 
 ---
 
-## 7. Regras de Negócio Críticas
-- **Segregação de Visibilidade (WhatsApp):** Um vendedor (role: COMMERCIAL) só consegue visualizar e responder conversas das quais é o `assigned_to` ou que estejam aguardando atendimento (`status = waiting`). Perfis ADMIN ou CEO possuem visão "God Mode".
-- **Assunção e Transferência de Ticket:** Ao assumir uma conversa, as tabelas atualizam o responsável. A transferência limpa o dono atual e pode transitar a conversa até entre instâncias diferentes da Evolution API (ex: Vendedor repassando pro Financeiro).
-- **Processamento Dinâmico de Instâncias:** O webhook utiliza os dados que vêm da Evolution para resolver o `company_id` de forma dinâmica (procurando na tabela `company_instances`), garantindo que a mensagem da franquia A não caia no banco de dados da franquia B.
+## 6. INTEGRAÇÕES EXTERNAS
+
+### Evolution API (WhatsApp)
+* **Envio:** O frontend dispara requisições para a API local Express em rotas como `/api/whatsapp/send`. O backend localiza as credenciais seguras da instância (Base URL, API Key) na tabela `company_instances` e faz o disparo do JSON para a Evolution API.
+* **Recebimento via Webhook:** A Evolution API monitora o celular e envia webhooks (`POST /api/webhooks/whatsapp`) para o backend da aplicação. O Express resolve qual empresa é dona da mensagem processando o `instance_name` recebido e salvando nas tabelas `whatsapp_conversations` e `whatsapp_messages`.
+
+### Supabase Storage
+O armazenamento de arquivos é dividido nos seguintes Buckets de acesso:
+1. **`whatsapp-media`:** Guarda permanentemente imagens, áudios e documentos trocados pelo painel do WhatsApp.
+2. **`propostas`:** Armazena os PDFs de propostas gerados pela equipe comercial.
+3. **`uploads`:** Guarda documentos gerais e fotos rápidas de vistoria cadastrados via CRM Kanban.
+4. **`obras-fotos`:** Fotos de checklists de obras enviadas pelos instaladores.
+5. **`homologacao-docs`:** Documentações burocráticas submetidas às distribuidoras de energia.
+
+### Firebase (Push Notifications)
+* **Serviço FCM:** O Firebase Admin SDK no Express é inicializado com chaves privadas de ambiente. Quando um status de projeto ou mensagem do WhatsApp precisa alertar um usuário mobile, o backend busca o `push_token` do usuário na tabela `users` e envia o payload.
+
+### Vercel (Deploy e Serverless)
+* **Backend Serverless:** O arquivo `/api/index.ts` roda em ambiente Vercel. Todas as rotas de API `/api/*` são reescritas para apontar para a serverless function monolítica.
+* **Cronjobs:** Conforme definido em `vercel.json`, a Vercel aciona diariamente as rotas `/api/cleanup-proposals` (03:00) e `/api/cron/agenda-reminders` (07:00) para processamentos agendados em background.
+
+### Railway (Evolution API)
+* A hospedagem das instâncias da Evolution API e da conexão com o WhatsApp do cliente final reside em um servidor Railway, provendo uma API contínua com IP estável para não derrubar o escaneamento do QR Code.
 
 ---
 
-## 8. Autenticação e Segurança
-- **Sistema de Sessão:** JWT (JSON Web Tokens). O token é gerado no login e salvo tanto em `HttpOnly Cookie` quanto via `Authorization Header` (importante para contornar limitações do Capacitor Mobile).
-- **Middleware Express:** A função `authenticateToken` barra o acesso a rotas `/api/*` e garante que todo request injete o `req.user.company_id` nas consultas do banco de dados (isolamento multi-tenant).
-- **Supabase RLS:** Utiliza-se a *Service Role Key* (Server-side) em algumas lógicas de webhook e upload de mídia para contornar restrições RLS em processamentos assíncronos que não possuem o contexto do JWT do usuário, injetando segurança direto via backend.
+## 7. AUTENTICAÇÃO E SEGURANÇA
+
+* **Fluxo de Login e JWT:**
+  1. O usuário submete e-mail e senha na tela de Login.
+  2. O backend faz o hash e compara usando `bcrypt.compareSync()`. Caso o e-mail seja `ceo@mtsolar.com` e a senha `admin123`, há um fallback administrador configurado para facilitar a recuperação.
+  3. Com a senha correta, é assinado um Token JWT contendo: `id`, `name`, `role` e `company_id`.
+  4. O token é salvo simultaneamente em um cookie HTTPOnly seguro (web) e retornado na resposta JSON para ser gravado em `localStorage` (mobile/Capacitor).
+* **Role-Based Access Control (Roles de Usuário):**
+  * **`CEO` / `ADMIN`:** Visão global de todas as conversas, clientes, estoque e relatórios de faturamento de toda a empresa.
+  * **`COMMERCIAL`:** Focado no CRM Kanban de vendas e no WhatsApp. Possui visão limitada apenas aos leads e conversas dos quais é o responsável técnico ou que aguardam atendimento.
+  * **`TECHNICAL`:** Acesso a vistorias, checklists de instalação, agendamento de obras e controle de estoque de ferramentas/cabos.
+* **Middleware de Autenticação (`authenticateToken`):**
+  * Toda rota protegida do Express passa por este middleware. Ele lê o token do header `Authorization: Bearer <token>` ou do Cookie, verifica a assinatura contra `JWT_SECRET` e injeta `req.user` contendo as informações e o `company_id` da empresa na requisição.
 
 ---
 
-## 9. Build, Deploy e Configuração
-- **Web (Vercel):** O Frontend compila com `vite build`. O Backend (`api/index.ts`) não sobe como um servidor Node tradicional (`app.listen`); o `vercel.json` o expõe via **Serverless Functions** (rewrites de `/api/(.*)` para `api/index.ts`). Isso requer configuração rigorosa para limites de payload e timeouts.
-- **Mobile (Capacitor):** É compilado apontando as requisições API e o bundle estático para dentro das WebViews do iOS/Android através do comando `npx cap sync`.
-- **Variáveis de Ambiente `.env`:**
-  - Banco: `VITE_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
-  - JWT: `JWT_SECRET`
-  - Firebase: `FIREBASE_PROJECT_ID`, `FIREBASE_PRIVATE_KEY`
-  - WhatsApp: `VITE_EVOLUTION_URL`, `VITE_EVOLUTION_KEY`, `VITE_EVOLUTION_INSTANCE_ATENDIMENTO`, etc.
+## 8. REGRAS DE NEGÓCIO
+
+* **Isolamento de Visualização por Role (WhatsApp):**
+  * Vendedores (`COMMERCIAL`) visualizam e respondem chats apenas sob as seguintes regras:
+    1. A conversa não tem dono (`assigned_to IS NULL`) e está na fila (`status = 'waiting'`).
+    2. A conversa está explicitamente atribuída a ele (`assigned_to = user_id`).
+  * Administradores e CEOs acessam todas as conversas sem barreiras.
+* **Assunção e Transferência de Tickets:**
+  * **Assumir:** Quando um atendente clica em uma conversa na fila, o sistema atualiza `assigned_to` para o seu ID de usuário e o status para `open`.
+  * **Transferir:** Um atendente comercial pode transferir a conversa para outro colaborador ou departamento. O sistema apaga o `assigned_to` anterior, atribui ao novo colaborador e registra uma mensagem do sistema indicando o direcionamento.
+* **Funil de Vendas Kanban:**
+  * Os projetos transitam de forma linear pelas colunas de estágio. Cada estágio exige preenchimento ou upload de dados diferentes (ex: o fechamento comercial exige upload de contrato; a fase técnica exige vistoria cadastrada).
 
 ---
 
-## 10. Problemas, Limitações e Pendências (Debt Técnico)
-1. **Monolito de Rotas:** O arquivo `api/index.ts` possui mais de 2.600 linhas, concentrando TODAS as lógicas de todas as integrações. Isso dificulta testes unitários, versionamento por múltiplos desenvolvedores e aumenta o *Cold Start* das Serverless Functions.
-2. **Gerenciamento de Tipagem Local:** Uso extenso de `any` ou `// @ts-ignore` observável em rotas Express e objetos do React, o que reduz a segurança natural do TypeScript.
-3. **Resíduos de Código:** Presença de arquivos `.bak` (ex: `Technical.tsx.bak`), sugerindo falhas de versionamento de backup via Git.
-4. **Sobrecarga de Mídia via Webhook:** Arquivos e vídeos grandes passando pelo Express correm o risco de estourar o limite de 50mb do Express ou dar Time-Out (15s da Vercel function) no momento em que ele trafega a base64 da Evolution e converte para Buffer antes de enviar pro Supabase.
-5. **Realtime "Racy":** Dependência no frontend do WebSocket (`postgres_changes`) do Supabase misturado com `setInterval` de fallback para lidar com mídias do WhatsApp.
+## 9. FLUXO DO WHATSAPP
+
+O fluxo de processamento de mídias foi otimizado para evitar expiração rápida de links e garantir o histórico permanente.
+
+### Envio de Mensagens
+
+#### Envio de Texto
+* O front-end envia para `/api/whatsapp/send`. A Evolution despacha e o Express grava a mensagem no banco.
+
+#### Envio de Imagens/Documentos
+* O front-end faz o upload do arquivo para o bucket temporário `/api/whatsapp/upload-media`, que retorna uma URL assinada temporária (válida por 600 segundos) e o caminho do arquivo (`filePath`).
+* O front-end chama `/api/whatsapp/send-media` passando essa URL assinada como origem para a Evolution API realizar o download e envio.
+* Após a confirmação da Evolution API, o Express gera a URL pública e definitiva via `supabaseAdmin.storage.from(...).getPublicUrl(filePath)` e insere o registro com `media_url: publicUrl` e `from_me: true`.
+
+#### Envio de Áudio
+* O front-end grava o áudio e envia uma string em formato `base64` no corpo da requisição para `/api/whatsapp/send-audio`.
+* O backend Express repassa o áudio em `base64` para a Evolution API.
+* Após sucesso no disparo, o Express converte o `base64` em um `Buffer` físico e realiza o upload para o Supabase Storage sob o caminho `company_id/conversationId/audio-[timestamp].ogg`.
+* O backend obtém a URL pública estática gerada pelo storage e insere no banco a nova mensagem contendo `media_url: audioPublicUrl`, `media_type: 'audio'`, `file_name: 'audio.ogg'` e `from_me: true`.
+
+### Recebimento (Webhook)
+* Quando uma mensagem de mídia externa (imagem, áudio ou documento) chega pelo Webhook da Evolution API:
+  1. O Express intercepta a mensagem no webhook de recebimento (`/api/webhooks/whatsapp`).
+  2. Caso a mensagem contenha mídia, o webhook faz uma chamada reversa à Evolution API (`/chat/getBase64FromMediaMessage`) para ler o binário em formato `base64`.
+  3. O backend converte o `base64` para binário (`Buffer`) e realiza o upload permanente no Supabase Storage no bucket `whatsapp-media`.
+  4. O link público estático e definitivo gerado pelo Supabase é salvo na coluna `media_url` da mensagem gravada no banco com `from_me: false`.
 
 ---
 
-## 11. Melhorias Sugeridas
+## 10. BUILD E DEPLOY
+
+### Processo de Build do Frontend
+* O build é executado via script do Vite: `npm run build` ou `vite build`. O compilador lê as configurações do arquivo `vite.config.ts` e gera os arquivos estáticos indexados na pasta `/dist`.
+
+### Deploy na Vercel
+* O deploy é estruturado com base nas regras do arquivo `vercel.json`:
+  * As requisições direcionadas para `/api/*` são interceptadas e encaminhadas para a serverless function Express (`/api/index.ts`).
+  * Qualquer outra rota de página `/.*` é redirecionada para a página estática raiz `/index.html` para deixar a navegação de rotas internas a cargo do React Router DOM (SPA).
+
+### Mobile com Capacitor
+* **Sincronização:** Após o build de produção (`npm run build`), o comando `npx cap sync` atualiza as plataformas móveis (`android` e `ios`) copiando a pasta `/dist` e os plugins necessários.
+* **Build de Desenvolvimento:** O comando `npm run build:mobile` usa chaves e arquivos `.env.mobile` específicos para gerar o build e sincronizar imediatamente no simulador ou celular conectado.
+
+---
+
+## 11. PROBLEMAS RESOLVIDOS
+
+* **URLs de Mídia Nulas para Mensagens Enviadas (`from_me = true`):**
+  * *Causa Raiz:* No envio de mídias e áudios, a URL temporária ou arquivo `base64` era enviado para a Evolution API, mas no `INSERT` da tabela `whatsapp_messages` a coluna `media_url` era mantida nula. Além disso, o arquivo temporário da mídia no bucket `whatsapp-media` era deletado imediatamente após o envio bem-sucedido para economizar espaço de storage.
+  * *Solução Aplicada:* Ajustadas as rotas `/api/whatsapp/send-media` e `/api/whatsapp/send-audio` no backend Express. Agora, antes de inserir a mensagem, o backend gera uma URL pública definitiva pelo storage com `supabaseAdmin.storage.from(...).getPublicUrl(filePath)`, preenche a propriedade `media_url` na query de `INSERT` e mantém o arquivo gravado no bucket de forma permanente.
+* **404 na Evolution API:**
+  * *Causa Raiz:* Inconsistências na URL final enviada à Evolution API por falta de validação rigorosa dos nomes das instâncias ativas (que vinham com espaços e letras maiúsculas).
+  * *Solução:* Implementado tratamento estrito de nomes de instâncias via Express antes de repassar a requisição (conversão para lowercase e substituição de espaços por hífens).
+* **Erro 400 no Supabase Storage via RLS:**
+  * *Causa Raiz:* O envio de arquivos pelo front-end falhava intermitentemente por falta de permissão de escrita de usuários não autenticados no bucket.
+  * *Solução:* Substituído o cliente anônimo por `supabaseAdmin` utilizando a chave privada master `SUPABASE_SERVICE_ROLE_KEY` exclusivamente no backend Express para realizar o upload das mídias.
+
+---
+
+## 12. DÉBITOS TÉCNICOS
+
+* **Monolito no Arquivo `api/index.ts`:**
+  * *Risco:* O arquivo concentra mais de 2.600 linhas de código unificando autenticação, rotas de projetos comercial, técnico, logs, estoque, WhatsApp, webhooks de recebimento, crons e inteligência artificial. Isso eleva a chance de bugs de concorrência de variáveis globais e dificulta manutenções.
+* **Payloads e Timeouts na Vercel:**
+  * *Risco:* Funções Serverless gratuitas ou standard na Vercel possuem limites de execução de 10s a 15s. O processamento de downloads de vídeos pesados vindos da Evolution API e subsequente upload no Supabase pode facilmente dar timeout.
+* **Uso Extensivo de Tipagem `any`:**
+  * *Risco:* Várias funções e manipulações de respostas do Express e do React no frontend estão anotadas com `any` ou utilizando diretivas de escape do compilador (`// @ts-ignore`), o que reduz consideravelmente os benefícios da checagem estática de tipos do TypeScript.
+* **Arquivos Sobressalentes / Legado:**
+  * *Risco:* Presença de arquivos de backup na pasta do código-fonte (ex: `src/pages/Technical.tsx.bak`) que poluem a árvore de arquivos e podem confundir desenvolvedores.
+
+---
+
+## 13. BACKLOG E MELHORIAS SUGERIDAS
 
 ### Técnicas
-- **Refatoração do Backend:** Migrar a arquitetura monolítica do Express para rotas controladas (Ex: `routes/whatsapp.ts`, `routes/auth.ts`, `controllers/`) para desacoplar a regra de negócio do roteamento.
-- **Transações ACID:** Muitas operações do frontend (como a transferência de instâncias do WhatsApp) disparam várias chamadas ao DB sucessivas (`supabase.from().update...`). Mover essas ações para uma **RPC (Stored Procedure)** no Postgres garante que, se uma etapa falhar, há *rollback* completo, evitando dados inconsistentes.
-- **Filas (Queues) para Webhooks:** Substituir o processamento síncrono dos Webhooks por uma fila (Redis / BullMQ ou Serverless Background Jobs). O webhook apenas receberia a requisição, salvaria na fila e retornaria `200 OK` imediatamente. Outro worker cuidaria do download do base64 e upload pro Supabase, evitando timeouts e repetições errôneas da Evolution API.
+1. **Desacoplamento e Organização do Backend:** Dividir o arquivo `/api/index.ts` em uma estrutura modularizada de rotas (ex: `api/routes/auth.ts`, `api/routes/whatsapp.ts`, `api/routes/projects.ts`) e controladores.
+2. **Utilização de Fila de Background Jobs:** Adotar serviços de fila (como BullMQ, Redis, ou tarefas em background integradas) para o processamento de mídias de webhooks recebidos do WhatsApp. O Webhook deve retornar `200 OK` imediatamente e agendar o processamento pesado de mídia em background para evitar timeouts.
+3. **Mecanismo de Limpeza Periódica de Storage (Data Retention):** Mídias permanentes de chat consomem gigabytes rapidamente. É recomendado criar um Cronjob mensal para deletar arquivos e URLs de mensagens com mais de 120 dias no bucket `whatsapp-media`.
 
 ### Produto
-- **Limpeza Periódica de Arquivos:** As mídias de WhatsApp persistidas no Supabase consumirão rapidamente o limite gratuito ou contratado da nuvem. Criar um CronJob para apagar imagens "irrelevantes" ou "velhas" (após 90 dias) da tabela `whatsapp_messages` e do bucket.
-- **Melhorias de Visualização:** Implementar miniaturas (Thumbnails) para vídeos e visualização de PDFs nativa diretamente no feed do WhatsApp (`WhatsApp.tsx`), evitando a obrigatoriedade de download.
+1. **Visualização Nativa de Arquivos:** Modificar o visualizador no chat (`WhatsApp.tsx`) para permitir visualizar PDFs de contratos e orçamentos dentro da própria conversa em formato iframe/modal sem exigir o download físico prévio.
+2. **Histórico Local de Mensagens:** Desenvolver um botão na interface do chat para sincronizar e importar as últimas 50 mensagens anteriores guardadas diretamente no celular da Evolution API para o banco do sistema.
+
+---
+
+## 14. VARIÁVEIS DE AMBIENTE
+
+Abaixo estão listadas todas as variáveis cruciais exigidas para o funcionamento local e de produção:
+
+### Frontend (Devem possuir o prefixo `VITE_` para exposição ao Vite/Cliente)
+* **`VITE_SUPABASE_URL`:** URL base da API do projeto Supabase. Usado para conectar o cliente SDK do banco.
+* **`VITE_SUPABASE_ANON_KEY`:** Chave pública de acesso do Supabase. Segura para exposição pública.
+* **`VITE_EVOLUTION_URL`:** Endereço público do servidor da Evolution API v2 (Railway).
+* **`VITE_EVOLUTION_KEY`:** Chave global de acesso de administrador da Evolution API.
+* **`VITE_EVOLUTION_INSTANCE_ADMIN`:** Nome padrão da instância administrativa (`mtsolar`).
+* **`VITE_EVOLUTION_INSTANCE_ATENDIMENTO`:** Nome padrão da instância comercial (`atendimento-cliente`).
+* **`VITE_EVOLUTION_TOKEN_ATENDIMENTO`:** Token de acesso específico da instância de atendimento ao cliente.
+
+### Backend (Seguras e restritas apenas ao Servidor Express na Vercel)
+* **`SUPABASE_SERVICE_ROLE_KEY`:** Chave de administração master do Supabase. Ignora todas as regras de segurança RLS (Row Level Security). **NUNCA DEVE SER EXPOSTA NO FRONTEND.**
+* **`JWT_SECRET`:** Chave secreta de encriptação usada para assinar e validar a autenticidade dos tokens de sessão de usuários.
+* **`FIREBASE_PROJECT_ID`:** ID de identificação do projeto configurado no console do Google Firebase.
+* **`FIREBASE_PRIVATE_KEY`:** Chave privada criptográfica em string do Firebase Admin para autenticação de push.
+* **`FIREBASE_CLIENT_EMAIL`:** E-mail de serviço configurado para comunicação com a API FCM do Firebase.
+
+---
+
+> [!WARNING]
+> A chave `SUPABASE_SERVICE_ROLE_KEY` concede controle total sobre todas as linhas de todas as tabelas do banco de dados e arquivos do Storage. Não insira ou exponha esta chave em qualquer script que seja compilado dentro do bundle do frontend (pasta `/src`).
+
+> [!IMPORTANT]
+> A Evolution API depende que os webhooks estejam ativados no painel correspondente direcionando para `https://gest-o-mt-solar.vercel.app/api/webhooks/whatsapp`. Caso o endpoint do webhook seja alterado ou o deploy Vercel seja recriado com uma nova URL, os webhooks devem ser reconfigurados imediatamente no painel da Evolution.
