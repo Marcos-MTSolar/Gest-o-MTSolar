@@ -1344,6 +1344,11 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
 
     // Salvar no banco
     if (conversationId) {
+      const { data: publicUrlData } = supabaseAdmin.storage
+        .from('whatsapp-media')
+        .getPublicUrl(filePath);
+      const publicUrl = publicUrlData.publicUrl;
+
       await supabase.from('whatsapp_messages').insert({
         conversation_id: conversationId,
         phone: phone,
@@ -1353,6 +1358,7 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
         timestamp: new Date().toISOString(),
         status: 'sent',
         media_type: mediatype,
+        media_url: publicUrl,
         file_name: filename,
         instance: creds.instanceName,
         company_id: req.user.company_id
@@ -1367,20 +1373,6 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
     }
 
     res.json(result);
-
-    // Limpeza automática do storage após envio
-    if (filePath) {
-      try {
-        const { error: deleteError } = await supabase.storage.from('whatsapp-media').remove([filePath]);
-        if (deleteError) {
-          console.warn(`[WA SEND] Aviso: Falha ao deletar arquivo temporário ${filePath}:`, deleteError.message);
-        } else {
-          console.log(`[WA SEND] Arquivo temporário removido do Storage: ${filePath}`);
-        }
-      } catch (e) {
-        console.warn(`[WA SEND] Erro inesperado ao limpar storage:`, e);
-      }
-    }
   } catch (err: any) {
     console.error("[WA SEND ERROR] Error sending media:", err);
     res.status(400).json({ error: err.message });
