@@ -62,7 +62,7 @@ interface Conversation {
   assigned_at: string | null;
   token?: string;
   instance?: string;
-  tag?: string | null;
+  tags?: string[] | null; // coluna TEXT[] no Supabase
 }
 
 const WHATSAPP_TAGS = [
@@ -540,12 +540,16 @@ export default function WhatsApp() {
     }
   };
 
-  const updateTag = async (tag: string | null) => {
+  // Adiciona ou remove uma tag do array da conversa selecionada
+  const updateTag = async (tagId: string) => {
     if (!selectedConversation) return;
+    const currentTags: string[] = selectedConversation.tags ?? [];
+    const newTags = currentTags.includes(tagId)
+      ? currentTags.filter(t => t !== tagId) // remove se já existir
+      : [...currentTags, tagId];             // adiciona se não existir
     try {
-      await api.put(`/api/conversations/${selectedConversation.id}/tag`, { tag });
-      setSelectedConversation({ ...selectedConversation, tag });
-      setShowTagDropdown(false);
+      await api.put(`/api/conversations/${selectedConversation.id}/tag`, { tags: newTags });
+      setSelectedConversation({ ...selectedConversation, tags: newTags });
       fetchConversations();
     } catch (err) {
       console.error('Erro ao atualizar etiqueta:', err);
@@ -604,7 +608,7 @@ export default function WhatsApp() {
   const allFiltered = conversations.filter(conv => {
     const matchesSearch = (conv.contact_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            conv.phone.includes(searchQuery));
-    const matchesTag = !activeTag || conv.tag === activeTag;
+    const matchesTag = !activeTag || (conv.tags ?? []).includes(activeTag);
     return matchesSearch && matchesTag;
   });
 
@@ -627,7 +631,8 @@ export default function WhatsApp() {
   const renderConversationItem = (conv: Conversation) => {
     const isAssignedToOther = conv.status === 'in_progress' && Number(conv.assigned_to) !== Number(user?.id);
     const isBlocked = isAssignedToOther && !isAdmin;
-    const currentTag = WHATSAPP_TAGS.find(t => t.id === conv.tag);
+    // Resolve os objetos visuais para todas as tags da conversa
+    const convTags = (conv.tags ?? []).map(tid => WHATSAPP_TAGS.find(t => t.id === tid)).filter(Boolean);
 
     return (
       <div
@@ -663,14 +668,16 @@ export default function WhatsApp() {
                   Administrativo
                 </span>
               )}
-              {currentTag && (
-                <span 
+              {/* Renderiza TODAS as tags da conversa */}
+              {convTags.map(tag => tag && (
+                <span
+                  key={tag.id}
                   className="text-[9px] font-bold text-white px-1.5 py-0.5 rounded w-fit uppercase tracking-tighter"
-                  style={{ backgroundColor: currentTag.color }}
+                  style={{ backgroundColor: tag.color }}
                 >
-                  {currentTag.label}
+                  {tag.label}
                 </span>
-              )}
+              ))}
             </div>
           </div>
           <span className="text-[10px] text-gray-400">
@@ -877,12 +884,51 @@ export default function WhatsApp() {
                   >
                     <Repeat size={12} /> Transferir
                   </button>
-                  <button 
-                    onClick={() => setShowTagDropdown(!showTagDropdown)}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition-all"
-                  >
-                    Etiqueta
-                  </button>
+                  {/* Dropdown de etiquetas — checkboxes para múltipla seleção */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowTagDropdown(!showTagDropdown)}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition-all"
+                    >
+                      Etiquetas {(selectedConversation.tags ?? []).length > 0 && (
+                        <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]">
+                          {(selectedConversation.tags ?? []).length}
+                        </span>
+                      )}
+                    </button>
+                    {showTagDropdown && (
+                      <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
+                        <div className="p-2 border-b border-gray-100 flex justify-between items-center">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Etiquetas</span>
+                          <button onClick={() => setShowTagDropdown(false)} className="text-gray-400 hover:text-gray-600">
+                            <X size={14} />
+                          </button>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto p-1">
+                          {WHATSAPP_TAGS.map(tag => {
+                            const isSelected = (selectedConversation.tags ?? []).includes(tag.id);
+                            return (
+                              <button
+                                key={tag.id}
+                                onClick={() => updateTag(tag.id)}
+                                className={cn(
+                                  "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left",
+                                  isSelected ? "bg-gray-100" : "hover:bg-gray-50"
+                                )}
+                              >
+                                <span
+                                  className="w-3 h-3 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: tag.color }}
+                                />
+                                <span className="flex-1 text-gray-700">{tag.label}</span>
+                                {isSelected && <Check size={12} className="text-blue-600" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <button className="p-2 text-gray-400 hover:text-blue-600">
                     <MoreVertical size={20} />
                   </button>
@@ -915,11 +961,19 @@ export default function WhatsApp() {
                   </button>
                 ) : null}
                 
-                {selectedConversation.tag && (
-                  <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-[9px] font-bold uppercase whitespace-nowrap">
-                    {selectedConversation.tag}
-                  </span>
-                )}
+                {/* Exibe todas as tags no header mobile */}
+                {(selectedConversation.tags ?? []).map(tid => {
+                  const tagObj = WHATSAPP_TAGS.find(t => t.id === tid);
+                  return tagObj ? (
+                    <span
+                      key={tagObj.id}
+                      className="px-2 py-1 text-white rounded text-[9px] font-bold uppercase whitespace-nowrap"
+                      style={{ backgroundColor: tagObj.color }}
+                    >
+                      {tagObj.label}
+                    </span>
+                  ) : null;
+                })}
               </div>
             </div>
 

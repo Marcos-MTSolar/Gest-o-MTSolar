@@ -993,13 +993,13 @@ app.get('/api/conversations', authenticateToken, async (req: any, res) => {
 
 // WhatsApp - Update Tag
 app.put('/api/conversations/:id/tag', authenticateToken, async (req: any, res) => {
-  const { id } = req.params;
-  const { tag } = req.body;
+  const conversationId = req.params.id;
+  const { tags } = req.body;
 
   const { error } = await supabase
     .from('whatsapp_conversations')
-    .update({ tag: tag ?? null })
-    .eq('id', id)
+    .update({ tags: tags ?? [] })
+    .eq('id', conversationId)
     .eq('company_id', req.user.company_id);
 
   if (error) return res.status(500).json({ error: error.message });
