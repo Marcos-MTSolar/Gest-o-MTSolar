@@ -991,6 +991,45 @@ app.get('/api/conversations', authenticateToken, async (req: any, res) => {
   res.json(data || []);
 });
 
+// WhatsApp - Buscar mensagens de uma conversa (com validação de bloqueio)
+app.get('/api/conversations/:id/messages', authenticateToken, async (req: any, res) => {
+  const conversationId = req.params.id;
+
+  // Buscar a conversa para verificar status e responsável
+  const { data: conv, error: convError } = await supabase
+    .from('whatsapp_conversations')
+    .select('id, status, assigned_to, assigned_name, company_id')
+    .eq('id', conversationId)
+    .eq('company_id', req.user.company_id)
+    .single();
+
+  if (convError || !conv) return res.status(404).json({ error: 'Conversa não encontrada' });
+
+  // Validação de bloqueio: conversa em atendimento por outro agente
+  if (
+    conv.status === 'in_progress' &&
+    conv.assigned_to !== null &&
+    Number(conv.assigned_to) !== Number(req.user.id) &&
+    req.user.role !== 'CEO'
+  ) {
+    return res.status(403).json({
+      error: 'CONVERSATION_LOCKED',
+      assignedTo: conv.assigned_name || 'Outro agente'
+    });
+  }
+
+  // Buscar mensagens
+  const { data: messages, error: msgError } = await supabase
+    .from('whatsapp_messages')
+    .select('*')
+    .eq('conversation_id', conversationId)
+    .order('timestamp', { ascending: true })
+    .limit(500);
+
+  if (msgError) return res.status(500).json({ error: msgError.message });
+  res.json(messages || []);
+});
+
 // WhatsApp - Update Tag
 app.put('/api/conversations/:id/tag', authenticateToken, async (req: any, res) => {
   const conversationId = req.params.id;
@@ -1194,6 +1233,26 @@ function resolveMediaType(mimetype: string, filename: string): string {
   return 'document'; // fallback seguro
 }
 
+// Helper: Validar se a conversa está bloqueada para o usuário
+async function checkConversationLock(conversationId: string, userId: number, userRole: string, companyId: string): Promise<{ locked: boolean; assignedTo?: string }> {
+  if (!conversationId) return { locked: false };
+  const { data: conv } = await supabase
+    .from('whatsapp_conversations')
+    .select('status, assigned_to, assigned_name')
+    .eq('id', conversationId)
+    .eq('company_id', companyId)
+    .single();
+  if (
+    conv?.status === 'in_progress' &&
+    conv?.assigned_to !== null &&
+    Number(conv?.assigned_to) !== Number(userId) &&
+    userRole !== 'CEO'
+  ) {
+    return { locked: true, assignedTo: conv?.assigned_name || 'Outro agente' };
+  }
+  return { locked: false };
+}
+
 // WhatsApp - Send Audio
 app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) => {
   const { phone, audio, conversationId } = req.body;
@@ -1204,6 +1263,14 @@ app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) =>
     if (conversationId) {
       const { data: conv } = await supabase.from('whatsapp_conversations').select('instance').eq('id', conversationId).eq('company_id', req.user.company_id).single();
       if (conv) instance = conv.instance;
+    }
+
+    // Validação de bloqueio de conversa
+    if (conversationId) {
+      const lockCheck = await checkConversationLock(conversationId, req.user.id, req.user.role, req.user.company_id);
+      if (lockCheck.locked) {
+        return res.status(403).json({ error: 'CONVERSATION_LOCKED', assignedTo: lockCheck.assignedTo });
+      }
     }
 
     const creds = await getEvolutionApiCredentials(req.user.company_id, instance);
@@ -1327,6 +1394,14 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
       if (conv) instance = conv.instance;
     }
 
+    // Validação de bloqueio de conversa
+    if (conversationId) {
+      const lockCheck = await checkConversationLock(conversationId, req.user.id, req.user.role, req.user.company_id);
+      if (lockCheck.locked) {
+        return res.status(403).json({ error: 'CONVERSATION_LOCKED', assignedTo: lockCheck.assignedTo });
+      }
+    }
+
     const creds = await getEvolutionApiCredentials(req.user.company_id, instance);
     console.log('[WA DEBUG EVOLUTION] URL:', `${creds.baseUrl}/message/sendMedia/${creds.instanceName}`);
     console.log('[WA DEBUG EVOLUTION] apikey (primeiros 8 chars):', creds.apiKey?.substring(0, 8));
@@ -1409,6 +1484,14 @@ app.post('/api/whatsapp/send', authenticateToken, async (req: any, res) => {
     if (conversationId) {
       const { data: conv } = await supabase.from('whatsapp_conversations').select('instance').eq('id', conversationId).eq('company_id', req.user.company_id).single();
       if (conv) instance = conv.instance;
+    }
+
+    // Validação de bloqueio de conversa
+    if (conversationId) {
+      const lockCheck = await checkConversationLock(conversationId, req.user.id, req.user.role, req.user.company_id);
+      if (lockCheck.locked) {
+        return res.status(403).json({ error: 'CONVERSATION_LOCKED', assignedTo: lockCheck.assignedTo });
+      }
     }
 
     const creds = await getEvolutionApiCredentials(req.user.company_id, instance);
@@ -2598,6 +2681,114 @@ app.get('/api/cleanup-proposals', async (req, res) => {
   }
 });
 
+
+// Cron: Mensagem de Início de Expediente (08:30 BRT)
+app.post('/api/cron/mensagem-inicio-expediente', async (req, res) => {
+  try {
+    const { data: conversations } = await supabase
+      .from('whatsapp_conversations')
+      .select('phone, instance, company_id')
+      .eq('status', 'in_progress');
+
+    if (!conversations || conversations.length === 0) {
+      return res.json({ success: true, sent: 0 });
+    }
+
+    let totalSent = 0;
+    for (const conv of conversations) {
+      try {
+        const creds = await getEvolutionApiCredentials(conv.company_id, conv.instance);
+        await fetch(`${creds.baseUrl}/message/sendText/${creds.instanceName}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': creds.apiKey },
+          body: JSON.stringify({
+            number: conv.phone,
+            text: 'Bom dia! 🌅 Nosso atendimento está iniciando agora. Estamos disponíveis das 08:30 às 17:00. Em que podemos te ajudar?'
+          })
+        });
+        totalSent++;
+      } catch (e) {
+        console.error('[CRON INICIO-EXPEDIENTE] Erro ao enviar para', conv.phone, ':', e);
+      }
+    }
+
+    res.json({ success: true, sent: totalSent });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Cron: Mensagem de Almoço (12:00 BRT)
+app.post('/api/cron/mensagem-almoco', async (req, res) => {
+  try {
+    const { data: conversations } = await supabase
+      .from('whatsapp_conversations')
+      .select('phone, instance, company_id')
+      .eq('status', 'in_progress');
+
+    if (!conversations || conversations.length === 0) {
+      return res.json({ success: true, sent: 0 });
+    }
+
+    let totalSent = 0;
+    for (const conv of conversations) {
+      try {
+        const creds = await getEvolutionApiCredentials(conv.company_id, conv.instance);
+        await fetch(`${creds.baseUrl}/message/sendText/${creds.instanceName}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': creds.apiKey },
+          body: JSON.stringify({
+            number: conv.phone,
+            text: 'Olá! 🍽️ Nosso atendimento entrará em pausa para o horário de almoço das 12:00 às 13:00. Retornaremos em breve. Obrigado pela compreensão!'
+          })
+        });
+        totalSent++;
+      } catch (e) {
+        console.error('[CRON ALMOCO] Erro ao enviar para', conv.phone, ':', e);
+      }
+    }
+
+    res.json({ success: true, sent: totalSent });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Cron: Mensagem de Fim de Expediente (17:00 BRT)
+app.post('/api/cron/mensagem-fim-expediente', async (req, res) => {
+  try {
+    const { data: conversations } = await supabase
+      .from('whatsapp_conversations')
+      .select('phone, instance, company_id')
+      .eq('status', 'in_progress');
+
+    if (!conversations || conversations.length === 0) {
+      return res.json({ success: true, sent: 0 });
+    }
+
+    let totalSent = 0;
+    for (const conv of conversations) {
+      try {
+        const creds = await getEvolutionApiCredentials(conv.company_id, conv.instance);
+        await fetch(`${creds.baseUrl}/message/sendText/${creds.instanceName}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': creds.apiKey },
+          body: JSON.stringify({
+            number: conv.phone,
+            text: 'Olá! 🌇 Nosso atendimento está sendo encerrado por hoje. Retornaremos amanhã às 08:30. Qualquer mensagem enviada será respondida no próximo dia útil. Até logo!'
+          })
+        });
+        totalSent++;
+      } catch (e) {
+        console.error('[CRON FIM-EXPEDIENTE] Erro ao enviar para', conv.phone, ':', e);
+      }
+    }
+
+    res.json({ success: true, sent: totalSent });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Catch-all for API routes to prevent falling through to SPA HTML
 app.all('/api/*', (req, res) => {

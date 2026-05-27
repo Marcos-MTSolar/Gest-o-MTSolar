@@ -118,6 +118,8 @@ O sistema é dividido em fluxos de negócios integrados que cobrem todas as fase
    * Formulário passo-a-passo no qual o vendedor informa os dados de consumo do cliente, seleciona o kit (painéis, inversores, estruturas), configura financiamentos e gera uma proposta comercial personalizada no formato de arquivo PDF (salva no storage do Supabase).
 6. **WhatsApp / Chat Center (`WhatsApp.tsx`):**
    * Painel de atendimento em tempo real. Exibe conversas em andamento agrupadas por status (Aguardando, Em Atendimento, Resolvidas). Permite envio de textos, áudios e mídias, bem como transferência de tickets entre vendedores e departamentos.
+   * **Bloqueio de Conversa em Atendimento:** Quando um agente está atendendo uma conversa (`status = 'in_progress'`), ela fica bloqueada para outros agentes. O frontend exibe uma barra amarela com cadeado indicando o nome do responsável em vez do campo de mensagem. CEOs têm acesso irrestrito. A validação ocorre tanto no backend (`GET /api/conversations/:id/messages`, `POST /api/whatsapp/send`, `send-media` e `send-audio`) quanto no frontend.
+   * **Mensagens Automáticas de Horário:** Três cronjobs enviam mensagens automáticas de início de expediente (08:30 BRT), pausa para almoço (12:00 BRT) e fim de expediente (17:00 BRT) para todas as conversas ativas (`in_progress`).
 7. **Ficha Técnica e Vistoria (`Technical.tsx`):**
    * Acesso aos dados físicos do local do cliente (tipo de telhado, orientação, padrão de entrada, disjuntores). Permite o envio de fotos comprobatórias obrigatórias do local da instalação.
 8. **Gestão de Obras (`Obra.tsx` e `ObraSchedule.tsx`):**
@@ -299,7 +301,12 @@ O armazenamento de arquivos é dividido nos seguintes Buckets de acesso:
 
 ### Vercel (Deploy e Serverless)
 * **Backend Serverless:** O arquivo `/api/index.ts` roda em ambiente Vercel. Todas as rotas de API `/api/*` são reescritas para apontar para a serverless function monolítica.
-* **Cronjobs:** Conforme definido em `vercel.json`, a Vercel aciona diariamente as rotas `/api/cleanup-proposals` (03:00) e `/api/cron/agenda-reminders` (07:00) para processamentos agendados em background.
+* **Cronjobs:** Conforme definido em `vercel.json`, a Vercel aciona rotas agendadas em background:
+  * `GET /api/cleanup-proposals` — Diariamente às 03:00 UTC. Remove propostas expiradas.
+  * `GET /api/cron/agenda-reminders` — Diariamente às 07:00 UTC. Notifica usuários de compromissos próximos.
+  * `POST /api/cron/mensagem-inicio-expediente` — Segunda a sexta, 11:30 UTC (08:30 BRT). Envia mensagem de início de expediente para conversas em atendimento.
+  * `POST /api/cron/mensagem-almoco` — Segunda a sexta, 15:00 UTC (12:00 BRT). Envia mensagem de pausa para almoço.
+  * `POST /api/cron/mensagem-fim-expediente` — Segunda a sexta, 20:00 UTC (17:00 BRT). Envia mensagem de encerramento do atendimento.
 
 ### Railway (Evolution API)
 * A hospedagem das instâncias da Evolution API e da conexão com o WhatsApp do cliente final reside em um servidor Railway, provendo uma API contínua com IP estável para não derrubar o escaneamento do QR Code.
@@ -312,13 +319,41 @@ O armazenamento de arquivos é dividido nos seguintes Buckets de acesso:
   1. O usuário submete e-mail e senha na tela de Login.
   2. O backend faz o hash e compara usando `bcrypt.compareSync()`. Caso o e-mail seja `ceo@mtsolar.com` e a senha `admin123`, há um fallback administrador configurado para facilitar a recuperação.
   3. Com a senha correta, é assinado um Token JWT contendo: `id`, `name`, `role` e `company_id`.
-  4. O token é salvo simultaneamente em um cookie HTTPOnly seguro (web) e retornado na resposta JSON para ser gravado em `localStorage` (mobile/Capacitor).
-* **Role-Based Access Control (Roles de Usuário):**
-  * **`CEO` / `ADMIN`:** Visão global de todas as conversas, clientes, estoque e relatórios de faturamento de toda a empresa.
-  * **`COMMERCIAL`:** Focado no CRM Kanban de vendas e no WhatsApp. Possui visão limitada apenas aos leads e conversas dos quais é o responsável técnico ou que aguardam atendimento.
-  * **`TECHNICAL`:** Acesso a vistorias, checklists de instalação, agendamento de obras e controle de estoque de ferramentas/cabos.
+  4. O token é retornado na resposta JSON e gravado em `localStorage` via `login()` do `AuthContext`. O `AuthContext` também emite um cookie via backend simultaneamente.
+  5. Em toda inicialização do React, `AuthContext` chama `GET /api/auth/me` para validar a sessão. Em caso de falha, remove o token do `localStorage` automaticamente.
+* **Cliente HTTP (`src/lib/api.ts`):**
+  * Instância Axios com `timeout: 15000ms` e `withCredentials: true`.
+  * **`baseURL` dinâmica:** Se rodando em plataforma nativa Capacitor, aponta para `https://gest-o-mt-solar.vercel.app`. Em ambiente web, usa `window.location.origin` (funciona tanto em local quanto em produção sem reconfiguração).
+  * Interceptor automático que injeta o header `Authorization: Bearer <token>` lido do `localStorage` em todas as requisições.
+* **Role-Based Access Control (Roles de Usuário e Rotas Protegidas):**
+
+  | Rota | CEO | ADMIN | COMMERCIAL | TECHNICAL |
+  |---|:---:|:---:|:---:|:---:|
+  | `/` (Dashboard) | ✅ | ✅ | ✅ | ✅ |
+  | `/commercial` (CRM) | ✅ | ✅ | ✅ | ❌ |
+  | `/whatsapp` | ✅ | ✅ | ✅ | ❌ |
+  | `/proposal-generator` | ✅ | ✅ | ✅ | ❌ |
+  | `/agenda` | ✅ | ✅ | ✅ | ❌ |
+  | `/calculadora` | ✅ | ✅ | ✅ | ✅ |
+  | `/technical` | ✅ | ✅ | ❌ | ✅ |
+  | `/obra` | ✅ | ✅ | ❌ | ✅ |
+  | `/cronograma` | ✅ | ✅ | ✅ | ✅ |
+  | `/homologation` | ✅ | ✅ | ✅ | ❌ |
+  | `/estoque` | ✅ | ✅ | ❌ | ❌ |
+  | `/kit-purchase` | ✅ | ✅ | ❌ | ❌ |
+  | `/users` | ✅ | ✅ | ❌ | ❌ |
+  | `/settings` | ✅ | ✅ | ❌ | ❌ |
+  | `/contracts` | ✅ | ✅ | ❌ | ❌ |
+  | `/neoenergia` | ✅ | ✅ | ❌ | ❌ |
+  | `/finished` | ✅ | ✅ | ❌ | ❌ |
+  | `/messages` | ✅ | ✅ | ❌ | ✅ |
+  | `/documents` | ✅ | ✅ | ❌ | ❌ |
+
+  * **Regra especial COMMERCIAL:** Se o usuário tem `role = COMMERCIAL` e tenta acessar qualquer rota fora das permitidas, é redirecionado para `/` pelo `PrivateRoute` em `App.tsx`.
 * **Middleware de Autenticação (`authenticateToken`):**
   * Toda rota protegida do Express passa por este middleware. Ele lê o token do header `Authorization: Bearer <token>` ou do Cookie, verifica a assinatura contra `JWT_SECRET` e injeta `req.user` contendo as informações e o `company_id` da empresa na requisição.
+* **Firebase Admin (Push Notifications):**
+  * A inicialização do Firebase Admin é **condicional**: só ocorre se as três variáveis `FIREBASE_PROJECT_ID`, `FIREBASE_PRIVATE_KEY` e `FIREBASE_CLIENT_EMAIL` estiverem presentes no ambiente. Caso contrário, a API inicializa normalmente sem crash.
 
 ---
 
@@ -328,10 +363,16 @@ O armazenamento de arquivos é dividido nos seguintes Buckets de acesso:
   * Vendedores (`COMMERCIAL`) visualizam e respondem chats apenas sob as seguintes regras:
     1. A conversa não tem dono (`assigned_to IS NULL`) e está na fila (`status = 'waiting'`).
     2. A conversa está explicitamente atribuída a ele (`assigned_to = user_id`).
-  * Administradores e CEOs acessam todas as conversas sem barreiras.
+  * Administradores e CEOs acessam todas as conversas sem barreiras. Conversas em atendimento por outros agentes aparecem para o COMMERCIAL, mas travadas (bloqueadas para escrita e com conteúdo oculto).
 * **Assunção e Transferência de Tickets:**
-  * **Assumir:** Quando um atendente clica em uma conversa na fila, o sistema atualiza `assigned_to` para o seu ID de usuário e o status para `open`.
+  * **Assumir:** Quando um atendente clica em uma conversa na fila, o sistema atualiza `assigned_to` para o seu ID de usuário e o status para `in_progress`.
   * **Transferir:** Um atendente comercial pode transferir a conversa para outro colaborador ou departamento. O sistema apaga o `assigned_to` anterior, atribui ao novo colaborador e registra uma mensagem do sistema indicando o direcionamento.
+  * **Transferência de Instância:** Instância `atendimento-cliente` → `mtsolar` (administrativo) e vice-versa, disponível apenas para ADMINs.
+* **Sistema de Etiquetas (Tags) das Conversas:**
+  * Cada conversa pode ter **múltiplas etiquetas** armazenadas na coluna `tags TEXT[]`.
+  * As etiquetas disponíveis são definidas no frontend em `WHATSAPP_TAGS` (constante em `WhatsApp.tsx`) com id, label e cor hex.
+  * A lógica de toggle: ao clicar em uma etiqueta, se ela já existe no array é removida; se não existe, é adicionada. O estado completo do array é sempre enviado ao backend (`PUT /api/conversations/:id/tag`).
+  * Etiquetas disponíveis: Atendimento Iniciado, Cuidar e Fechar, Fechou Venda, Lead Desqualificado, Lead Qualificado, Não Fechou Venda, Orçamento Enviado, Visita Agendada, Transferido.
 * **Funil de Vendas Kanban:**
   * Os projetos transitam de forma linear pelas colunas de estágio. Cada estágio exige preenchimento ou upload de dados diferentes (ex: o fechamento comercial exige upload de contrato; a fase técnica exige vistoria cadastrada).
 
@@ -393,19 +434,44 @@ O fluxo de processamento de mídias foi otimizado para evitar expiração rápid
 * **Erro 400 no Supabase Storage via RLS:**
   * *Causa Raiz:* O envio de arquivos pelo front-end falhava intermitentemente por falta de permissão de escrita de usuários não autenticados no bucket.
   * *Solução:* Substituído o cliente anônimo por `supabaseAdmin` utilizando a chave privada master `SUPABASE_SERVICE_ROLE_KEY` exclusivamente no backend Express para realizar o upload das mídias.
+* **Sistema de Etiquetas Não Salvando (Multi-Tag):**
+  * *Causa Raiz (1 — Banco):* A tabela `whatsapp_conversations` possuía apenas a coluna `tag TEXT` (singular), incapaz de armazenar múltiplas etiquetas. A coluna `tags TEXT[]` não existia, fazendo o UPDATE retornar erro `42703` silencioso do PostgreSQL.
+  * *Causa Raiz (2 — Backend):* A rota `PUT /api/conversations/:id/tag` atualizava a coluna `tag` com uma string única em vez de receber e persistir um array na coluna `tags`.
+  * *Causa Raiz (3 — Frontend):* A interface `Conversation` tipava o campo como `tag?: string | null` e a função `updateTag` enviava uma string única, sem lógica de toggle ou suporte a múltiplos valores.
+  * *Solução Aplicada:*
+    1. Executado `ALTER TABLE whatsapp_conversations ADD COLUMN tags TEXT[] DEFAULT '{}'` no SQL Editor do Supabase.
+    2. Migrados dados históricos: `UPDATE whatsapp_conversations SET tags = ARRAY[tag] WHERE tag IS NOT NULL AND tag != ''`.
+    3. Atualizada a rota backend para ler `{ tags }` do body e gravar `{ tags: tags ?? [] }` na coluna correta.
+    4. Atualizado o frontend: interface alterada para `tags?: string[] | null`, função `updateTag` com lógica de toggle (adiciona/remove do array), dropdown com checkboxes visuais e renderização de múltiplas tags coloridas por conversa.
+
+* **Bloqueio de Conversa em Atendimento por Outro Agente:**
+  * *Contexto:* Antes da implementação, não havia bloqueio do tipo "conversa em uso" — qualquer agente podia ler e responder mensagens de conversas que já estavam sendo atendidas por outro colega, gerando conflito de atendimento.
+  * *Solução Aplicada:*
+    1. Criada nova rota `GET /api/conversations/:id/messages` no backend que, antes de retornar mensagens, verifica se `status = 'in_progress'`, `assigned_to IS NOT NULL` e `assigned_to != req.user.id`. Caso confirmado e o role não for CEO, retorna HTTP 403 com `{ error: 'CONVERSATION_LOCKED', assignedTo: nome_do_agente }`.
+    2. Adicionada a mesma validação nas rotas `POST /api/whatsapp/send`, `POST /api/whatsapp/send-media` e `POST /api/whatsapp/send-audio` via helper `checkConversationLock()`.
+    3. No frontend (`WhatsApp.tsx`): adicionados estados `isLocked` e `lockedByName`. A função `fetchMessages` agora chama o backend via `api.get()` (em vez de Supabase direto) e trata o erro 403 setando `isLocked = true`. Ao trocar de conversa, os estados são resetados. No lugar do campo de mensagem, exibe-se um aviso amarelo com ícone de cadeado e o nome do agente responsável.
+* **Cronjobs de Mensagens Automáticas de Horário:**
+  * Adicionadas 3 novas rotas `POST` no backend e 3 entradas no `vercel.json` para disparar mensagens automáticas de horário (início de expediente, almoço e fim de expediente) para todas as conversas com `status = 'in_progress'`, utilizando as credenciais de instância de cada empresa via `getEvolutionApiCredentials()`.
 
 ---
 
 ## 12. DÉBITOS TÉCNICOS
 
 * **Monolito no Arquivo `api/index.ts`:**
-  * *Risco:* O arquivo concentra mais de 2.600 linhas de código unificando autenticação, rotas de projetos comercial, técnico, logs, estoque, WhatsApp, webhooks de recebimento, crons e inteligência artificial. Isso eleva a chance de bugs de concorrência de variáveis globais e dificulta manutenções.
+  * *Risco:* O arquivo concentra mais de **2.619 linhas** de código unificando autenticação, rotas de projetos comercial, técnico, logs, estoque, WhatsApp, webhooks de recebimento, crons e inteligência artificial. Isso eleva a chance de bugs de concorrência de variáveis globais e dificulta manutenções.
+* **Dupla Coluna de Tag (`tag` e `tags`) na Tabela `whatsapp_conversations`:**
+  * *Situação:* A coluna legada `tag TEXT` (singular) ainda existe na tabela ao lado da nova coluna `tags TEXT[]`. Os dados históricos foram migrados via script, mas as duas colunas coexistem. Novas gravações via a rota corrigida só atualizam `tags`; a coluna `tag` ficará progressivamente desatualizada.
+  * *Risco:* Confusão em queries futuras, consumo desnecessário de espaço, e risco de regressão caso alguma rota antiga ainda referencie `tag`.
+  * *Ação Recomendada:* Após confirmar estabilidade, executar `ALTER TABLE whatsapp_conversations DROP COLUMN tag;` para remover a coluna obsoleta.
 * **Payloads e Timeouts na Vercel:**
   * *Risco:* Funções Serverless gratuitas ou standard na Vercel possuem limites de execução de 10s a 15s. O processamento de downloads de vídeos pesados vindos da Evolution API e subsequente upload no Supabase pode facilmente dar timeout.
 * **Uso Extensivo de Tipagem `any`:**
   * *Risco:* Várias funções e manipulações de respostas do Express e do React no frontend estão anotadas com `any` ou utilizando diretivas de escape do compilador (`// @ts-ignore`), o que reduz consideravelmente os benefícios da checagem estática de tipos do TypeScript.
 * **Arquivos Sobressalentes / Legado:**
   * *Risco:* Presença de arquivos de backup na pasta do código-fonte (ex: `src/pages/Technical.tsx.bak`) que poluem a árvore de arquivos e podem confundir desenvolvedores.
+* **Rota de Transferência Não Atualiza `tags`:**
+  * *Situação:* A rota `POST /api/whatsapp/transfer` ao criar o objeto `transferData` ainda define `tag: 'Transferido'` (coluna antiga singular), e **não** preenche a coluna `tags` com `['Transferido']`.
+  * *Risco:* Conversas transferidas não receberão a etiqueta visual no novo sistema de multi-tags.
 
 ---
 

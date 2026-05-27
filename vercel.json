@@ -21,6 +21,9 @@
     {
       "path": "/api/cron/agenda-reminders",
       "schedule": "0 7 * * *"
-    }
+    },
+    { "path": "/api/cron/mensagem-inicio-expediente", "schedule": "30 11 * * 1-5" },
+    { "path": "/api/cron/mensagem-almoco", "schedule": "0 15 * * 1-5" },
+    { "path": "/api/cron/mensagem-fim-expediente", "schedule": "0 20 * * 1-5" }
   ]
 }

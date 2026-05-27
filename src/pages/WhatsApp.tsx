@@ -116,6 +116,8 @@ export default function WhatsApp() {
   const isCommercial = user?.role?.toUpperCase() === 'COMMERCIAL';
   const [activeInstance, setActiveInstance] = useState<'admin' | 'atendimento'>('atendimento');
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockedByName, setLockedByName] = useState('');
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [showTagDropdown, setShowTagDropdown] = useState(false);
   const [showTransferInstanceModal, setShowTransferInstanceModal] = useState(false);
@@ -177,6 +179,9 @@ export default function WhatsApp() {
   useEffect(() => {
     if (selectedConversation) {
       shouldAutoScrollRef.current = true;
+      // Resetar estado de bloqueio ao trocar de conversa
+      setIsLocked(false);
+      setLockedByName('');
       const hasAccess =
         selectedConversation.status === 'waiting' ||
         selectedConversation.status === 'closed' ||
@@ -268,15 +273,16 @@ export default function WhatsApp() {
   };
 
   const fetchMessages = async (conversationId: string) => {
-    const { data, error } = await supabase
-      .from('whatsapp_messages')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .order('timestamp', { ascending: true })
-      .limit(500);
-
-    if (!error && data) {
-      setMessages(data);
+    try {
+      const { data } = await api.get(`/api/conversations/${conversationId}/messages`);
+      setMessages(data || []);
+      setIsLocked(false);
+      setLockedByName('');
+    } catch (error: any) {
+      if (error?.response?.status === 403 && error?.response?.data?.error === 'CONVERSATION_LOCKED') {
+        setIsLocked(true);
+        setLockedByName(error.response.data.assignedTo || 'Outro agente');
+      }
     }
   };
 
@@ -1110,7 +1116,12 @@ export default function WhatsApp() {
 
             {/* Campo de Envio */}
             <div className="p-3 lg:p-4 bg-white border-t border-gray-200 pb-10 lg:pb-4">
-              {selectedConversation.status === 'in_progress' && (Number(selectedConversation.assigned_to) === Number(user?.id) || isAdmin) ? (
+              {isLocked && user?.role !== 'CEO' ? (
+                <div className="text-center p-3 bg-amber-50 text-amber-800 rounded-lg text-sm font-medium border border-amber-200 flex items-center justify-center gap-2">
+                  <Lock size={16} />
+                  Esta conversa está sendo atendida por {lockedByName}. Aguarde a finalização.
+                </div>
+              ) : selectedConversation.status === 'in_progress' && (Number(selectedConversation.assigned_to) === Number(user?.id) || isAdmin) ? (
                 <div className="flex items-end gap-2">
                   <input 
                     type="file" 
