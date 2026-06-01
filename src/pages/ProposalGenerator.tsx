@@ -3033,7 +3033,7 @@ export default function ProposalGenerator() {
             </div>
 
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto overflow-y-auto max-h-96">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-gray-50 text-gray-600 uppercase text-[10px] font-bold tracking-wider">

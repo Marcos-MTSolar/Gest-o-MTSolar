@@ -45,7 +45,9 @@ export default function Dashboard() {
     api.get('/api/projects').then(res => {
       if (Array.isArray(res.data)) {
         setHomologacoes(res.data.filter((p: any) =>
-          ['homologation', 'conclusion', 'completed'].includes(p.current_stage)
+          ['homologation', 'conclusion', 'completed'].includes(p.current_stage) &&
+          p.current_stage !== 'conclusion' &&
+          p.status !== 'completed'
         ));
       }
     });

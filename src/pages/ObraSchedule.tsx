@@ -41,6 +41,42 @@ interface ScheduleDetails {
   endereco?: string;
 }
 
+const OrderInput = ({ currentIndex, totalItems, onMove }: { currentIndex: number; totalItems: number; onMove: (newPos: number) => void }) => {
+  const [val, setVal] = useState<string | number>(currentIndex + 1);
+
+  useEffect(() => {
+    setVal(currentIndex + 1);
+  }, [currentIndex]);
+
+  const handleBlurOrSubmit = () => {
+    let num = Number(val);
+    if (isNaN(num) || num < 1) {
+      num = 1;
+    } else if (num > totalItems) {
+      num = totalItems;
+    }
+    setVal(num);
+    onMove(num);
+  };
+
+  return (
+    <input
+      type="number"
+      min={1}
+      max={totalItems}
+      value={val}
+      onChange={(e) => setVal(e.target.value)}
+      onBlur={handleBlurOrSubmit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          handleBlurOrSubmit();
+        }
+      }}
+      className="w-14 text-center border border-gray-300 rounded-lg p-1 font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900 shadow-sm text-sm"
+    />
+  );
+};
+
 export default function ObraSchedule() {
   const { user } = useAuth();
   const [projects, setProjects] = useState<ProjectSchedule[]>([]);
@@ -105,6 +141,26 @@ export default function ObraSchedule() {
     // Update local state
     setProjects(newProjects);
     
+    try {
+      const orders = newProjects.map((p, i) => ({ id: p.id, schedule_order: i }));
+      await api.put('/api/projects/schedule/reorder', { orders });
+    } catch (error) {
+      fetchSchedule();
+    }
+  };
+
+  const handlePositionChange = async (currentIndex: number, newPosition: number) => {
+    if (!canReorder) return;
+    const targetIndex = newPosition - 1;
+    if (targetIndex < 0 || targetIndex >= projects.length || targetIndex === currentIndex) return;
+
+    const newProjects = [...projects];
+    const [removed] = newProjects.splice(currentIndex, 1);
+    newProjects.splice(targetIndex, 0, removed);
+
+    // Update local state
+    setProjects(newProjects);
+
     try {
       const orders = newProjects.map((p, i) => ({ id: p.id, schedule_order: i }));
       await api.put('/api/projects/schedule/reorder', { orders });
@@ -249,29 +305,16 @@ export default function ObraSchedule() {
                     className="group bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all"
                   >
                     <div className="p-5 flex flex-col md:flex-row md:items-center gap-5">
-                      {/* Order Controls */}
-                      {canReorder && !searchTerm && (
-                        <div className="flex md:flex-col gap-1 border-r pr-5 border-gray-100">
-                          <button 
-                            onClick={() => handleMove(index, 'up')}
-                            disabled={index === 0}
-                            className="p-1.5 hover:bg-blue-50 rounded-lg disabled:opacity-20 text-blue-900 transition-colors"
-                          >
-                            <ArrowUp size={22} />
-                          </button>
-                          <button 
-                            onClick={() => handleMove(index, 'down')}
-                            disabled={index === projects.length - 1}
-                            className="p-1.5 hover:bg-blue-50 rounded-lg disabled:opacity-20 text-blue-900 transition-colors"
-                          >
-                            <ArrowDown size={22} />
-                          </button>
-                        </div>
-                      )}
-
                       {/* Project Info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-3 mb-2">
+                          {canReorder && !searchTerm && (
+                            <OrderInput 
+                              currentIndex={index}
+                              totalItems={projects.length}
+                              onMove={(newPos) => handlePositionChange(index, newPos)}
+                            />
+                          )}
                           <h3 className="text-xl font-bold text-gray-900 truncate">{project.client_name}</h3>
                           <span className="text-[10px] bg-blue-900 text-white px-2.5 py-1 rounded-full uppercase font-black tracking-widest shadow-sm">
                             {project.current_stage}

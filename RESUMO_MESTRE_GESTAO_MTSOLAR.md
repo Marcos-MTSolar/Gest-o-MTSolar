@@ -452,6 +452,18 @@ O fluxo de processamento de mídias foi otimizado para evitar expiração rápid
     3. No frontend (`WhatsApp.tsx`): adicionados estados `isLocked` e `lockedByName`. A função `fetchMessages` agora chama o backend via `api.get()` (em vez de Supabase direto) e trata o erro 403 setando `isLocked = true`. Ao trocar de conversa, os estados são resetados. No lugar do campo de mensagem, exibe-se um aviso amarelo com ícone de cadeado e o nome do agente responsável.
 * **Cronjobs de Mensagens Automáticas de Horário:**
   * Adicionadas 3 novas rotas `POST` no backend e 3 entradas no `vercel.json` para disparar mensagens automáticas de horário (início de expediente, almoço e fim de expediente) para todas as conversas com `status = 'in_progress'`, utilizando as credenciais de instância de cada empresa via `getEvolutionApiCredentials()`.
+* **Scroll no Histórico do Gerador de Propostas:**
+  * *O que foi feito:* Adição das classes CSS `overflow-y-auto` e `max-h-96` ao container div que envolve a tabela na aba de histórico do gerador de propostas. Isso habilita o scroll vertical, permitindo visualizar todos os registros sem limitação ou quebra de layout.
+  * *Data e hora da alteração:* 01/06/2026 às 15:11 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
+* **Filtro de Projetos Finalizados nas Homologações do Dashboard:**
+  * *O que foi feito:* Adição de condições no `.filter()` da listagem de homologações no arquivo `Dashboard.tsx` para excluir projetos que possuam `current_stage` como `'conclusion'` ou `status` como `'completed'`.
+  * *Data e hora da alteração:* 01/06/2026 às 15:12 (Horário Local)
+  * *Arquivos modificados:* `src/pages/Dashboard.tsx`
+* **Campo de Input Numérico para Ordenação no Cronograma:**
+  * *O que foi feito:* Substituição dos botões de seta por um componente de input numérico (`OrderInput`) na listagem do cronograma de obras (`ObraSchedule.tsx`). O input permite ao usuário digitar diretamente a posição de reordenação do cliente, e dispara a movimentação e reordenação no blur ou pressionando Enter.
+  * *Data e hora da alteração:* 01/06/2026 às 15:13 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ObraSchedule.tsx`
 
 ---
 
