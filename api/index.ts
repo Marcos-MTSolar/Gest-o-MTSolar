@@ -9,6 +9,7 @@ import multer from 'multer';
 import cors from 'cors';
 import * as dotenv from 'dotenv';
 import admin from 'firebase-admin';
+import { uploadToR2, deleteFromR2, R2_PUBLIC_URL } from './r2.js';
 
 dotenv.config();
 
@@ -2785,6 +2786,324 @@ app.post('/api/cron/mensagem-fim-expediente', async (req, res) => {
     }
 
     res.json({ success: true, sent: totalSent });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================================
+// MÓDULO: PONTO ELETRÔNICO
+// ============================================================
+
+// GET /api/ponto/schedules — Retorna horários configurados da empresa
+app.get('/api/ponto/schedules', authenticateToken, async (req: any, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('work_schedules')
+      .select('*')
+      .eq('company_id', req.user.company_id);
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/ponto/schedules — Atualiza ou cria horário por função (CEO/ADMIN)
+app.put('/api/ponto/schedules', authenticateToken, async (req: any, res) => {
+  try {
+    if (!['CEO', 'ADMIN'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    const { role, entry_time, lunch_start, lunch_end, exit_time } = req.body;
+
+    if (!role || !entry_time || !lunch_start || !lunch_end || !exit_time) {
+      return res.status(400).json({ error: 'Todos os horários são obrigatórios' });
+    }
+
+    const { data: existing } = await supabaseAdmin
+      .from('work_schedules')
+      .select('id')
+      .eq('company_id', req.user.company_id)
+      .eq('role', role)
+      .single();
+
+    let result;
+    if (existing) {
+      result = await supabaseAdmin
+        .from('work_schedules')
+        .update({ entry_time, lunch_start, lunch_end, exit_time })
+        .eq('id', existing.id)
+        .eq('company_id', req.user.company_id)
+        .select()
+        .single();
+    } else {
+      result = await supabaseAdmin
+        .from('work_schedules')
+        .insert({ company_id: req.user.company_id, role, entry_time, lunch_start, lunch_end, exit_time })
+        .select()
+        .single();
+    }
+
+    if (result.error) throw result.error;
+    res.json(result.data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/ponto/registrar — Registra batida com selfie + GPS
+app.post('/api/ponto/registrar', authenticateToken, async (req: any, res) => {
+  try {
+    const { type, latitude, longitude, selfie_base64 } = req.body;
+
+    if (!type || !selfie_base64) {
+      return res.status(400).json({ error: 'Tipo e selfie são obrigatórios' });
+    }
+
+    const validTypes = ['entry', 'lunch_start', 'lunch_end', 'exit'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ error: 'Tipo de batida inválido' });
+    }
+
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const timestamp = now.getTime();
+
+    const filePath = `ponto/${req.user.company_id}/${req.user.id}/${yyyy}-${mm}/${timestamp}.jpg`;
+    const base64Data = selfie_base64.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    const selfie_url = await uploadToR2(buffer, filePath, 'image/jpeg');
+
+    const { data, error } = await supabaseAdmin
+      .from('time_records')
+      .insert({
+        company_id: req.user.company_id,
+        user_id: req.user.id,
+        type,
+        timestamp: now.toISOString(),
+        latitude: latitude ?? null,
+        longitude: longitude ?? null,
+        selfie_url,
+        selfie_path: filePath,
+        status: 'pending',
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/ponto/historico — Histórico do usuário logado
+app.get('/api/ponto/historico', authenticateToken, async (req: any, res) => {
+  try {
+    const { start, end } = req.query;
+
+    let query = supabaseAdmin
+      .from('time_records')
+      .select('*')
+      .eq('company_id', req.user.company_id)
+      .eq('user_id', req.user.id)
+      .order('timestamp', { ascending: false });
+
+    if (start) query = query.gte('timestamp', start);
+    if (end) query = query.lte('timestamp', end);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/ponto/relatorio/:userId — Consolidado mensal (CEO/ADMIN)
+app.get('/api/ponto/relatorio/:userId', authenticateToken, async (req: any, res) => {
+  try {
+    if (!['CEO', 'ADMIN'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    const { userId } = req.params;
+    const { start, end } = req.query;
+
+    let query = supabaseAdmin
+      .from('time_records')
+      .select('*, users(name, role)')
+      .eq('company_id', req.user.company_id)
+      .eq('user_id', userId)
+      .order('timestamp', { ascending: true });
+
+    if (start) query = query.gte('timestamp', start);
+    if (end) query = query.lte('timestamp', end);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/ponto/ajuste — Solicita correção de batida
+app.post('/api/ponto/ajuste', authenticateToken, async (req: any, res) => {
+  try {
+    const { time_record_id, justification, new_timestamp } = req.body;
+
+    if (!time_record_id || !justification || !new_timestamp) {
+      return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
+    }
+
+    const { data: record } = await supabaseAdmin
+      .from('time_records')
+      .select('id, company_id')
+      .eq('id', time_record_id)
+      .eq('company_id', req.user.company_id)
+      .single();
+
+    if (!record) {
+      return res.status(404).json({ error: 'Registro não encontrado' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('time_adjustments')
+      .insert({
+        company_id: req.user.company_id,
+        time_record_id,
+        requested_by: req.user.id,
+        justification,
+        new_timestamp,
+        status: 'pending',
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    await supabaseAdmin
+      .from('time_records')
+      .update({ status: 'adjustment_requested' })
+      .eq('id', time_record_id);
+
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/ponto/ajuste/:id — Aprovar ou rejeitar ajuste (CEO/ADMIN)
+app.put('/api/ponto/ajuste/:id', authenticateToken, async (req: any, res) => {
+  try {
+    if (!['CEO', 'ADMIN'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Status inválido' });
+    }
+
+    const { data: adjustment, error: fetchError } = await supabaseAdmin
+      .from('time_adjustments')
+      .select('*')
+      .eq('id', id)
+      .eq('company_id', req.user.company_id)
+      .single();
+
+    if (fetchError || !adjustment) {
+      return res.status(404).json({ error: 'Ajuste não encontrado' });
+    }
+
+    await supabaseAdmin
+      .from('time_adjustments')
+      .update({
+        status,
+        reviewed_by: req.user.id,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq('id', id);
+
+    if (status === 'approved') {
+      await supabaseAdmin
+        .from('time_records')
+        .update({
+          timestamp: adjustment.new_timestamp,
+          status: 'approved',
+        })
+        .eq('id', adjustment.time_record_id);
+    } else {
+      await supabaseAdmin
+        .from('time_records')
+        .update({ status: 'pending' })
+        .eq('id', adjustment.time_record_id);
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/ponto/ajustes — Lista ajustes pendentes (CEO/ADMIN)
+app.get('/api/ponto/ajustes', authenticateToken, async (req: any, res) => {
+  try {
+    if (!['CEO', 'ADMIN'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('time_adjustments')
+      .select('*, time_records(*), users!time_adjustments_requested_by_fkey(name, role)')
+      .eq('company_id', req.user.company_id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Cron: limpeza de selfies de ponto com mais de 90 dias no R2
+app.get('/api/cron/cleanup-r2', async (req, res) => {
+  try {
+    const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
+    const cutoffDate = new Date(Date.now() - NINETY_DAYS_MS);
+
+    const { data: oldRecords, error } = await supabaseAdmin
+      .from('time_records')
+      .select('id, selfie_path')
+      .lt('timestamp', cutoffDate.toISOString())
+      .not('selfie_path', 'is', null);
+
+    if (error) throw error;
+
+    let deleted = 0;
+    for (const record of oldRecords ?? []) {
+      try {
+        await deleteFromR2(record.selfie_path);
+        await supabaseAdmin
+          .from('time_records')
+          .update({ selfie_url: null, selfie_path: null })
+          .eq('id', record.id);
+        deleted++;
+      } catch (e) {
+        console.error(`Erro ao deletar selfie ${record.selfie_path}:`, e);
+      }
+    }
+
+    res.json({ success: true, deleted });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

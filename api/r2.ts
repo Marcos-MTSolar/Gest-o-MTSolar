@@ -1,0 +1,49 @@
+import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+
+export const r2Client = new S3Client({
+  region: 'auto',
+  endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY!,
+    secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_KEY!,
+  },
+});
+
+export const R2_BUCKET = process.env.CLOUDFLARE_R2_BUCKET!;
+export const R2_PUBLIC_URL = process.env.CLOUDFLARE_R2_PUBLIC_URL!;
+
+export async function uploadToR2(
+  buffer: Buffer,
+  filePath: string,
+  contentType: string
+): Promise<string> {
+  await r2Client.send(
+    new PutObjectCommand({
+      Bucket: R2_BUCKET,
+      Key: filePath,
+      Body: buffer,
+      ContentType: contentType,
+      Metadata: { uploadedAt: new Date().toISOString() },
+    })
+  );
+  return `${R2_PUBLIC_URL}/${filePath}`;
+}
+
+export async function deleteFromR2(filePath: string): Promise<void> {
+  await r2Client.send(
+    new DeleteObjectCommand({
+      Bucket: R2_BUCKET,
+      Key: filePath,
+    })
+  );
+}
+
+export async function listR2Files(prefix: string) {
+  const response = await r2Client.send(
+    new ListObjectsV2Command({
+      Bucket: R2_BUCKET,
+      Prefix: prefix,
+    })
+  );
+  return response.Contents ?? [];
+}

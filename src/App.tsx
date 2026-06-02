@@ -34,9 +34,7 @@ const WhatsApp = lazy(() => import('./pages/WhatsApp'));
 const NeoenergiaProtocols = lazy(() => import('./pages/NeoenergiaProtocols'));
 const EnergyCalculator = lazy(() => import('./pages/EnergyCalculator'));
 const ObraSchedule = lazy(() => import('./pages/ObraSchedule'));
-
-
-
+const Ponto = lazy(() => import('./pages/Ponto'));
 
 function PrivateRoute({ children, roles }: { children: React.ReactNode, roles?: string[] }) {
   const { user, loading } = useAuth();
@@ -45,10 +43,10 @@ function PrivateRoute({ children, roles }: { children: React.ReactNode, roles?: 
   
   if (!user) return <Navigate to="/login" />;
 
-  // Se for VENDEDOR (COMMERCIAL), acesso restrito a Dashboard, WhatsApp, Agenda e Proposta
+  // Se for VENDEDOR (COMMERCIAL), acesso restrito a Dashboard, WhatsApp, Agenda, Proposta e Ponto
   const isCommercial = user.role.toUpperCase() === 'COMMERCIAL';
   const currentPath = window.location.pathname;
-  const allowedCommercialPaths = ['/', '/whatsapp', '/agenda', '/proposal-generator', '/calculadora'];
+  const allowedCommercialPaths = ['/', '/whatsapp', '/agenda', '/proposal-generator', '/calculadora', '/ponto'];
   
   if (isCommercial && !allowedCommercialPaths.includes(currentPath)) {
     return <Navigate to="/" />;
@@ -188,6 +186,12 @@ export default function App() {
               <Route path="/cronograma" element={
                 <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL']}>
                   <ObraSchedule />
+                </PrivateRoute>
+              } />
+              
+              <Route path="/ponto" element={
+                <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL']}>
+                  <Ponto />
                 </PrivateRoute>
               } />
               

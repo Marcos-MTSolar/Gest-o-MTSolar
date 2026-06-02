@@ -16,6 +16,9 @@
     "build:mobile": "dotenv -e .env.mobile -- vite build && npx cap sync"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1058.0",
+    "@aws-sdk/s3-request-presigner": "^3.1058.0",
+    "@capacitor/geolocation": "^8.2.0",
     "@capacitor/local-notifications": "^8.0.2",
     "@capacitor/push-notifications": "^8.0.4",
     "@google/genai": "1.29.0",

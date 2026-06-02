@@ -24,7 +24,8 @@ import {
   MessageCircle,
   ClipboardList,
   Zap,
-  FileCheck
+  FileCheck,
+  Clock
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
@@ -110,6 +111,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: 'Protocolos Neoenergia', path: '/neoenergia', icon: ClipboardList, roles: ['CEO', 'ADMIN'] },
     { name: 'Gerador de Proposta', path: '/proposal-generator', icon: FileSpreadsheet, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Calculadora', path: '/calculadora', icon: Zap, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
+    { name: 'Ponto Eletrônico', path: '/ponto', icon: Clock, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Comercial', path: '/commercial', icon: Briefcase, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Kit Solar', path: '/kit-purchase', icon: ShoppingCart, roles: ['CEO', 'ADMIN'] },
     { name: 'Contratos', path: '/contracts', icon: FileSignature, roles: ['CEO', 'ADMIN'] },
@@ -127,8 +129,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const filteredItems = menuItems.filter(item => {
     const hasRole = !item.roles || item.roles.includes(user?.role || '');
     if (isCommercial) {
-      // Vendedor: Dashboard, Atendimento, Agenda, Gerador de Proposta e Calculadora
-      const allowedPaths = ['/', '/whatsapp', '/agenda', '/proposal-generator', '/calculadora'];
+      // Vendedor: Dashboard, Atendimento, Agenda, Gerador de Proposta, Calculadora e Ponto Eletrônico
+      const allowedPaths = ['/', '/whatsapp', '/agenda', '/proposal-generator', '/calculadora', '/ponto'];
       return allowedPaths.includes(item.path);
     }
     return hasRole;
