@@ -501,6 +501,13 @@ O fluxo de processamento de mídias foi otimizado para evitar expiração rápid
   * *Data e hora da alteração:* 03/06/2026 às 13:58 (Horário Local)
   * *Arquivos modificados:* `api/index.ts`, `vercel.json`
 
+* **Alteração da Opacidade do Logotipo (`PNG_-_MT_SOLAR__1_.png`):**
+  * *Causa Raiz:* O logotipo institucional de fundo estava com opacidade muito alta, interferindo na legibilidade dos textos e layouts das telas.
+  * *Solução Aplicada:* Processado o arquivo de imagem no canal alpha para definir a opacidade máxima como 15%, suavizando sua exibição em toda a aplicação.
+  * *Data e hora da alteração:* 03/06/2026 às 14:10 (Horário Local)
+  * *Arquivos modificados:* `public/PNG_-_MT_SOLAR__1_.png`
+
+
 
 
 
