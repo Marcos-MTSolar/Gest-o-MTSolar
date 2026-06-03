@@ -264,51 +264,71 @@ app.get('/api/users', authenticateToken, async (req: any, res) => {
 
 app.post('/api/users', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CEO') return res.sendStatus(403);
-  const { name, email, password, role, cpf = null, cargo = null, data_admissao = null } = req.body;
+  const { name, email, password, role, cpf, cargo, data_admissao } = req.body;
   const hash = bcrypt.hashSync(password, 10);
 
-  const { data, error } = await supabase
-    .from('users')
-    .insert({ 
-      name, 
-      email, 
-      password_hash: hash, 
-      role, 
-      company_id: req.user.company_id,
-      cpf,
-      cargo,
-      data_admissao: data_admissao || null
-    })
-    .select()
-    .single();
+  // Payload base — campos obrigatórios (sempre existem na tabela)
+  const baseInsert: any = {
+    name,
+    email,
+    password_hash: hash,
+    role,
+    company_id: req.user.company_id,
+  };
+
+  // Payload completo — inclui campos opcionais se preenchidos
+  const fullInsert: any = { ...baseInsert };
+  if (cpf != null && cpf !== '') fullInsert.cpf = cpf;
+  if (cargo != null && cargo !== '') fullInsert.cargo = cargo;
+  if (data_admissao != null && data_admissao !== '') fullInsert.data_admissao = data_admissao;
+
+  // Tenta inserir com campos opcionais
+  let { data, error } = await supabase.from('users').insert(fullInsert).select().single();
+
+  // Se falhar por coluna inexistente no banco (PGRST204), retenta sem os campos opcionais
+  if (error?.code === 'PGRST204') {
+    console.warn('[users POST] Colunas opcionais ausentes no schema — retentando sem cpf/cargo/data_admissao');
+    ({ data, error } = await supabase.from('users').insert(baseInsert).select().single());
+  }
 
   if (error) return res.status(400).json({ error: error.message });
-
-
   res.json({ id: data.id });
 });
 
 app.put('/api/users/:id', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CEO' && req.user.role !== 'ADMIN') return res.sendStatus(403);
 
-  const { name, email, role, active, password, cpf = null, cargo = null, data_admissao = null } = req.body;
-  const updates: any = { 
-    name, 
-    email, 
-    role, 
+  const { name, email, role, active, password, cpf, cargo, data_admissao } = req.body;
+
+  // Payload base — campos obrigatórios
+  const baseUpdate: any = {
+    name,
+    email,
+    role,
     active: active ? true : false,
-    cpf,
-    cargo,
-    data_admissao: data_admissao || null
   };
 
+  // Payload completo — inclui campos opcionais se preenchidos
+  const fullUpdate: any = { ...baseUpdate };
+  if (cpf != null && cpf !== '') fullUpdate.cpf = cpf;
+  if (cargo != null && cargo !== '') fullUpdate.cargo = cargo;
+  if (data_admissao != null && data_admissao !== '') fullUpdate.data_admissao = data_admissao;
+
   if (password) {
-    updates.password_hash = bcrypt.hashSync(password, 10);
+    baseUpdate.password_hash = bcrypt.hashSync(password, 10);
+    fullUpdate.password_hash = baseUpdate.password_hash;
   }
 
-  await supabase.from('users').update(updates).eq('id', req.params.id).eq('company_id', req.user.company_id);
+  // Tenta atualizar com campos opcionais
+  let { error } = await supabase.from('users').update(fullUpdate).eq('id', req.params.id).eq('company_id', req.user.company_id);
 
+  // Se falhar por coluna inexistente no banco (PGRST204), retenta sem os campos opcionais
+  if (error?.code === 'PGRST204') {
+    console.warn('[users PUT] Colunas opcionais ausentes no schema — retentando sem cpf/cargo/data_admissao');
+    ({ error } = await supabase.from('users').update(baseUpdate).eq('id', req.params.id).eq('company_id', req.user.company_id));
+  }
 
+  if (error) return res.status(400).json({ error: error.message });
   res.json({ success: true });
 });
 

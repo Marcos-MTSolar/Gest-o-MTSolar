@@ -507,6 +507,27 @@ O fluxo de processamento de mídias foi otimizado para evitar expiração rápid
   * *Data e hora da alteração:* 03/06/2026 às 14:10 (Horário Local)
   * *Arquivos modificados:* `public/PNG_-_MT_SOLAR__1_.png`
 
+* **Erro HTTP 400 ao Cadastrar Funcionário — Colunas `cpf`/`cargo`/`data_admissao` Ausentes no Banco:**
+  * *Causa Raiz:* O PostgREST do Supabase retornava erro `PGRST204` ("Could not find the 'cargo' column in the schema cache") porque as colunas `cpf`, `cargo` e `data_admissao` ainda não foram criadas na tabela `users` via SQL Editor do Supabase. Mesmo que os valores fossem `null`, incluir os campos no payload causava rejeição imediata da API.
+  * *Solução Aplicada:* Implementada lógica de **fallback automático** nas rotas `POST /api/users` e `PUT /api/users/:id` do `api/index.ts`: a rota tenta inserir/atualizar com o payload completo (incluindo `cpf`, `cargo`, `data_admissao`); se o Supabase retornar `PGRST204`, reexecuta a operação com apenas os campos obrigatórios. O cadastro agora funciona em qualquer cenário — tanto antes quanto depois da migration SQL ser aplicada no Supabase.
+  * *Ação pendente:* Executar o SQL abaixo no editor do Supabase para ativar o salvamento dos campos opcionais:
+    ```sql
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='cpf') THEN
+        ALTER TABLE users ADD COLUMN cpf TEXT;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='cargo') THEN
+        ALTER TABLE users ADD COLUMN cargo TEXT;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='data_admissao') THEN
+        ALTER TABLE users ADD COLUMN data_admissao TIMESTAMP WITH TIME ZONE;
+      END IF;
+    END $$;
+    ```
+  * *Data e hora da alteração:* 03/06/2026 às 14:25 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`
+
+
 
 
 
