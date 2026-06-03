@@ -17,6 +17,8 @@ import { Toaster } from 'react-hot-toast';
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Users = lazy(() => import('./pages/Users'));
+const Funcionarios = lazy(() => import('./pages/Funcionarios'));
+
 const Commercial = lazy(() => import('./pages/Commercial'));
 const Technical = lazy(() => import('./pages/Technical'));
 const Obra = lazy(() => import('./pages/Obra'));
@@ -91,6 +93,13 @@ export default function App() {
                   <Users />
                 </PrivateRoute>
               } />
+              
+              <Route path="/funcionarios" element={
+                <PrivateRoute roles={['CEO', 'ADMIN']}>
+                  <Funcionarios />
+                </PrivateRoute>
+              } />
+
               
               <Route path="/commercial" element={
                 <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>

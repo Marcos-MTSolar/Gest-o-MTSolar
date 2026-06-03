@@ -2953,6 +2953,66 @@ app.get('/api/ponto/relatorio/:userId', authenticateToken, async (req: any, res)
   }
 });
 
+// DELETE /api/ponto/usuario/:userId/registros — Exclui todos os registros de ponto de um usuário (apenas CEO)
+app.delete('/api/ponto/usuario/:userId/registros', authenticateToken, async (req: any, res) => {
+  try {
+    if (req.user.role !== 'CEO') {
+      return res.status(403).json({ error: 'Apenas o CEO pode excluir registros de ponto.' });
+    }
+
+    const { userId } = req.params;
+
+    // Verificar se o userId informado pertence à mesma company_id do CEO autenticado
+    const { data: targetUser, error: userError } = await supabaseAdmin
+      .from('users')
+      .select('company_id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (userError || !targetUser) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
+
+    if (targetUser.company_id !== req.user.company_id) {
+      return res.status(403).json({ error: 'Acesso negado. O usuário não pertence à sua empresa.' });
+    }
+
+    // Buscar IDs dos registros de ponto a serem excluídos para podermos remover os ajustes relacionados
+    const { data: recordsToDelete, error: fetchError } = await supabaseAdmin
+      .from('time_records')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('company_id', req.user.company_id);
+
+    if (fetchError) throw fetchError;
+
+    if (recordsToDelete && recordsToDelete.length > 0) {
+      const recordIds = recordsToDelete.map((r) => r.id);
+
+      // Deletar os ajustes relacionados
+      const { error: adjError } = await supabaseAdmin
+        .from('time_adjustments')
+        .delete()
+        .in('time_record_id', recordIds);
+
+      if (adjError) throw adjError;
+
+      // Deletar os registros de ponto
+      const { error: deleteError } = await supabaseAdmin
+        .from('time_records')
+        .delete()
+        .eq('user_id', userId)
+        .eq('company_id', req.user.company_id);
+
+      if (deleteError) throw deleteError;
+    }
+
+    res.json({ message: 'Registros excluídos com sucesso.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/ponto/ajuste — Solicita correção de batida
 app.post('/api/ponto/ajuste', authenticateToken, async (req: any, res) => {
   try {

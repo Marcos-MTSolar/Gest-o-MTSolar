@@ -1,9 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+
 import { Geolocation } from '@capacitor/geolocation';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import jsPDF from 'jspdf';
+import { supabase } from '../lib/supabase';
+import { Trash2, MapPin } from 'lucide-react';
+
+
 
 type TimeRecord = {
   id: number;
@@ -83,9 +89,35 @@ function calcDayHours(records: TimeRecord[]): number {
   return total;
 }
 
+const capturarLocalizacao = async (): Promise<{ latitude: number; longitude: number } | null> => {
+  try {
+    const permissao = await Geolocation.requestPermissions();
+    if (permissao.location !== 'granted') {
+      console.warn('Permissão de localização negada');
+      return null;
+    }
+    const posicao = await Geolocation.getCurrentPosition({
+      enableHighAccuracy: true,
+      timeout: 10000,
+    });
+    return {
+      latitude: posicao.coords.latitude,
+      longitude: posicao.coords.longitude,
+    };
+  } catch (err) {
+    console.error('Erro ao capturar localização:', err);
+    return null;
+  }
+};
+
 export default function Ponto() {
+
   const { user } = useAuth();
   const isManager = ['CEO', 'ADMIN'].includes(user?.role ?? '');
+
+  const [searchParams] = useSearchParams();
+  const userIdParam = searchParams.get('userId');
+
 
   const [records, setRecords] = useState<TimeRecord[]>([]);
   const [schedules, setSchedules] = useState<WorkSchedule[]>([]);
@@ -98,10 +130,49 @@ export default function Ponto() {
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<number | null>(null);
   const [reportRecords, setReportRecords] = useState<TimeRecord[]>([]);
-  const [reportMonth, setReportMonth] = useState(() => {
+  const [startDate, setStartDate] = useState(() => {
     const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   });
+  const [endDate, setEndDate] = useState(() => {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${day}`;
+  });
+  const [companyInfo, setCompanyInfo] = useState<{ name: string; cnpj?: string | null } | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingRecords, setDeletingRecords] = useState(false);
+
+
+  useEffect(() => {
+    async function fetchCompanyInfo() {
+      if (user?.company_id) {
+        try {
+          const { data } = await supabase
+            .from('companies')
+            .select('name, cnpj')
+            .eq('id', user.company_id)
+            .maybeSingle();
+
+          if (data) {
+            setCompanyInfo(data);
+          } else {
+            const { data: fallbackData } = await supabase
+              .from('companies')
+              .select('name')
+              .eq('id', user.company_id)
+              .maybeSingle();
+            if (fallbackData) {
+              setCompanyInfo({ name: fallbackData.name });
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching company info:', err);
+        }
+      }
+    }
+    fetchCompanyInfo();
+  }, [user?.company_id]);
 
   // Ajuste
   const [adjustments, setAdjustments] = useState<TimeAdjustment[]>([]);
@@ -120,6 +191,16 @@ export default function Ponto() {
       fetchPendingAdjustments();
     }
   }, []);
+
+  useEffect(() => {
+    if (userIdParam && isManager) {
+      const uId = Number(userIdParam);
+      setSelectedUser(uId);
+      setActiveTab('gestor');
+      fetchReport(uId);
+    }
+  }, [userIdParam, isManager]);
+
 
   async function fetchSchedules() {
     try {
@@ -141,9 +222,10 @@ export default function Ponto() {
   async function fetchAllUsers() {
     try {
       const res = await api.get('/api/users');
-      setAllUsers(res.data.filter((u: any) => u.active));
+      setAllUsers(res.data);
     } catch {}
   }
+
 
   async function fetchPendingAdjustments() {
     try {
@@ -155,15 +237,35 @@ export default function Ponto() {
   async function fetchReport(userId: number) {
     try {
       setLoading(true);
-      const [year, month] = reportMonth.split('-');
-      const start = new Date(Number(year), Number(month) - 1, 1).toISOString();
-      const end = new Date(Number(year), Number(month), 0, 23, 59, 59).toISOString();
+      const start = startDate;
+      const end = `${endDate} 23:59:59`;
       const res = await api.get(`/api/ponto/relatorio/${userId}?start=${start}&end=${end}`);
       setReportRecords(res.data);
     } catch {} finally {
       setLoading(false);
     }
   }
+
+  async function handleDeleteAllRecords() {
+    if (!selectedUser) return;
+    try {
+      setDeletingRecords(true);
+      await api.delete(`/api/ponto/usuario/${selectedUser}/registros`);
+      
+      setReportRecords([]);
+      setMessage({ text: 'Registros excluídos com sucesso.', type: 'success' });
+      setTimeout(() => setMessage(null), 5000);
+      
+      setShowDeleteModal(false);
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Erro ao excluir registros.';
+      setMessage({ text: errMsg, type: 'error' });
+      setTimeout(() => setMessage(null), 5000);
+    } finally {
+      setDeletingRecords(false);
+    }
+  }
+
 
   async function handlePunch() {
     try {
@@ -178,13 +280,13 @@ export default function Ponto() {
         width: 640,
       });
 
-      let latitude: number | null = null;
-      let longitude: number | null = null;
-      try {
-        const pos = await Geolocation.getCurrentPosition({ timeout: 8000 });
-        latitude = pos.coords.latitude;
-        longitude = pos.coords.longitude;
-      } catch {}
+      const localizacao = await capturarLocalizacao();
+      const latitude = localizacao ? localizacao.latitude : null;
+      const longitude = localizacao ? localizacao.longitude : null;
+
+      if (!localizacao) {
+        setMessage({ text: 'Localização não capturada. O ponto será registrado sem geolocalização.', type: 'error' });
+      }
 
       const todayStr = new Date().toISOString().slice(0, 10);
       const todayRecords = records.filter((r) => r.timestamp.slice(0, 10) === todayStr);
@@ -202,7 +304,9 @@ export default function Ponto() {
         selfie_base64: `data:image/jpeg;base64,${photo.base64String}`,
       });
 
-      setMessage({ text: `${TYPE_LABELS[type]} registrada com sucesso!`, type: 'success' });
+      if (localizacao) {
+        setMessage({ text: `${TYPE_LABELS[type]} registrada com sucesso!`, type: 'success' });
+      }
       fetchHistory();
     } catch (err: any) {
       setMessage({ text: err?.response?.data?.error ?? 'Erro ao registrar ponto.', type: 'error' });
@@ -249,50 +353,125 @@ export default function Ponto() {
     }
   }
 
+  function formatDate(dateStr: string) {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
+  }
+
   function generatePDF() {
     if (!reportRecords.length) return;
     const doc = new jsPDF();
-    const userName = allUsers.find((u) => u.id === selectedUser)?.name ?? 'Funcionário';
-    const [year, month] = reportMonth.split('-');
-    const monthName = new Date(Number(year), Number(month) - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+    const colab = allUsers.find((u) => u.id === selectedUser);
+    const userName = colab?.name ?? 'Funcionário';
+    const userRole = colab?.role ?? '';
+    
+    // Período formatado
+    const periodStr = `${formatDate(startDate)} a ${formatDate(endDate)}`;
 
-    doc.setFontSize(16);
-    doc.text('ESPELHO DE PONTO', 105, 20, { align: 'center' });
-    doc.setFontSize(11);
-    doc.text(`Funcionário: ${userName}`, 14, 35);
-    doc.text(`Período: ${monthName}`, 14, 43);
-    doc.text(`Emitido em: ${new Date().toLocaleDateString('pt-BR')}`, 14, 51);
+    // Nome e CNPJ da empresa
+    const companyName = companyInfo?.name ?? 'MT Solar';
+    const companyCnpj = companyInfo?.cnpj ? `CNPJ: ${companyInfo.cnpj}` : '';
+
+    // Cabeçalho do PDF
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(companyName, 14, 20);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    if (companyCnpj) {
+      doc.text(companyCnpj, 14, 26);
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text('ESPELHO DE PONTO', 196, 20, { align: 'right' });
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Período: ${periodStr}`, 196, 26, { align: 'right' });
+
+    // Informações do Colaborador
+    doc.setFont('helvetica', 'bold');
+    doc.text('Colaborador:', 14, 38);
+    doc.setFont('helvetica', 'normal');
+    doc.text(userName, 42, 38);
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Cargo:', 14, 44);
+    doc.setFont('helvetica', 'normal');
+    doc.text(userRole, 28, 44);
+
+    doc.text(`Emitido em: ${new Date().toLocaleDateString('pt-BR')}`, 196, 44, { align: 'right' });
+
+    // Quadro de horários de expediente esperado
+    const colabSchedule = schedules.find((s) => s.role === userRole);
+    const scheduleStr = colabSchedule
+      ? `Entrada: ${colabSchedule.entry_time} | Almoço: ${colabSchedule.lunch_start} às ${colabSchedule.lunch_end} | Saída: ${colabSchedule.exit_time}`
+      : 'Horário esperado: Não configurado';
+
+    doc.setFillColor(245, 247, 250);
+    doc.rect(14, 50, 182, 12, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.text('Expediente Esperado:', 18, 57);
+    doc.setFont('helvetica', 'normal');
+    doc.text(scheduleStr, 60, 57);
+
+    // Tabela de registros diários
+    let y = 74;
+    doc.setFillColor(235, 238, 243);
+    doc.rect(14, y - 6, 182, 8, 'F');
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text('DIA/MÊS', 14, y - 1);
+    doc.text('DIA SEMANA', 29, y - 1);
+    doc.text('ENTRADA', 54, y - 1);
+    doc.text('SAÍDA ALM.', 72, y - 1);
+    doc.text('RETORNO', 92, y - 1);
+    doc.text('SAÍDA', 112, y - 1);
+    doc.text('TOTAL', 130, y - 1);
+    doc.text('OBSERVAÇÕES', 152, y - 1);
+
+    doc.setFont('helvetica', 'normal');
+    y += 7;
 
     const grouped = groupByDay(reportRecords);
-    let y = 65;
     let totalHours = 0;
-
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Data', 14, y);
-    doc.text('Entrada', 45, y);
-    doc.text('Saída Alm.', 75, y);
-    doc.text('Retorno', 107, y);
-    doc.text('Saída', 137, y);
-    doc.text('Total', 165, y);
-    doc.setFont('helvetica', 'normal');
-    y += 6;
 
     Object.entries(grouped).sort().forEach(([day, recs]) => {
       const byType: Record<string, string> = {};
       recs.forEach((r) => {
         byType[r.type] = new Date(r.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
       });
+      
       const hours = calcDayHours(recs);
       totalHours += hours;
 
-      const dateStr = new Date(day + 'T12:00:00').toLocaleDateString('pt-BR');
+      const dateParts = day.split('-');
+      const dateObj = new Date(Number(dateParts[0]), Number(dateParts[1]) - 1, Number(dateParts[2]), 12, 0, 0);
+      const daysOfWeek = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+      const dayOfWeekName = daysOfWeek[dateObj.getDay()];
+      const dateStr = `${dateParts[2]}/${dateParts[1]}`;
+
+      const hasMissingLocation = recs.some((r) => r.latitude === null || r.longitude === null);
+      const obs = hasMissingLocation ? 'Sem localização registrada' : 'Localização registrada';
+
       doc.text(dateStr, 14, y);
-      doc.text(byType['entry'] ?? '-', 45, y);
-      doc.text(byType['lunch_start'] ?? '-', 75, y);
-      doc.text(byType['lunch_end'] ?? '-', 107, y);
-      doc.text(byType['exit'] ?? '-', 137, y);
-      doc.text(hours > 0 ? `${hours.toFixed(1)}h` : '-', 165, y);
+      doc.text(dayOfWeekName, 29, y);
+      doc.text(byType['entry'] ?? '-', 54, y);
+      doc.text(byType['lunch_start'] ?? '-', 72, y);
+      doc.text(byType['lunch_end'] ?? '-', 92, y);
+      doc.text(byType['exit'] ?? '-', 112, y);
+      doc.text(hours > 0 ? `${hours.toFixed(1)}h` : '-', 130, y);
+      doc.text(obs, 152, y);
+
+      // Linha separadora
+      doc.setDrawColor(220, 224, 230);
+      doc.setLineWidth(0.1);
+      doc.line(14, y + 2, 196, y + 2);
+
       y += 7;
 
       if (y > 270) {
@@ -302,10 +481,29 @@ export default function Ponto() {
     });
 
     y += 5;
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Total de horas trabalhadas no mês: ${totalHours.toFixed(1)}h`, 14, y);
+    if (y > 250) {
+      doc.addPage();
+      y = 30;
+    }
 
-    doc.save(`ponto-${userName.replace(/\s/g, '-')}-${reportMonth}.pdf`);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text(`Total de horas trabalhadas no período: ${totalHours.toFixed(1)}h`, 14, y);
+
+    y += 25;
+    if (y > 265) {
+      doc.addPage();
+      y = 35;
+    }
+
+    doc.setFont('helvetica', 'normal');
+    doc.line(55, y, 155, y);
+    y += 5;
+    doc.text('Assinatura do Colaborador', 105, y, { align: 'center' });
+    y += 5;
+    doc.text(userName, 105, y, { align: 'center' });
+
+    doc.save(`ponto-${userName.replace(/\s/g, '-')}-${startDate}-a-${endDate}.pdf`);
   }
 
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -446,6 +644,21 @@ export default function Ponto() {
                         <span className="text-gray-500">{TYPE_LABELS[t]}</span>
                         {rec ? (
                           <div className="flex items-center gap-2">
+                            {rec.latitude !== null && rec.longitude !== null ? (
+                              <a
+                                href={`https://www.google.com/maps?q=${rec.latitude},${rec.longitude}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-green-500 hover:text-green-600 inline-flex items-center"
+                                title="Ver localização no mapa"
+                              >
+                                <MapPin size={16} />
+                              </a>
+                            ) : (
+                              <span className="text-gray-400 inline-flex items-center" title="Sem geolocalização">
+                                <MapPin size={16} />
+                              </span>
+                            )}
                             <span className={`font-medium ${rec.status === 'adjustment_requested' ? 'text-orange-500' : 'text-gray-800'}`}>
                               {new Date(rec.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                               {rec.status === 'adjustment_requested' && ' (ajuste pendente)'}
@@ -480,24 +693,42 @@ export default function Ponto() {
       {activeTab === 'gestor' && isManager && (
         <div className="space-y-6">
           <div className="bg-white rounded-xl shadow p-4 space-y-4">
-            <p className="font-semibold text-gray-700">Gerar Relatório Mensal</p>
-            <div className="flex gap-3 flex-wrap">
-              <select
-                value={selectedUser ?? ''}
-                onChange={(e) => setSelectedUser(Number(e.target.value))}
-                className="border rounded-lg px-3 py-2 text-sm flex-1 min-w-[180px]"
-              >
-                <option value="">Selecione o funcionário</option>
-                {allUsers.map((u) => (
-                  <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-                ))}
-              </select>
-              <input
-                type="month"
-                value={reportMonth}
-                onChange={(e) => setReportMonth(e.target.value)}
-                className="border rounded-lg px-3 py-2 text-sm"
-              />
+            <p className="font-semibold text-gray-700">Gerar Relatório por Período</p>
+            <div className="flex gap-3 flex-wrap items-end">
+              <div className="flex-1 min-w-[180px]">
+                <label className="block text-xs text-gray-500 mb-1">Funcionário</label>
+                <select
+                  value={selectedUser ?? ''}
+                  onChange={(e) => setSelectedUser(Number(e.target.value))}
+                  className="border rounded-lg px-3 py-2 text-sm w-full"
+                >
+                  <option value="">Selecione o funcionário</option>
+                  {allUsers.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.role === 'ADMIN' ? 'Administrador' : u.role === 'COMMERCIAL' ? 'Vendedor' : u.role === 'TECHNICAL' ? 'Técnico' : u.role}){!u.active ? ' (Inativo)' : ''}
+                    </option>
+                  ))}
+
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Data Inicial</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="border rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Data Final</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="border rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
               <button
                 onClick={() => selectedUser && fetchReport(selectedUser)}
                 disabled={!selectedUser || loading}
@@ -505,6 +736,16 @@ export default function Ponto() {
               >
                 {loading ? 'Carregando...' : 'Carregar'}
               </button>
+              {user?.role === 'CEO' && selectedUser && (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(true)}
+                  disabled={loading || deletingRecords}
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Trash2 size={16} /> Excluir todos os registros
+                </button>
+              )}
             </div>
 
             {/* Configurar horários */}
@@ -585,8 +826,29 @@ export default function Ponto() {
                       {TYPE_ORDER.map((t) => {
                         const rec = recs.find((r) => r.type === t);
                         return (
-                          <span key={t}>
-                            {TYPE_LABELS[t].split(' ')[0]}: {rec ? new Date(rec.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                          <span key={t} className="flex items-center gap-1">
+                            {TYPE_LABELS[t].split(' ')[0]}: {rec ? (
+                              <>
+                                <span>{new Date(rec.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                {rec.latitude !== null && rec.longitude !== null ? (
+                                  <a
+                                    href={`https://www.google.com/maps?q=${rec.latitude},${rec.longitude}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-green-500 hover:text-green-600 inline-flex items-center"
+                                    title="Ver localização no mapa"
+                                  >
+                                    <MapPin size={14} />
+                                  </a>
+                                ) : (
+                                  <span className="text-gray-400 inline-flex items-center" title="Sem geolocalização">
+                                    <MapPin size={14} />
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              '—'
+                            )}
                           </span>
                         );
                       })}
@@ -642,6 +904,39 @@ export default function Ponto() {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <h2 className="text-lg font-bold text-gray-800">Confirmar Exclusão</h2>
+            <p className="text-gray-600 text-sm">
+              Tem certeza que deseja excluir TODOS os registros de ponto de{' '}
+              <strong className="text-gray-800">
+                {allUsers.find((u) => u.id === selectedUser)?.name}
+              </strong>
+              ? Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deletingRecords}
+                className="border rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAllRecords}
+                disabled={deletingRecords}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+              >
+                {deletingRecords ? 'Excluindo...' : 'Confirmar Exclusão'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

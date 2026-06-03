@@ -90,11 +90,9 @@ export default function Contracts() {
     const pageHeight = 297;
     
     const addBackground = () => {
-      try {
-        doc.addImage(imgTimbrado, 'PNG', 0, 0, pageWidth, pageHeight);
-      } catch (e) {
-        console.warn("Papel timbrado não encontrado.");
-      }
+      // O fundo do PDF deve ser branco puro
+      doc.setFillColor(255, 255, 255);
+      doc.rect(0, 0, pageWidth, pageHeight, 'F');
     };
     
     addBackground(); // página 1
@@ -114,9 +112,9 @@ export default function Contracts() {
       
       const lines = doc.splitTextToSize(text, contentWidth);
       
-      if (currentY + (lines.length * spacing) > 265) {
+      if (currentY + (lines.length * spacing) > pageHeight - 30) {
         doc.addPage();
-        addBackground(); // timbrado na nova página ANTES do texto
+        addBackground();
         currentY = marginTop;
       }
       
@@ -235,6 +233,13 @@ export default function Contracts() {
     const dataFormatada = new Date(formData.data_contrato).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
     addText(`${formData.cidade_contrato} - PE, ${dataFormatada}.`, { align: 'center' });
 
+    // Verificar se o bloco de assinaturas cabe na página respeitando o limite do rodapé
+    if (currentY + 35 > pageHeight - 30) {
+      doc.addPage();
+      addBackground();
+      currentY = marginTop;
+    }
+
     currentY += 20;
     doc.line(marginLeft, currentY, marginLeft + 70, currentY);
     doc.line(pageWidth - marginLeft - 70, currentY, pageWidth - marginLeft, currentY);
@@ -244,7 +249,34 @@ export default function Contracts() {
     doc.text('MT SOLAR ENERGIA RENOVAVEL\n51.713.487/0001-90', marginLeft + 35, currentY, { align: 'center' });
     doc.text(`${formData.nome_contratante || 'CONTRATANTE'}\n${formData.cpf_cnpj_contratante || ''}`, pageWidth - marginLeft - 35, currentY, { align: 'center' });
 
-    
+    // Loop pós-geração para desenhar o rodapé padrão em todas as páginas do contrato
+    const totalPages = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(120, 120, 120);
+      
+      // Linha separadora discreta no rodapé (25mm a partir da base)
+      doc.setDrawColor(220, 220, 220);
+      doc.setLineWidth(0.2);
+      doc.line(marginLeft, pageHeight - 25, pageWidth - marginLeft, pageHeight - 25);
+      
+      // Informações da empresa do rodapé (dentro dos 25mm reservados)
+      const footerTextLine1 = "MT SOLAR ENERGIA RENOVAVEL — CNPJ: 51.713.487/0001-90";
+      const footerTextLine2 = "mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99951-7110";
+      const footerTextLine3 = "Rua Rossini Roosevelt de Albuquerque, nº 10, sala 103, Piedade, Jaboatão dos Guararapes - PE";
+      
+      doc.text(footerTextLine1, pageWidth / 2, pageHeight - 20, { align: 'center' });
+      doc.text(footerTextLine2, pageWidth / 2, pageHeight - 16, { align: 'center' });
+      doc.text(footerTextLine3, pageWidth / 2, pageHeight - 12, { align: 'center' });
+      
+      // Paginação
+      const pageText = `Página ${i} de ${totalPages}`;
+      doc.text(pageText, pageWidth - marginLeft, pageHeight - 8, { align: 'right' });
+    }
+
     const dataFormatadaArquivo = new Date(formData.data_contrato).toLocaleDateString('pt-BR').replace(/\//g, '-');
     doc.save(`Contrato_${formData.nome_contratante || 'Cliente'}_${dataFormatadaArquivo}.pdf`);
   };

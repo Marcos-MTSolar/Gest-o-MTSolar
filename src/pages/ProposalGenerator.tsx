@@ -1704,6 +1704,9 @@ export default function ProposalGenerator() {
         const { jsPDF } = await import('jspdf');
         const doc = new jsPDF('p', 'mm', 'a4');
         
+        const pageWidth = 210;
+        const pageHeight = 297;
+
         // Extrair apenas o conteúdo do body para o jsPDF.html (sem as fotos HTML)
         const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
         const content = bodyMatch ? bodyMatch[1] : html;
@@ -1722,22 +1725,23 @@ export default function ProposalGenerator() {
         if (formData.includePhotos && formData.photos && formData.photos.length > 0) {
           doc.addPage();
           
-          // Desenhar o cabeçalho idêntico à página anterior
-          doc.setFillColor(30, 58, 95); // #1e3a5f
-          doc.rect(0, 0, 210, 18, 'F');
-          doc.setFillColor(245, 158, 11); // #f59e0b (Linha dourada)
-          doc.rect(0, 18, 210, 1, 'F');
-
-          doc.setTextColor(255, 255, 255);
+          const margemEsquerda = 15;
+          const margemDireita = 15;
+          const margemSuperior = 15;
+          const margemInferior = 20;
+          
+          let y = margemSuperior;
+          
+          doc.setTextColor(30, 58, 95);
           doc.setFontSize(14);
           doc.setFont('helvetica', 'bold');
-          doc.text("Fotos de Vistoria Técnica", 14, 12);
+          doc.text("Fotos de Vistoria Técnica", margemEsquerda, y + 5);
           
-          doc.setTextColor(245, 158, 11);
-          doc.setFontSize(10);
-          doc.text("MT Solar", 180, 12);
-
-          let yPos = 25; // Começa abaixo do header
+          y += 15; // Incrementar y pelo tamanho do título + espaçamento
+          
+          const photoWidth = 180;
+          const photoHeight = 100;
+          const spacing = 10;
           
           for (let i = 0; i < formData.photos.length; i++) {
             const photoUrl = formData.photos[i];
@@ -1755,47 +1759,80 @@ export default function ProposalGenerator() {
                 reader.readAsDataURL(blob);
               });
               
-              // Se a próxima foto ultrapassar o final da página (297mm), cria nova página
-              if (yPos > 190) {
+              // Verificar se a imagem cabe na página atual (com base na margem inferior)
+              if (y + photoHeight > pageHeight - margemInferior) {
                 doc.addPage();
-                doc.setFillColor(30, 58, 95);
-                doc.rect(0, 0, 210, 18, 'F');
-                doc.setFillColor(245, 158, 11);
-                doc.rect(0, 18, 210, 1, 'F');
-
-                doc.setTextColor(255, 255, 255);
-                doc.setFontSize(14);
-                doc.setFont('helvetica', 'bold');
-                doc.text("Fotos de Vistoria Técnica (Cont.)", 14, 12);
-                doc.setTextColor(245, 158, 11);
-                doc.setFontSize(10);
-                doc.text("MT Solar", 180, 12);
-                
-                yPos = 25;
+                y = margemSuperior;
               }
               
-              // 3. Inserir no PDF
-              // Assumindo proporção landscape padrão (160mm x 100mm aprox) e centralizando (X=25)
-              doc.addImage(base64, 'JPEG', 25, yPos, 160, 100);
+              // 3. Inserir no PDF respeitando as margens horizontais e verticais
+              doc.addImage(base64, 'JPEG', margemEsquerda, y, photoWidth, photoHeight);
               
               // Borda decorativa leve em volta da foto
               doc.setDrawColor(229, 231, 235); // gray-200
-              doc.rect(25, yPos, 160, 100, 'S');
+              doc.setLineWidth(0.2);
+              doc.rect(margemEsquerda, y, photoWidth, photoHeight, 'S');
 
-              yPos += 110; // Espaço para a próxima imagem
+              y += photoHeight + spacing; // Espaço para a próxima imagem
               
             } catch (err) {
               console.error(`[PDF IMAGE ERROR] Falha ao carregar imagem ${i+1}:`, err);
               // Feedback no PDF caso a imagem quebre
+              if (y + 15 > pageHeight - margemInferior) {
+                doc.addPage();
+                y = margemSuperior;
+              }
               doc.setTextColor(239, 68, 68); // red-500
               doc.setFontSize(10);
               doc.setFont('helvetica', 'normal');
-              doc.text(`[Erro ao carregar a imagem da vistoria ${i+1}]`, 25, yPos + 10);
-              yPos += 20;
+              doc.text(`[Erro ao carregar a imagem da vistoria ${i+1}]`, margemEsquerda, y + 5);
+              y += 15;
             }
           }
         }
         // =========================================================
+
+        // Loop pós-geração para cabeçalhos e rodapés em todas as páginas
+        const totalPages = (doc as any).internal.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+          doc.setPage(i);
+          
+          // 1. Cabeçalho nas páginas subsequentes (a partir da página 2)
+          if (i > 1) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(120, 120, 120);
+
+            // Linha separadora discreta para o cabeçalho a 12mm do topo
+            doc.setDrawColor(220, 220, 220);
+            doc.setLineWidth(0.2);
+            doc.line(15, 12, 195, 12);
+
+            // Conteúdo do cabeçalho
+            const headerLeft = `Proposta: PROP-${proposalNumber}`;
+            const headerRight = `Cliente: ${formData.clientName || 'Cliente'}`;
+            doc.text(headerLeft, 15, 9);
+            doc.text(headerRight, 195, 9, { align: 'right' });
+          }
+
+          // 2. Rodapé em todas as páginas (margem de 20mm a partir da base)
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8);
+          doc.setTextColor(120, 120, 120);
+
+          // Linha separadora discreta no rodapé (20mm a partir da base)
+          doc.setDrawColor(220, 220, 220);
+          doc.setLineWidth(0.2);
+          doc.line(15, pageHeight - 20, pageWidth - 15, pageHeight - 20);
+
+          // Informações da empresa no rodapé (dentro dos 20mm reservados)
+          const footerTextLine = "MT SOLAR — mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99951-7110";
+          doc.text(footerTextLine, pageWidth / 2, pageHeight - 14, { align: 'center' });
+
+          // Paginação
+          const pageText = `Página ${i} de ${totalPages}`;
+          doc.text(pageText, pageWidth - 15, pageHeight - 8, { align: 'right' });
+        }
 
         const pdfBlob = doc.output('blob');
         const fileName = `${proposalNumber}-${Date.now()}.pdf`;

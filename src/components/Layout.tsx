@@ -121,6 +121,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: 'Estoque', path: '/estoque', icon: Package, roles: ['CEO', 'ADMIN'] },
     { name: 'Finalizados', path: '/finished', icon: Archive, roles: ['CEO', 'ADMIN'] },
     { name: 'Mensagens', path: '/messages', icon: MessageSquare, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
+    { name: 'Funcionários', path: '/funcionarios', icon: Users, roles: ['CEO', 'ADMIN'] },
     { name: 'Usuários', path: '/users', icon: Users, roles: ['CEO', 'ADMIN'] },
     { name: 'Configurações', path: '/settings', icon: Settings, roles: ['CEO', 'ADMIN'] },
   ];
