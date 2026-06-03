@@ -389,6 +389,7 @@ async function sendPushNotification(
   } catch (err) {
     console.error(`[PUSH ERROR] Failed to send notification to User ${userId}:`, err);
   }
+}
 
 // Clients
 app.get('/api/clients', authenticateToken, async (req: any, res) => {

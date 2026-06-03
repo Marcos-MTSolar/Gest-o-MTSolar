@@ -467,6 +467,12 @@ O fluxo de processamento de mídias foi otimizado para evitar expiração rápid
 
 ## 11. PROBLEMAS RESOLVIDOS
 
+* **Falha Geral no Login e API do Servidor (Erro de Compilação no Backend):**
+  * *Causa Raiz:* Durante a implementação da Melhoria 5, a chave de fechamento (`}`) da função `sendPushNotification` foi acidentalmente removida no arquivo `api/index.ts`. Como resultado, o compilador TSX/esbuild interpretou as definições de rotas subsequentes como parte da função, gerando um erro sintático fatal (`Unexpected export`) e travando a inicialização de todo o backend. Com a API fora do ar, todas as tentativas de autenticação falharam.
+  * *Solução Aplicada:* Restaurada a chave de fechamento `}` na função `sendPushNotification` (linha 392) de `api/index.ts`. O compilador reiniciou com sucesso, restabelecendo a operação de todas as rotas e permitindo o login dos usuários.
+  * *Data e hora da alteração:* 03/06/2026 às 12:30 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`
+
 * **URLs de Mídia Nulas para Mensagens Enviadas (`from_me = true`):**
   * *Causa Raiz:* No envio de mídias e áudios, a URL temporária ou arquivo `base64` era enviado para a Evolution API, mas no `INSERT` da tabela `whatsapp_messages` a coluna `media_url` era mantida nula. Além disso, o arquivo temporário da mídia no bucket `whatsapp-media` era deletado imediatamente após o envio bem-sucedido para economizar espaço de storage.
   * *Solução Aplicada:* Ajustadas as rotas `/api/whatsapp/send-media` e `/api/whatsapp/send-audio` no backend Express. Agora, antes de inserir a mensagem, o backend gera uma URL pública definitiva pelo storage com `supabaseAdmin.storage.from(...).getPublicUrl(filePath)`, preenche a propriedade `media_url` na query de `INSERT` e mantém o arquivo gravado no bucket de forma permanente.
