@@ -264,7 +264,7 @@ app.get('/api/users', authenticateToken, async (req: any, res) => {
 
 app.post('/api/users', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CEO') return res.sendStatus(403);
-  const { name, email, password, role, cpf, cargo, data_admissao } = req.body;
+  const { name, email, password, role, cpf = null, cargo = null, data_admissao = null } = req.body;
   const hash = bcrypt.hashSync(password, 10);
 
   const { data, error } = await supabase
@@ -291,7 +291,7 @@ app.post('/api/users', authenticateToken, async (req: any, res) => {
 app.put('/api/users/:id', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CEO' && req.user.role !== 'ADMIN') return res.sendStatus(403);
 
-  const { name, email, role, active, password, cpf, cargo, data_admissao } = req.body;
+  const { name, email, role, active, password, cpf = null, cargo = null, data_admissao = null } = req.body;
   const updates: any = { 
     name, 
     email, 
@@ -3177,8 +3177,8 @@ app.get('/api/ponto/ajustes', authenticateToken, async (req: any, res) => {
 // Cron: limpeza de selfies de ponto com mais de 90 dias no R2
 app.get('/api/cron/cleanup-r2', async (req, res) => {
   try {
-    const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
-    const cutoffDate = new Date(Date.now() - NINETY_DAYS_MS);
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 90);
 
     const { data: oldRecords, error } = await supabaseAdmin
       .from('time_records')
@@ -3203,6 +3203,79 @@ app.get('/api/cron/cleanup-r2', async (req, res) => {
     }
 
     res.json({ success: true, deleted });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Cron: limpeza de mídias do WhatsApp com mais de 120 dias no Supabase Storage
+app.get('/api/cron/cleanup-whatsapp-media', async (req, res) => {
+  try {
+    const ONE_HUNDRED_TWENTY_DAYS_MS = 120 * 24 * 60 * 60 * 1000;
+    const cutoffDate = new Date(Date.now() - ONE_HUNDRED_TWENTY_DAYS_MS);
+
+    // Buscar registros antigos que possuem media_url
+    const { data: records, error } = await supabaseAdmin
+      .from('whatsapp_messages')
+      .select('id, media_url')
+      .lt('timestamp', cutoffDate.toISOString())
+      .not('media_url', 'is', null)
+      .limit(50);
+
+    if (error) throw error;
+
+    let deleted = 0;
+    let errors = 0;
+
+    for (const record of records ?? []) {
+      try {
+        const mediaUrl = record.media_url;
+        if (!mediaUrl) continue;
+
+        const bucketPrefix = 'whatsapp-media/';
+        const index = mediaUrl.indexOf(bucketPrefix);
+        if (index === -1) {
+          errors++;
+          continue;
+        }
+
+        const path = mediaUrl.slice(index + bucketPrefix.length);
+        if (!path) {
+          errors++;
+          continue;
+        }
+
+        // Remover do storage do Supabase
+        const { error: deleteError } = await supabaseAdmin.storage
+          .from('whatsapp-media')
+          .remove([path]);
+
+        if (deleteError) {
+          console.error(`Erro ao remover arquivo ${path} do Supabase Storage:`, deleteError);
+          errors++;
+          continue;
+        }
+
+        // Atualizar o registro na tabela
+        const { error: updateError } = await supabaseAdmin
+          .from('whatsapp_messages')
+          .update({ media_url: null })
+          .eq('id', record.id);
+
+        if (updateError) {
+          console.error(`Erro ao atualizar banco para mensagem ${record.id}:`, updateError);
+          errors++;
+          continue;
+        }
+
+        deleted++;
+      } catch (e) {
+        console.error(`Erro ao processar limpeza da mensagem ${record.id}:`, e);
+        errors++;
+      }
+    }
+
+    res.json({ deleted, errors });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

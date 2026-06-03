@@ -41,18 +41,15 @@ export default function Funcionarios() {
     role: 'COMMERCIAL' as UserProfile['role'],
     active: true,
     cpf: '',
-    cargo: 'COMMERCIAL',
+    cargo: '',
     data_admissao: '',
   });
   const [submitting, setSubmitting] = useState(false);
 
   const formatCPF = (value: string) => {
     return value
-      .replace(/\D/g, '') // remove tudo que não for dígito
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d{1,2})/, '$1-$2')
-      .replace(/(-\d{2})\d+?$/, '$1'); // limita o tamanho
+      .replace(/\D/g, '')
+      .replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
   };
 
   const handleCPFChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,7 +83,7 @@ export default function Funcionarios() {
       role: 'COMMERCIAL',
       active: true,
       cpf: '',
-      cargo: 'COMMERCIAL',
+      cargo: '',
       data_admissao: '',
     });
     setIsModalOpen(true);
@@ -418,6 +415,7 @@ export default function Funcionarios() {
                     });
                   }}
                 >
+                  <option value="">Selecione o cargo</option>
                   <option value="COMMERCIAL">Vendedor</option>
                   <option value="TECHNICAL">Técnico</option>
                   <option value="ADMIN">Administrador</option>

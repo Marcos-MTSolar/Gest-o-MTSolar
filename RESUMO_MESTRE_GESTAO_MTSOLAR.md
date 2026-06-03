@@ -473,6 +473,37 @@ O fluxo de processamento de mídias foi otimizado para evitar expiração rápid
   * *Data e hora da alteração:* 03/06/2026 às 12:30 (Horário Local)
   * *Arquivos modificados:* `api/index.ts`
 
+* **Erro Cannot read properties of null (reading 'map') na aba Relatório do Ponto:**
+  * *Causa Raiz:* O estado `reportRecords` e outros arrays de ponto eram deixados como `null` ou `undefined` quando ocorria um erro de requisição (como HTTP 400 por falta de parâmetros) ou o retorno da API vinha vazio. O frontend tentava renderizar chamando `.map()` sobre esses arrays, provocando a quebra visual completa da aba de relatórios.
+  * *Solução Aplicada:*
+    1. Adicionada guarda de validação de parâmetros na função `fetchReport` para evitar requisições sem `userId`, `startDate` ou `endDate`, retornando preventivamente e definindo o estado como `[]`.
+    2. Implementado fallback com operador de coalescência nula (`res.data ?? []`) e fallback explícito no bloco `catch` em todas as rotas de carregamento (`fetchReport`, `fetchHistory`, `fetchSchedules`, `fetchAllUsers` e `fetchPendingAdjustments`).
+    3. Protegidos todos os acessos por `.map()`, `.filter()`, `.find()`, `.reduce()` e agrupamento utilizando o operador `(estado ?? [])`.
+  * *Data e hora da alteração:* 03/06/2026 às 13:45 (Horário Local)
+  * *Arquivos modificados:* `src/pages/Ponto.tsx`
+
+* **Erro HTTP 400 ao Cadastrar/Atualizar Funcionário:**
+  * *Causa Raiz:* No envio de novas propriedades de cadastro (como `cpf`, `cargo` e `data_admissao`), as rotas do backend não utilizavam valores padrões na desestruturação de `req.body`, resultando em payloads ou colunas inconsistentes que o Supabase rejeitava se os campos estivessem ausentes. No frontend, a inicialização e a máscara de formatação do CPF não seguiam o padrão exato exigido.
+  * *Solução Aplicada:*
+    1. Ajustadas as rotas `POST /api/users` e `PUT /api/users/:id` no backend `api/index.ts` para desestruturar `cpf = null`, `cargo = null` e `data_admissao = null` do `req.body` com valores padrão nulos.
+    2. Modificado o estado inicial do formulário no frontend `src/pages/Funcionarios.tsx` para inicializar `cargo` com `''` (string vazia).
+    3. Adicionada a opção padrão `Selecione o cargo` no menu select de cargos do formulário para guiar o usuário na seleção.
+    4. Atualizada a máscara de formatação incremental do CPF para usar o padrão regex literal solicitado.
+  * *Data e hora da alteração:* 03/06/2026 às 13:48 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/Funcionarios.tsx`
+
+* **Ciclo de Vida de Armazenamento e Limpeza Automática de Mídias (R2 e Supabase Storage):**
+  * *Causa Raiz:* Não existia uma limpeza periódica de mídias enviadas no WhatsApp (`whatsapp-media`), gerando acúmulo ilimitado de arquivos no Supabase Storage. O cronjob do R2 (`cleanup-r2`) usava uma lógica de intervalo dinâmico que não correspondia exatamente à filtragem recomendada no banco de dados.
+  * *Solução Aplicada:*
+    1. Corrigida a lógica de filtragem da data de corte no cronjob `cleanup-r2` no `api/index.ts` usando `setDate(getDate() - 90)` de forma direta e segura.
+    2. Desenvolvido o novo cronjob `GET /api/cron/cleanup-whatsapp-media` no backend para buscar mídias do WhatsApp com mais de 120 dias, extrair o caminho relativo dos arquivos a partir da `media_url`, removê-los do Supabase Storage via `supabaseAdmin.storage.from(...).remove` e atualizar o banco para `media_url = null` (processados em lotes de 50 registros para evitar timeout).
+    3. Cadastrada a rota do novo cronjob no arquivo `vercel.json` sob o agendamento `"0 3 2 * *"` (dia 2 de cada mês).
+  * *Data e hora da alteração:* 03/06/2026 às 13:58 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `vercel.json`
+
+
+
+
 * **URLs de Mídia Nulas para Mensagens Enviadas (`from_me = true`):**
   * *Causa Raiz:* No envio de mídias e áudios, a URL temporária ou arquivo `base64` era enviado para a Evolution API, mas no `INSERT` da tabela `whatsapp_messages` a coluna `media_url` era mantida nula. Além disso, o arquivo temporário da mídia no bucket `whatsapp-media` era deletado imediatamente após o envio bem-sucedido para economizar espaço de storage.
   * *Solução Aplicada:* Ajustadas as rotas `/api/whatsapp/send-media` e `/api/whatsapp/send-audio` no backend Express. Agora, antes de inserir a mensagem, o backend gera uma URL pública definitiva pelo storage com `supabaseAdmin.storage.from(...).getPublicUrl(filePath)`, preenche a propriedade `media_url` na query de `INSERT` e mantém o arquivo gravado no bucket de forma permanente.

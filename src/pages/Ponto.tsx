@@ -66,7 +66,7 @@ function getNextPunchType(todayRecords: TimeRecord[]): string | null {
 }
 
 function groupByDay(records: TimeRecord[]): Record<string, TimeRecord[]> {
-  return records.reduce((acc, r) => {
+  return (records ?? []).reduce((acc, r) => {
     const day = r.timestamp.slice(0, 10);
     if (!acc[day]) acc[day] = [];
     acc[day].push(r);
@@ -75,7 +75,7 @@ function groupByDay(records: TimeRecord[]): Record<string, TimeRecord[]> {
 }
 
 function calcDayHours(records: TimeRecord[]): number {
-  const sorted = [...records].sort(
+  const sorted = [...(records ?? [])].sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
   const byType: Record<string, Date> = {};
@@ -291,8 +291,10 @@ export default function Ponto() {
   async function fetchSchedules() {
     try {
       const res = await api.get('/api/ponto/schedules');
-      setSchedules(res.data);
-    } catch {}
+      setSchedules(res.data ?? []);
+    } catch {
+      setSchedules([]);
+    }
   }
 
   async function fetchHistory() {
@@ -301,33 +303,46 @@ export default function Ponto() {
       const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
       const res = await api.get(`/api/ponto/historico?start=${start}&end=${end}`);
-      setRecords(res.data);
-    } catch {}
+      setRecords(res.data ?? []);
+    } catch {
+      setRecords([]);
+    }
   }
 
   async function fetchAllUsers() {
     try {
       const res = await api.get('/api/users');
-      setAllUsers(res.data);
-    } catch {}
+      setAllUsers(res.data ?? []);
+    } catch {
+      setAllUsers([]);
+    }
   }
 
 
   async function fetchPendingAdjustments() {
     try {
       const res = await api.get('/api/ponto/ajustes');
-      setAdjustments(res.data);
-    } catch {}
+      setAdjustments(res.data ?? []);
+    } catch {
+      setAdjustments([]);
+    }
   }
 
   async function fetchReport(userId: number) {
+    if (!userId || !startDate || !endDate) {
+      setReportRecords([]);
+      return;
+    }
     try {
       setLoading(true);
       const start = startDate;
       const end = `${endDate} 23:59:59`;
       const res = await api.get(`/api/ponto/relatorio/${userId}?start=${start}&end=${end}`);
-      setReportRecords(res.data);
-    } catch {} finally {
+      setReportRecords(res.data ?? []);
+    } catch (err) {
+      console.error(err);
+      setReportRecords([]);
+    } finally {
       setLoading(false);
     }
   }
@@ -446,9 +461,9 @@ export default function Ponto() {
   }
 
   function generatePDF() {
-    if (!reportRecords.length) return;
+    if (!(reportRecords ?? []).length) return;
     const doc = new jsPDF();
-    const colab = allUsers.find((u) => u.id === selectedUser);
+    const colab = (allUsers ?? []).find((u) => u.id === selectedUser);
     const userName = colab?.name ?? 'Funcionário';
     const userRole = colab?.role ?? '';
     const userCpf = colab?.cpf ?? '—';
@@ -516,7 +531,7 @@ export default function Ponto() {
     doc.text(`Emitido em: ${new Date().toLocaleDateString('pt-BR')}`, 196, 47, { align: 'right' });
 
     // Quadro de horários de expediente esperado
-    const colabSchedule = schedules.find((s) => s.role === userRole);
+    const colabSchedule = (schedules ?? []).find((s) => s.role === userRole);
     const scheduleStr = colabSchedule
       ? `Entrada: ${colabSchedule.entry_time} | Almoço: ${colabSchedule.lunch_start} às ${colabSchedule.lunch_end} | Saída: ${colabSchedule.exit_time}`
       : 'Horário esperado: Não configurado';
@@ -547,12 +562,12 @@ export default function Ponto() {
     doc.setFont('helvetica', 'normal');
     y += 7;
 
-    const grouped = groupByDay(reportRecords);
+    const grouped = groupByDay(reportRecords ?? []);
     let totalHours = 0;
 
     Object.entries(grouped).sort().forEach(([day, recs]) => {
       const byType: Record<string, string> = {};
-      recs.forEach((r) => {
+      (recs ?? []).forEach((r) => {
         byType[r.type] = new Date(r.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
       });
       
@@ -565,7 +580,7 @@ export default function Ponto() {
       const dayOfWeekName = daysOfWeek[dateObj.getDay()];
       const dateStr = `${dateParts[2]}/${dateParts[1]}`;
 
-      const hasMissingLocation = recs.some((r) => r.latitude === null || r.longitude === null);
+      const hasMissingLocation = (recs ?? []).some((r) => r.latitude === null || r.longitude === null);
       const obs = hasMissingLocation ? 'Sem localização registrada' : 'Localização registrada';
 
       doc.text(dateStr, 14, y);
@@ -617,9 +632,9 @@ export default function Ponto() {
   }
 
   const todayStr = new Date().toISOString().slice(0, 10);
-  const todayRecords = records.filter((r) => r.timestamp.slice(0, 10) === todayStr);
+  const todayRecords = (records ?? []).filter((r) => r.timestamp.slice(0, 10) === todayStr);
   const nextType = getNextPunchType(todayRecords);
-  const mySchedule = schedules.find((s) => s.role === user?.role);
+  const mySchedule = (schedules ?? []).find((s) => s.role === user?.role);
 
   return (
     <div className="max-w-4xl mx-auto p-4">
@@ -677,12 +692,12 @@ export default function Ponto() {
 
           <div className="bg-white rounded-xl shadow p-4">
             <p className="font-semibold text-gray-700 mb-3">Registros de hoje</p>
-            {todayRecords.length === 0 ? (
+            {(todayRecords ?? []).length === 0 ? (
               <p className="text-gray-400 text-sm">Nenhuma batida hoje.</p>
             ) : (
               <div className="space-y-2">
                 {TYPE_ORDER.map((t) => {
-                  const rec = todayRecords.find((r) => r.type === t);
+                  const rec = (todayRecords ?? []).find((r) => r.type === t);
                   return (
                     <div key={t} className="flex justify-between items-center text-sm py-2 border-b border-gray-100 last:border-0">
                       <span className="text-gray-600">{TYPE_LABELS[t]}</span>
@@ -736,8 +751,8 @@ export default function Ponto() {
             </div>
           )}
 
-          {Object.entries(groupByDay(records)).sort().reverse().map(([day, recs]) => {
-            const hours = calcDayHours(recs);
+          {Object.entries(groupByDay(records ?? [])).sort().reverse().map(([day, recs]) => {
+            const hours = calcDayHours(recs ?? []);
             return (
               <div key={day} className="bg-white rounded-xl shadow p-4">
                 <div className="flex justify-between items-center mb-3">
@@ -748,7 +763,7 @@ export default function Ponto() {
                 </div>
                 <div className="space-y-1">
                   {TYPE_ORDER.map((t) => {
-                    const rec = recs.find((r) => r.type === t);
+                    const rec = (recs ?? []).find((r) => r.type === t);
                     return (
                       <div key={t} className="flex justify-between text-sm py-1">
                         <span className="text-gray-500">{TYPE_LABELS[t]}</span>
@@ -801,7 +816,7 @@ export default function Ponto() {
             );
           })}
 
-          {records.length === 0 && (
+          {(records ?? []).length === 0 && (
             <p className="text-center text-gray-400 py-8">Nenhum registro este mês.</p>
           )}
         </div>
@@ -821,7 +836,7 @@ export default function Ponto() {
                   className="border rounded-lg px-3 py-2 text-sm w-full"
                 >
                   <option value="">Selecione o funcionário</option>
-                  {allUsers.map((u) => (
+                  {(allUsers ?? []).map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name} ({u.role === 'ADMIN' ? 'Administrador' : u.role === 'COMMERCIAL' ? 'Vendedor' : u.role === 'TECHNICAL' ? 'Técnico' : u.role}){!u.active ? ' (Inativo)' : ''}
                     </option>
@@ -919,11 +934,11 @@ export default function Ponto() {
             </div>
           </div>
 
-          {reportRecords.length > 0 && (
+          {(reportRecords ?? []).length > 0 && (
             <div className="bg-white rounded-xl shadow p-4">
               <div className="flex justify-between items-center mb-4">
                 <p className="font-semibold text-gray-700">
-                  Resultado — {allUsers.find((u) => u.id === selectedUser)?.name}
+                  Resultado — {(allUsers ?? []).find((u) => u.id === selectedUser)?.name}
                 </p>
                 <button
                   onClick={generatePDF}
@@ -933,8 +948,8 @@ export default function Ponto() {
                 </button>
               </div>
 
-              {Object.entries(groupByDay(reportRecords)).sort().map(([day, recs]) => {
-                const hours = calcDayHours(recs);
+              {Object.entries(groupByDay(reportRecords ?? [])).sort().map(([day, recs]) => {
+                const hours = calcDayHours(recs ?? []);
                 return (
                   <div key={day} className="flex justify-between items-center py-2 border-b border-gray-100 text-sm">
                     <span className="text-gray-600 w-32">
@@ -942,7 +957,7 @@ export default function Ponto() {
                     </span>
                     <div className="flex gap-4 flex-wrap text-gray-500">
                       {TYPE_ORDER.map((t) => {
-                        const rec = recs.find((r) => r.type === t);
+                        const rec = (recs ?? []).find((r) => r.type === t);
                         return (
                           <span key={t} className="flex items-start gap-1">
                             {TYPE_LABELS[t].split(' ')[0]}: {rec ? (
@@ -985,7 +1000,7 @@ export default function Ponto() {
               })}
 
               <div className="pt-3 text-right font-bold text-gray-800">
-                Total: {Object.values(groupByDay(reportRecords)).reduce((sum, recs) => sum + calcDayHours(recs), 0).toFixed(1)}h
+                Total: {Object.values(groupByDay(reportRecords ?? [])).reduce((sum, recs) => sum + calcDayHours(recs ?? []), 0).toFixed(1)}h
               </div>
             </div>
           )}
@@ -995,10 +1010,10 @@ export default function Ponto() {
       {/* TAB: AJUSTES PENDENTES (GESTOR) */}
       {activeTab === 'ajustes' && isManager && (
         <div className="space-y-4">
-          {adjustments.length === 0 ? (
+          {(adjustments ?? []).length === 0 ? (
             <p className="text-center text-gray-400 py-8">Nenhum ajuste pendente.</p>
           ) : (
-            adjustments.map((adj) => (
+            (adjustments ?? []).map((adj) => (
               <div key={adj.id} className="bg-white rounded-xl shadow p-4">
                 <div className="flex justify-between items-start mb-2">
                   <div>
@@ -1040,7 +1055,7 @@ export default function Ponto() {
             <p className="text-gray-600 text-sm">
               Tem certeza que deseja excluir TODOS os registros de ponto de{' '}
               <strong className="text-gray-800">
-                {allUsers.find((u) => u.id === selectedUser)?.name}
+                {(allUsers ?? []).find((u) => u.id === selectedUser)?.name}
               </strong>
               ? Esta ação não pode ser desfeita.
             </p>

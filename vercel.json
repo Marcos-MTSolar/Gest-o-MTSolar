@@ -25,6 +25,7 @@
     { "path": "/api/cron/mensagem-inicio-expediente", "schedule": "30 11 * * 1-5" },
     { "path": "/api/cron/mensagem-almoco", "schedule": "0 15 * * 1-5" },
     { "path": "/api/cron/mensagem-fim-expediente", "schedule": "0 20 * * 1-5" },
-    { "path": "/api/cron/cleanup-r2", "schedule": "0 3 1 * *" }
+    { "path": "/api/cron/cleanup-r2", "schedule": "0 3 1 * *" },
+    { "path": "/api/cron/cleanup-whatsapp-media", "schedule": "0 3 2 * *" }
   ]
 }
