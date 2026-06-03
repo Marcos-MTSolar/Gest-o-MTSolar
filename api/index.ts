@@ -258,8 +258,25 @@ app.get('/api/auth/me', authenticateToken, async (req: any, res) => {
 // Users
 app.get('/api/users', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CEO' && req.user.role !== 'ADMIN') return res.sendStatus(403);
-  const { data: users } = await supabase.from('users').select('id, name, email, role, active, created_at, cpf, cargo, data_admissao').eq('company_id', req.user.company_id);
-  res.json(users);
+
+  // Tenta buscar com campos opcionais (cpf, cargo, data_admissao)
+  let { data: users, error } = await supabase
+    .from('users')
+    .select('id, name, email, role, active, created_at, cpf, cargo, data_admissao')
+    .eq('company_id', req.user.company_id);
+
+  // Se falhar por colunas inexistentes no banco (PGRST204), retenta sem os campos opcionais
+  if (error?.code === 'PGRST204') {
+    console.warn('[users GET] Colunas opcionais ausentes no schema — retentando sem cpf/cargo/data_admissao');
+    const fallback = await supabase
+      .from('users')
+      .select('id, name, email, role, active, created_at')
+      .eq('company_id', req.user.company_id);
+    users = fallback.data as any[];
+    error = fallback.error;
+  }
+
+  res.json(users ?? []);
 });
 
 app.post('/api/users', authenticateToken, async (req: any, res) => {
