@@ -507,9 +507,12 @@ O fluxo de processamento de mídias foi otimizado para evitar expiração rápid
   * *Data e hora da alteração:* 03/06/2026 às 14:10 (Horário Local)
   * *Arquivos modificados:* `public/PNG_-_MT_SOLAR__1_.png`
 
-* **Erro HTTP 400 ao Cadastrar Funcionário — Colunas `cpf`/`cargo`/`data_admissao` Ausentes no Banco:**
-  * *Causa Raiz:* O PostgREST do Supabase retornava erro `PGRST204` ("Could not find the 'cargo' column in the schema cache") porque as colunas `cpf`, `cargo` e `data_admissao` ainda não foram criadas na tabela `users` via SQL Editor do Supabase. Mesmo que os valores fossem `null`, incluir os campos no payload causava rejeição imediata da API.
-  * *Solução Aplicada:* Implementada lógica de **fallback automático** nas rotas `POST /api/users` e `PUT /api/users/:id` do `api/index.ts`: a rota tenta inserir/atualizar com o payload completo (incluindo `cpf`, `cargo`, `data_admissao`); se o Supabase retornar `PGRST204`, reexecuta a operação com apenas os campos obrigatórios. O cadastro agora funciona em qualquer cenário — tanto antes quanto depois da migration SQL ser aplicada no Supabase.
+* **Erro HTTP 400 ao Cadastrar e Listagem Vazia na Página de Funcionários (PGRST204):**
+  * *Causa Raiz:* O PostgREST do Supabase retornava erro `PGRST204` em três rotas (`GET`, `POST` e `PUT /api/users`) porque as colunas `cpf`, `cargo` e `data_admissao` ainda não foram criadas na tabela `users`. O `GET` retornava `null` silenciosamente (lista vazia na tela), o `POST` retornava HTTP 400 (cadastro falhava) e o `PUT` idem.
+  * *Solução Aplicada:* Implementado **fallback automático com código de erro `PGRST204`** nas três rotas do `api/index.ts`:
+    1. `GET /api/users`: tenta buscar com campos extras; se `PGRST204`, retenta sem eles — a lista de funcionários sempre é retornada.
+    2. `POST /api/users`: tenta inserir com `cpf`/`cargo`/`data_admissao`; se `PGRST204`, retenta com apenas os campos obrigatórios.
+    3. `PUT /api/users/:id`: mesma lógica de fallback para atualizações.
   * *Ação pendente:* Executar o SQL abaixo no editor do Supabase para ativar o salvamento dos campos opcionais:
     ```sql
     DO $$ BEGIN
@@ -524,8 +527,9 @@ O fluxo de processamento de mídias foi otimizado para evitar expiração rápid
       END IF;
     END $$;
     ```
-  * *Data e hora da alteração:* 03/06/2026 às 14:25 (Horário Local)
+  * *Data e hora da alteração:* 03/06/2026 às 14:42 (Horário Local)
   * *Arquivos modificados:* `api/index.ts`
+
 
 
 
