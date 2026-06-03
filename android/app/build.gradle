@@ -16,10 +16,20 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Configuração de assinatura com a keystore da MT Solar
+    signingConfigs {
+        release {
+            storeFile file("C:\\Users\\aurel\\Desktop\\APK\\mtsolar.jks")
+            storePassword "Kem124578369@"
+            keyAlias "mtsolar"
+            keyPassword "Kem124578369@"
+        }
+    }
     buildTypes {
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
 }

@@ -12,6 +12,9 @@ type UserProfile = {
   role: 'CEO' | 'ADMIN' | 'COMMERCIAL' | 'TECHNICAL';
   active: boolean;
   company_id: string;
+  cpf?: string;
+  cargo?: string;
+  data_admissao?: string;
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -37,8 +40,25 @@ export default function Funcionarios() {
     password: '',
     role: 'COMMERCIAL' as UserProfile['role'],
     active: true,
+    cpf: '',
+    cargo: 'COMMERCIAL',
+    data_admissao: '',
   });
   const [submitting, setSubmitting] = useState(false);
+
+  const formatCPF = (value: string) => {
+    return value
+      .replace(/\D/g, '') // remove tudo que não for dígito
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})/, '$1-$2')
+      .replace(/(-\d{2})\d+?$/, '$1'); // limita o tamanho
+  };
+
+  const handleCPFChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatCPF(e.target.value);
+    setFormData(prev => ({ ...prev, cpf: formatted }));
+  };
 
   useEffect(() => {
     fetchUsers();
@@ -65,6 +85,9 @@ export default function Funcionarios() {
       password: '',
       role: 'COMMERCIAL',
       active: true,
+      cpf: '',
+      cargo: 'COMMERCIAL',
+      data_admissao: '',
     });
     setIsModalOpen(true);
   };
@@ -77,6 +100,9 @@ export default function Funcionarios() {
       password: '', // Leave empty for optional change
       role: user.role,
       active: user.active,
+      cpf: user.cpf || '',
+      cargo: user.cargo || user.role,
+      data_admissao: user.data_admissao || '',
     });
     setIsModalOpen(true);
   };
@@ -94,6 +120,9 @@ export default function Funcionarios() {
         email: user.email,
         role: user.role,
         active: nextActive,
+        cpf: user.cpf || '',
+        cargo: user.cargo || user.role,
+        data_admissao: user.data_admissao || null,
       });
       toast.success(`Funcionário ${nextActive ? 'reativado' : 'desativado'} com sucesso!`);
       fetchUsers();
@@ -116,17 +145,29 @@ export default function Funcionarios() {
       toast.error('A senha é obrigatória para novos cadastros.');
       return;
     }
+    if (!formData.cpf.trim()) {
+      toast.error('O CPF é obrigatório.');
+      return;
+    }
+    if (!formData.cargo.trim()) {
+      toast.error('O Cargo é obrigatório.');
+      return;
+    }
 
     try {
       setSubmitting(true);
+      const payload: any = {
+        name: formData.name,
+        email: formData.email,
+        role: formData.role,
+        active: formData.active,
+        cpf: formData.cpf,
+        cargo: formData.cargo,
+        data_admissao: formData.data_admissao || null,
+      };
+
       if (editingUser) {
         // Edit mode
-        const payload: any = {
-          name: formData.name,
-          email: formData.email,
-          role: formData.role,
-          active: formData.active,
-        };
         if (formData.password) {
           payload.password = formData.password;
         }
@@ -134,7 +175,8 @@ export default function Funcionarios() {
         toast.success('Funcionário atualizado com sucesso!');
       } else {
         // Create mode
-        await api.post('/api/users', formData);
+        payload.password = formData.password;
+        await api.post('/api/users', payload);
         toast.success('Funcionário cadastrado com sucesso!');
       }
       setIsModalOpen(false);
@@ -346,19 +388,53 @@ export default function Funcionarios() {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                  CPF <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="000.000.000-00"
+                  maxLength={14}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-blue-900 focus:outline-none transition-all"
+                  value={formData.cpf}
+                  onChange={handleCPFChange}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
                   Cargo / Função <span className="text-red-500">*</span>
                 </label>
                 <select
                   required
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:border-blue-900 focus:outline-none transition-all"
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as UserProfile['role'] })}
+                  value={formData.cargo}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData({
+                      ...formData,
+                      cargo: val,
+                      role: val as UserProfile['role']
+                    });
+                  }}
                 >
                   <option value="COMMERCIAL">Vendedor</option>
                   <option value="TECHNICAL">Técnico</option>
                   <option value="ADMIN">Administrador</option>
                   {currentUser?.role === 'CEO' && <option value="CEO">CEO</option>}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                  Data de Admissão
+                </label>
+                <input
+                  type="date"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-blue-900 focus:outline-none transition-all"
+                  value={formData.data_admissao ? formData.data_admissao.split('T')[0] : ''}
+                  onChange={(e) => setFormData({ ...formData, data_admissao: e.target.value })}
+                />
               </div>
 
               <div className="flex items-center gap-3 pt-2">

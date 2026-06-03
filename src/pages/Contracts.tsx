@@ -81,13 +81,38 @@ export default function Contracts() {
 
   const updateForm = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const gerarPDF = async () => {
+  };  const gerarPDF = async () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const imgTimbrado = '/Papel_-_timbrado.png';
     const pageWidth = 210;
     const pageHeight = 297;
+    
+    // Carregar a logomarca e obter suas dimensões reais para calcular a altura proporcional
+    let imgBase64 = '';
+    let imgWidth = 0;
+    let imgHeight = 0;
+    try {
+      const response = await fetch('/PNG_-_MT_SOLAR__1_.png');
+      const blob = await response.blob();
+      
+      imgBase64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
+
+      const img = new Image();
+      img.src = imgBase64;
+      await new Promise((resolve) => {
+        img.onload = () => {
+          imgWidth = img.width;
+          imgHeight = img.height;
+          resolve(null);
+        };
+      });
+    } catch (error) {
+      console.error('Erro ao carregar a logomarca do contrato:', error);
+    }
     
     const addBackground = () => {
       // O fundo do PDF deve ser branco puro
@@ -172,7 +197,7 @@ export default function Contracts() {
     addText('- Executar a instalação de acordo com as normas técnicas oficiais em vigor;');
     addText('- Auxiliar o CONTRATANTE no monitoramento do sistema de geração fotovoltaico de Gestão de Energia até 01 (Um) ano. Podendo, após isso, o CONTRATANTE renovar o contrato com a CONTRATADA para dar continuidade ao monitoramento.');
     addText('- Atender as possíveis ocorrências de falhas de equipamentos, objeto deste contrato, após serem reportadas pela CONTRATADA.');
-    addText('- Realizar o contato com os fabricantes dos equipamentos em caso de falha que exija substituição ou reparo, gerenciando o envio e recebimento para troca ou reparo; não se responsabilizando por eventuais cobranças no período de pausa na produção até o reestabelecimento do sistema;');
+    addText('- Realizar o contato com os fabricantes dos equipamentos in caso de falha que exija substituição ou reparo, gerenciando o envio e recebimento para troca ou reparo; não se responsabilizando por eventuais cobranças no período de pausa na produção até o reestabelecimento do sistema;');
     addText('- É de responsabilidade da CONTRATADA viabilizar para o CONTRATANTE todo o processo de compra do equipamento, independente do fornecedor;');
     addText('- Respeitar e fazer com que seus colaboradores respeitem as normas de segurança e higiene no trabalho, incluindo o devido uso de EPIs e EPCs;');
     addText('- Assumir integral responsabilidade pelas obrigações de natureza trabalhista e/ou previdenciária relativas aos trabalhadores alocados para a execução dos serviços.');
@@ -249,10 +274,24 @@ export default function Contracts() {
     doc.text('MT SOLAR ENERGIA RENOVAVEL\n51.713.487/0001-90', marginLeft + 35, currentY, { align: 'center' });
     doc.text(`${formData.nome_contratante || 'CONTRATANTE'}\n${formData.cpf_cnpj_contratante || ''}`, pageWidth - marginLeft - 35, currentY, { align: 'center' });
 
-    // Loop pós-geração para desenhar o rodapé padrão em todas as páginas do contrato
+    // Loop pós-geração para desenhar o rodapé padrão e a marca d'água em todas as páginas do contrato
     const totalPages = (doc as any).internal.getNumberOfPages();
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);
+      
+      // Adicionar marca d'água se a imagem foi carregada com sucesso
+      if (imgBase64 && imgWidth > 0 && imgHeight > 0) {
+        const watermarkWidth = 120;
+        const watermarkHeight = (watermarkWidth * imgHeight) / imgWidth;
+        const x = (pageWidth - watermarkWidth) / 2;
+        const y = (pageHeight - watermarkHeight) / 2;
+        
+        // @ts-ignore
+        doc.setGState(new doc.GState({ opacity: 0.3 }));
+        doc.addImage(imgBase64, 'PNG', x, y, watermarkWidth, watermarkHeight);
+        // @ts-ignore
+        doc.setGState(new doc.GState({ opacity: 1.0 }));
+      }
       
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);

@@ -555,9 +555,40 @@ O fluxo de processamento de mídias foi otimizado para evitar expiração rápid
 * **Proposta Comercial PDF: Correção de Layout e Paginação (Parte 6):**
   * *O que foi feito:* Refatoramos a geração da página de fotos do PDF da proposta comercial no `src/pages/ProposalGenerator.tsx` definindo margens fixas horizontais/verticais (15mm/20mm) e implementando controle estrito de cursor vertical (`y = margemSuperior`). Quando uma imagem não cabe no espaço restante da página (`y + photoHeight > pageHeight - margemInferior`), a página é quebrada com `doc.addPage()` e o cursor reiniciado. Além disso, criamos um loop de pós-processamento que percorre todas as páginas geradas para desenhar uma linha divisória discreta a 20mm da base, o rodapé corporativo institucional e a paginação automática (`Página X de Y`). A partir da página 2, desenha também um cabeçalho simplificado com a proposta (`PROP-${proposalNumber}`) e o nome do cliente.
   * *Data e hora da alteração:* 03/06/2026 às 10:11 (Horário Local)
+* **Cadastro e Atualização de Colaboradores com CPF, Cargo e Data de Admissão (Melhoria 2):**
+  * *O que foi feito:*
+    * **Backend (`api/index.ts`):** Atualização das rotas `GET`, `POST` e `PUT` de `/api/users` para persistir e retornar os campos `cpf`, `cargo` e `data_admissao` na tabela `users` do Supabase.
+    * **Frontend (`Funcionarios.tsx`):** Criação/atualização do formulário para inclusão de CPF com máscara `000.000.000-00` obrigatório, select de cargo obrigatório (CEO, ADMIN, COMMERCIAL, TECHNICAL) e data de admissão opcional.
+    * **Espelho de Ponto (`Ponto.tsx`):** Inclusão desses novos campos formatados no cabeçalho do PDF do espelho de ponto.
+  * *Data e hora da alteração:* 03/06/2026 às 11:30 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/Funcionarios.tsx`, `src/pages/Ponto.tsx`
+
+* **Marca D'água com Logomarca no PDF do Contrato (Melhoria 3):**
+  * *O que foi feito:* Inclusão da logomarca `/PNG_-_MT_SOLAR__1_.png` como marca d'água centralizada em todas as páginas do PDF do contrato gerado em `Contracts.tsx`. A imagem é carregada e convertida em base64, escalada dinamicamente mantendo a proporção com largura de 120mm e inserida com opacidade de 30% (`doc.setGState` com `opacity: 0.3`).
+  * *Data e hora da alteração:* 03/06/2026 às 11:55 (Horário Local)
+  * *Arquivos modificados:* `src/pages/Contracts.tsx`
+
+* **Correção de Rodapé na Proposta Comercial com Muitos Materiais (Melhoria 4):**
+  * *O que foi feito:* Implementação de paginação dinâmica para a tabela de materiais de estrutura na proposta comercial em `ProposalGenerator.tsx`. Define margem inferior de 35mm e verifica antes de cada linha se ultrapassa `pageHeight - 35`. Em caso positivo, quebra página, reinicia cursor y em 20mm e desenha novamente o cabeçalho (Item, Descrição, Qtd, Valor Unit., Valor Total) na nova página.
+  * *Data e hora da alteração:* 03/06/2026 às 12:12 (Horário Local)
   * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
 
+* **Notificações Push com APK Fechado — Background/Killed State (Melhoria 5):**
+  * *O que foi feito:*
+    * **Backend (`api/index.ts`):** Refatoração da função `sendPushNotification` para payload data-only (apenas campo `data`, sem campo `notification`), garantindo tráfego FCM de alta prioridade e entrega com app fechado/morto.
+    * **AndroidManifest.xml:** Registro do serviço de recepção do Firebase associado ao serviço customizado.
+    * **`MyFirebaseMessagingService.java` (Novo):** Criação do serviço nativo para capturar mensagens de dados, criar canal de notificação com som/vibração no Oreo+ e disparar a notificação local via `NotificationCompat` direcionada para abrir a Activity principal.
+  * *Data e hora da alteração:* 03/06/2026 às 12:15 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `android/app/src/main/AndroidManifest.xml`, `android/app/src/main/java/io/ionic/starter/MyFirebaseMessagingService.java`
+
+* **Notificação Push em Mensagens de Entrada no WhatsApp Atendimento (Melhoria 6):**
+  * *O que foi feito:* Adicionada lógica no webhook de recebimento de mensagens (`POST /api/webhooks/whatsapp` em `api/index.ts`) para disparar notificação push ao agente responsável caso a mensagem seja de entrada (`from_me = false`). O sistema busca a conversa no banco, obtém o campo `assigned_to` e, se preenchido, recupera o `push_token` correspondente daquele usuário com validação de `company_id`. Se existir, aciona a função `sendPushNotification` com payload data-only: título baseado no nome do contato da conversa (ou o número de telefone se nulo), corpo limitando a mensagem em 80 caracteres (ou "📎 Mídia recebida" se for mensagem multimídia), tipo definido como "whatsapp_message" e o UUID da conversa correspondente. Se a conversa não estiver atribuída (fila de espera), nada é disparado.
+  * *Data e hora da alteração:* 03/06/2026 às 12:20 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`
+
 ---
+
+
 
 ## 12. DÉBITOS TÉCNICOS
 

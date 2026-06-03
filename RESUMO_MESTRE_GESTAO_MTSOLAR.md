@@ -552,12 +552,50 @@ O fluxo de processamento de mídias foi otimizado para evitar expiração rápid
   * *O que foi feito:* No gerador de PDFs do contrato (`src/pages/Contracts.tsx`), removemos a imagem embaçada de fundo (`/Papel_-_timbrado.png`) da função `addBackground()`, substituindo-a por um preenchimento de fundo branco puro (`doc.setFillColor(255, 255, 255)` e `doc.rect(0, 0, pageWidth, pageHeight, 'F')`). Ajustamos a verificação de limite de página da função `addText` para `pageHeight - 30` (267mm) para respeitar a margem inferior do rodapé de 25mm. Adicionamos uma validação de overflow de página logo antes do bloco de assinaturas para garantir que as assinaturas não se sobreponham ao rodapé, gerando uma nova página caso necessário. Por fim, implementamos um laço de repetição que percorre todas as páginas geradas (`doc.setPage(i)`), desenha uma linha separadora fina e imprime o rodapé corporativo institucional padronizado (CNPJ, e-mail, telefone, endereço) centralizado e a paginação `Página X de Y` à direita.
   * *Data e hora da alteração:* 03/06/2026 às 10:05 (Horário Local)
   * *Arquivos modificados:* `src/pages/Contracts.tsx`
+* **Exibição de Endereço via Geocodificação Reversa no Ponto Eletrônico:**
+  * *O que foi feito:* Adição do componente interno `AddressDisplay` em `src/pages/Ponto.tsx` que consome a API de Geocoding Reverso do OpenStreetMap (Nominatim) — `https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}` — para converter as coordenadas já salvas nos campos `latitude` e `longitude` de cada registro de ponto em um endereço legível (`display_name`). O endereço é exibido em fonte menor e cor cinza, truncado a 60 caracteres, diretamente abaixo do horário da batida. Quando as coordenadas são nulas ou a requisição falha, exibe "Sem localização registrada". O estado `geocodeCache` (mapa `"lat,lon" → address`) foi adicionado ao componente pai `Ponto` para garantir que a requisição à API externa seja feita apenas **uma vez por coordenada**, evitando chamadas repetidas ao navegar entre registros. A exibição foi aplicada tanto na aba **Meu Histórico** (visão do colaborador) quanto na aba **Relatórios** (visão do gestor), sem alterar nenhuma outra lógica da tela.
+  * *Data e hora da alteração:* 03/06/2026 às 11:55 (Horário Local)
+  * *Arquivos modificados:* `src/pages/Ponto.tsx`
+
+* **Cadastro e Atualização de Colaboradores com CPF, Cargo e Data de Admissão (Melhoria 2):**
+  * *O que foi feito:*
+    * Implementada a persistência de CPF, Cargo e Data de Admissão na tabela `users` do Supabase pelas rotas backend `/api/users` (GET, POST e PUT).
+    * Atualizada a tipagem `UserProfile` e o formulário de cadastro/edição em `Funcionarios.tsx` para incluir os novos campos, implementando máscara dinâmica de digitação para o CPF (padrão `000.000.000-00`) e tornando obrigatórios os campos CPF e Cargo/Função.
+    * Refatorada a função `generatePDF` no módulo de Ponto Eletrônico (`Ponto.tsx`) para exibir de maneira formatada e alinhada no cabeçalho do PDF do espelho de ponto as novas informações do colaborador: CPF formatado, Cargo traduzido e Data de Admissão.
+  * *Data e hora da alteração:* 03/06/2026 às 12:00 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/Funcionarios.tsx`, `src/pages/Ponto.tsx`
+
+* **Marca D'água com Logomarca no PDF do Contrato (Melhoria 3):**
+  * *O que foi feito:* Implementada a inclusão da logomarca da empresa (`PNG_-_MT_SOLAR__1_.png`) como marca d'água centralizada em todas as páginas do PDF do contrato gerado na página `Contracts.tsx`. A imagem é carregada de forma assíncrona via `fetch`, convertida em base64 e medida para cálculo de altura proporcional automática. No loop de pós-processamento, a imagem é inserida em cada página (via `doc.setPage(i)`) centralizada, com largura de 120mm e opacidade configurada em 30% (`doc.setGState`) para não obstruir o conteúdo de texto, restaurando para 100% após a inserção.
+  * *Data e hora da alteração:* 03/06/2026 às 12:05 (Horário Local)
+  * *Arquivos modificados:* `src/pages/Contracts.tsx`
+
 * **Proposta Comercial PDF: Correção de Layout e Paginação (Parte 6):**
   * *O que foi feito:* Refatoramos a geração da página de fotos do PDF da proposta comercial no `src/pages/ProposalGenerator.tsx` definindo margens fixas horizontais/verticais (15mm/20mm) e implementando controle estrito de cursor vertical (`y = margemSuperior`). Quando uma imagem não cabe no espaço restante da página (`y + photoHeight > pageHeight - margemInferior`), a página é quebrada com `doc.addPage()` e o cursor reiniciado. Além disso, criamos um loop de pós-processamento que percorre todas as páginas geradas para desenhar uma linha divisória discreta a 20mm da base, o rodapé corporativo institucional e a paginação automática (`Página X de Y`). A partir da página 2, desenha também um cabeçalho simplificado com a proposta (`PROP-${proposalNumber}`) e o nome do cliente.
   * *Data e hora da alteração:* 03/06/2026 às 10:11 (Horário Local)
   * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
 
+* **Correção de Rodapé na Proposta Comercial com Muitos Materiais (Melhoria 4):**
+  * *O que foi feito:* Implementada lógica de paginação explícita para a tabela de materiais de estrutura dentro da função `uploadFullPDF` em `src/pages/ProposalGenerator.tsx`. Quando a proposta possui itens de estrutura cadastrados (`itensEstrutura.length > 0`), uma nova página é adicionada ao PDF com uma tabela "Lista de Materiais — Estrutura de Fixação" renderizada manualmente via jsPDF. Antes de inserir cada linha, o sistema verifica se `mat_y + alturaLinha (8mm) > pageHeight - margemInferior (35mm)`. Se ultrapassar, é chamado `doc.addPage()`, o cursor é redefinido para `mat_margSup (20mm)` e a função `desenharCabecalhoTabMat()` redesenha o cabeçalho das colunas (Item, Descrição, Qtd, Valor Unit., Valor Total) na nova página. As linhas têm zebra striping alternado e linha divisória inferior. Uma linha de totalização com o count de itens é adicionada ao final. O loop de rodapé pós-geração já existente cobre automaticamente essas novas páginas, garantindo consistência.
+  * *Data e hora da alteração:* 03/06/2026 às 12:12 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
+
+* **Notificações Push com APK Fechado — Background/Killed State (Melhoria 5):**
+  * *O que foi feito:*
+    * **Backend (`api/index.ts`):** Refatoração da função `sendPushNotification` para payload data-only (apenas campo `data`, sem campo `notification`), garantindo tráfego FCM de alta prioridade e entrega com app fechado/morto.
+    * **AndroidManifest.xml:** Registro do serviço de recepção do Firebase associado ao serviço customizado.
+    * **`MyFirebaseMessagingService.java` (Novo):** Criação do serviço nativo para capturar mensagens de dados, criar canal de notificação com som/vibração no Oreo+ e disparar a notificação local via `NotificationCompat` direcionada para abrir a Activity principal.
+  * *Data e hora da alteração:* 03/06/2026 às 12:15 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `android/app/src/main/AndroidManifest.xml`, `android/app/src/main/java/io/ionic/starter/MyFirebaseMessagingService.java`
+
+* **Notificação Push em Mensagens de Entrada no WhatsApp Atendimento (Melhoria 6):**
+  * *O que foi feito:* Adicionada lógica no webhook de recebimento de mensagens (`POST /api/webhooks/whatsapp` em `api/index.ts`) para disparar notificação push ao agente responsável caso a mensagem seja de entrada (`from_me = false`). O sistema busca a conversa no banco, obtém o campo `assigned_to` e, se preenchido, recupera o `push_token` correspondente daquele usuário com validação de `company_id`. Se existir, aciona a função `sendPushNotification` com payload data-only: título baseado no nome do contato da conversa (ou o número de telefone se nulo), corpo limitando a mensagem em 80 caracteres (ou "📎 Mídia recebida" se for mensagem multimídia), tipo definido como "whatsapp_message" e o UUID da conversa correspondente. Se a conversa não estiver atribuída (fila de espera), nada é disparado.
+  * *Data e hora da alteração:* 03/06/2026 às 12:20 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`
+
 ---
+
+
 
 ## 12. DÉBITOS TÉCNICOS
 

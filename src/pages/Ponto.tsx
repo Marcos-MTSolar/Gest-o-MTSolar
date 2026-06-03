@@ -48,6 +48,13 @@ const TYPE_LABELS: Record<string, string> = {
   exit: 'Saída',
 };
 
+const ROLE_LABELS: Record<string, string> = {
+  CEO: 'CEO',
+  ADMIN: 'Administrador',
+  COMMERCIAL: 'Vendedor',
+  TECHNICAL: 'Técnico',
+};
+
 const TYPE_ORDER = ['entry', 'lunch_start', 'lunch_end', 'exit'];
 
 function getNextPunchType(todayRecords: TimeRecord[]): string | null {
@@ -110,6 +117,81 @@ const capturarLocalizacao = async (): Promise<{ latitude: number; longitude: num
   }
 };
 
+// ─── Componente de exibição de endereço via geocodificação reversa ───────────
+type AddressDisplayProps = {
+  latitude: number | null;
+  longitude: number | null;
+  cache: Record<string, string>;
+  onAddressFetched: (key: string, address: string) => void;
+};
+
+function AddressDisplay({ latitude, longitude, cache, onAddressFetched }: AddressDisplayProps) {
+  const [localAddress, setLocalAddress] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const key =
+    latitude !== null && longitude !== null ? `${latitude},${longitude}` : null;
+
+  useEffect(() => {
+    if (!key) return;
+    // Verificar cache do componente pai
+    if (cache[key] !== undefined) {
+      setLocalAddress(cache[key]);
+      return;
+    }
+    // Buscar endereço na API Nominatim
+    setLoading(true);
+    fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
+      { headers: { 'Accept-Language': 'pt-BR' } }
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        const addr: string = data.display_name ?? '';
+        setLocalAddress(addr);
+        onAddressFetched(key, addr);
+      })
+      .catch(() => {
+        setLocalAddress('');
+        onAddressFetched(key, '');
+      })
+      .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  if (!key) {
+    return (
+      <span className="block text-xs text-gray-400 mt-0.5">
+        Sem localização registrada
+      </span>
+    );
+  }
+
+  const addr = localAddress ?? cache[key] ?? '';
+
+  if (loading) {
+    return (
+      <span className="block text-xs text-gray-400 mt-0.5">Carregando...</span>
+    );
+  }
+
+  if (!addr) {
+    return (
+      <span className="block text-xs text-gray-400 mt-0.5">
+        Sem localização registrada
+      </span>
+    );
+  }
+
+  const truncated = addr.length > 60 ? addr.slice(0, 60) + '…' : addr;
+  return (
+    <span className="block text-xs text-gray-500 mt-0.5" title={addr}>
+      {truncated}
+    </span>
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function Ponto() {
 
   const { user } = useAuth();
@@ -121,6 +203,10 @@ export default function Ponto() {
 
   const [records, setRecords] = useState<TimeRecord[]>([]);
   const [schedules, setSchedules] = useState<WorkSchedule[]>([]);
+  // Cache de endereços: chave = "lat,lon", valor = display_name truncado
+  const [geocodeCache, setGeocodeCache] = useState<Record<string, string>>({});
+  const handleAddressFetched = (key: string, address: string) =>
+    setGeocodeCache((prev) => ({ ...prev, [key]: address }));
   const [loading, setLoading] = useState(false);
   const [punching, setPunching] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -365,6 +451,19 @@ export default function Ponto() {
     const colab = allUsers.find((u) => u.id === selectedUser);
     const userName = colab?.name ?? 'Funcionário';
     const userRole = colab?.role ?? '';
+    const userCpf = colab?.cpf ?? '—';
+    const userCargo = colab?.cargo ?? userRole;
+    
+    let userAdmissao = '—';
+    if (colab?.data_admissao) {
+      const clean = colab.data_admissao.split('T')[0];
+      const parts = clean.split('-');
+      if (parts.length === 3) {
+        userAdmissao = `${parts[2]}/${parts[1]}/${parts[0]}`;
+      } else {
+        userAdmissao = colab.data_admissao;
+      }
+    }
     
     // Período formatado
     const periodStr = `${formatDate(startDate)} a ${formatDate(endDate)}`;
@@ -394,16 +493,27 @@ export default function Ponto() {
 
     // Informações do Colaborador
     doc.setFont('helvetica', 'bold');
-    doc.text('Colaborador:', 14, 38);
+    doc.text('Colaborador:', 14, 35);
     doc.setFont('helvetica', 'normal');
-    doc.text(userName, 42, 38);
+    doc.text(userName, 42, 35);
 
     doc.setFont('helvetica', 'bold');
-    doc.text('Cargo:', 14, 44);
+    doc.text('CPF:', 120, 35);
     doc.setFont('helvetica', 'normal');
-    doc.text(userRole, 28, 44);
+    doc.text(userCpf, 131, 35);
 
-    doc.text(`Emitido em: ${new Date().toLocaleDateString('pt-BR')}`, 196, 44, { align: 'right' });
+    doc.setFont('helvetica', 'bold');
+    doc.text('Cargo:', 14, 41);
+    doc.setFont('helvetica', 'normal');
+    const roleTranslated = ROLE_LABELS[userCargo] || userCargo;
+    doc.text(roleTranslated, 28, 41);
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Admissão:', 120, 41);
+    doc.setFont('helvetica', 'normal');
+    doc.text(userAdmissao, 142, 41);
+
+    doc.text(`Emitido em: ${new Date().toLocaleDateString('pt-BR')}`, 196, 47, { align: 'right' });
 
     // Quadro de horários de expediente esperado
     const colabSchedule = schedules.find((s) => s.role === userRole);
@@ -643,30 +753,38 @@ export default function Ponto() {
                       <div key={t} className="flex justify-between text-sm py-1">
                         <span className="text-gray-500">{TYPE_LABELS[t]}</span>
                         {rec ? (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-start gap-2">
                             {rec.latitude !== null && rec.longitude !== null ? (
                               <a
                                 href={`https://www.google.com/maps?q=${rec.latitude},${rec.longitude}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-green-500 hover:text-green-600 inline-flex items-center"
+                                className="text-green-500 hover:text-green-600 inline-flex items-center mt-0.5"
                                 title="Ver localização no mapa"
                               >
                                 <MapPin size={16} />
                               </a>
                             ) : (
-                              <span className="text-gray-400 inline-flex items-center" title="Sem geolocalização">
+                              <span className="text-gray-400 inline-flex items-center mt-0.5" title="Sem geolocalização">
                                 <MapPin size={16} />
                               </span>
                             )}
-                            <span className={`font-medium ${rec.status === 'adjustment_requested' ? 'text-orange-500' : 'text-gray-800'}`}>
-                              {new Date(rec.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                              {rec.status === 'adjustment_requested' && ' (ajuste pendente)'}
-                            </span>
+                            <div className="flex flex-col">
+                              <span className={`font-medium ${rec.status === 'adjustment_requested' ? 'text-orange-500' : 'text-gray-800'}`}>
+                                {new Date(rec.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                {rec.status === 'adjustment_requested' && ' (ajuste pendente)'}
+                              </span>
+                              <AddressDisplay
+                                latitude={rec.latitude}
+                                longitude={rec.longitude}
+                                cache={geocodeCache}
+                                onAddressFetched={handleAddressFetched}
+                              />
+                            </div>
                             {rec.status !== 'adjustment_requested' && (
                               <button
                                 onClick={() => setAdjustingRecord(rec)}
-                                className="text-xs text-orange-400 hover:underline"
+                                className="text-xs text-orange-400 hover:underline mt-0.5"
                               >
                                 Ajustar
                               </button>
@@ -826,10 +944,18 @@ export default function Ponto() {
                       {TYPE_ORDER.map((t) => {
                         const rec = recs.find((r) => r.type === t);
                         return (
-                          <span key={t} className="flex items-center gap-1">
+                          <span key={t} className="flex items-start gap-1">
                             {TYPE_LABELS[t].split(' ')[0]}: {rec ? (
                               <>
-                                <span>{new Date(rec.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                <div className="flex flex-col">
+                                  <span>{new Date(rec.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                  <AddressDisplay
+                                    latitude={rec.latitude}
+                                    longitude={rec.longitude}
+                                    cache={geocodeCache}
+                                    onAddressFetched={handleAddressFetched}
+                                  />
+                                </div>
                                 {rec.latitude !== null && rec.longitude !== null ? (
                                   <a
                                     href={`https://www.google.com/maps?q=${rec.latitude},${rec.longitude}`}

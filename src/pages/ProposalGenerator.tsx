@@ -1792,6 +1792,114 @@ export default function ProposalGenerator() {
         }
         // =========================================================
 
+        // =========================================================
+        // MELHORIA 4 — TABELA DE MATERIAIS COM PAGINAÇÃO CONTROLADA
+        // Antes de cada linha, verifica se y + alturaLinha ultrapassa
+        // pageHeight - margemInferior (35mm). Se sim: addPage() + redesenho
+        // do cabeçalho da tabela (Item, Descrição, Qtd, Valor Unit., Valor Total).
+        // =========================================================
+        if (itensEstrutura.length > 0) {
+          const mat_margEsq     = 15;
+          const mat_margSup     = 20;
+          const mat_margemInf   = 35; // espaço reservado para o rodapé
+          const mat_alturaLinha = 8;  // altura de cada linha em mm
+          const mat_larguraTab  = 180;
+
+          doc.addPage();
+          let mat_y = mat_margSup;
+
+          // Bloco de título da seção
+          doc.setFillColor(30, 58, 95);
+          doc.rect(mat_margEsq, mat_y, mat_larguraTab, 11, 'F');
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(11);
+          doc.setTextColor(245, 158, 11);
+          doc.text('Lista de Materiais — Estrutura de Fixação', mat_margEsq + 3, mat_y + 7.5);
+          doc.setTextColor(0, 0, 0);
+          mat_y += 15;
+
+          // Função que desenha o cabeçalho da tabela na posição atual de mat_y
+          const desenharCabecalhoTabMat = () => {
+            doc.setFillColor(30, 58, 95);
+            doc.rect(mat_margEsq, mat_y, mat_larguraTab, mat_alturaLinha, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8.5);
+            // Coluna Item
+            doc.setTextColor(245, 158, 11);
+            doc.text('Item', mat_margEsq + 2, mat_y + 5.5);
+            // Coluna Descrição
+            doc.text('Descrição', mat_margEsq + 14, mat_y + 5.5);
+            // Colunas numéricas
+            doc.setTextColor(255, 255, 255);
+            doc.text('Qtd',        mat_margEsq + 120, mat_y + 5.5, { align: 'right' });
+            doc.text('Valor Unit.', mat_margEsq + 147, mat_y + 5.5, { align: 'right' });
+            doc.text('Valor Total', mat_margEsq + 175, mat_y + 5.5, { align: 'right' });
+            doc.setTextColor(0, 0, 0);
+            mat_y += mat_alturaLinha;
+          };
+
+          // Desenha o primeiro cabeçalho
+          desenharCabecalhoTabMat();
+
+          // Renderiza cada linha com verificação de margem inferior
+          itensEstrutura.forEach((item, idx) => {
+            // VERIFICAÇÃO PRINCIPAL: se y + linha ultrapassa o limite inferior da página
+            if (mat_y + mat_alturaLinha > pageHeight - mat_margemInf) {
+              doc.addPage();
+              mat_y = mat_margSup;
+              desenharCabecalhoTabMat(); // Redesenha cabeçalho na nova página
+            }
+
+            // Zebra striping nas linhas
+            if (idx % 2 === 0) {
+              doc.setFillColor(248, 250, 252);
+              doc.rect(mat_margEsq, mat_y, mat_larguraTab, mat_alturaLinha, 'F');
+            }
+
+            // Linha divisória inferior
+            doc.setDrawColor(229, 231, 235);
+            doc.setLineWidth(0.1);
+            doc.line(mat_margEsq, mat_y + mat_alturaLinha, mat_margEsq + mat_larguraTab, mat_y + mat_alturaLinha);
+
+            // Texto das células
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8.5);
+            doc.setTextColor(55, 65, 81);
+
+            // Nº do item
+            doc.text(`${idx + 1}`, mat_margEsq + 2, mat_y + 5.5);
+
+            // Descrição (truncar em 65 caracteres)
+            const descMax = 65;
+            const descricao = item.nome.length > descMax
+              ? item.nome.substring(0, descMax - 3) + '...'
+              : item.nome;
+            doc.text(descricao, mat_margEsq + 14, mat_y + 5.5);
+
+            // Qtd, Valor Unit., Valor Total (sem valores monetários nos itens de estrutura)
+            doc.setTextColor(100, 116, 139);
+            doc.text('1',  mat_margEsq + 120, mat_y + 5.5, { align: 'right' });
+            doc.text('—', mat_margEsq + 147, mat_y + 5.5, { align: 'right' });
+            doc.text('—', mat_margEsq + 175, mat_y + 5.5, { align: 'right' });
+
+            mat_y += mat_alturaLinha;
+          });
+
+          // Linha de totais ao final da tabela
+          if (mat_y + 10 > pageHeight - mat_margemInf) {
+            doc.addPage();
+            mat_y = mat_margSup;
+          }
+          doc.setDrawColor(30, 58, 95);
+          doc.setLineWidth(0.5);
+          doc.line(mat_margEsq, mat_y + 1, mat_margEsq + mat_larguraTab, mat_y + 1);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(9);
+          doc.setTextColor(30, 58, 95);
+          doc.text(`Total de itens: ${itensEstrutura.length}`, mat_margEsq + 2, mat_y + 7);
+        }
+        // =========================================================
+
         // Loop pós-geração para cabeçalhos e rodapés em todas as páginas
         const totalPages = (doc as any).internal.getNumberOfPages();
         for (let i = 1; i <= totalPages; i++) {

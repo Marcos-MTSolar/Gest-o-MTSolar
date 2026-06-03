@@ -258,18 +258,27 @@ app.get('/api/auth/me', authenticateToken, async (req: any, res) => {
 // Users
 app.get('/api/users', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CEO' && req.user.role !== 'ADMIN') return res.sendStatus(403);
-  const { data: users } = await supabase.from('users').select('id, name, email, role, active, created_at').eq('company_id', req.user.company_id);
+  const { data: users } = await supabase.from('users').select('id, name, email, role, active, created_at, cpf, cargo, data_admissao').eq('company_id', req.user.company_id);
   res.json(users);
 });
 
 app.post('/api/users', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CEO') return res.sendStatus(403);
-  const { name, email, password, role } = req.body;
+  const { name, email, password, role, cpf, cargo, data_admissao } = req.body;
   const hash = bcrypt.hashSync(password, 10);
 
   const { data, error } = await supabase
     .from('users')
-    .insert({ name, email, password_hash: hash, role, company_id: req.user.company_id })
+    .insert({ 
+      name, 
+      email, 
+      password_hash: hash, 
+      role, 
+      company_id: req.user.company_id,
+      cpf,
+      cargo,
+      data_admissao: data_admissao || null
+    })
     .select()
     .single();
 
@@ -282,8 +291,16 @@ app.post('/api/users', authenticateToken, async (req: any, res) => {
 app.put('/api/users/:id', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CEO' && req.user.role !== 'ADMIN') return res.sendStatus(403);
 
-  const { name, email, role, active, password } = req.body;
-  const updates: any = { name, email, role, active: active ? true : false };
+  const { name, email, role, active, password, cpf, cargo, data_admissao } = req.body;
+  const updates: any = { 
+    name, 
+    email, 
+    role, 
+    active: active ? true : false,
+    cpf,
+    cargo,
+    data_admissao: data_admissao || null
+  };
 
   if (password) {
     updates.password_hash = bcrypt.hashSync(password, 10);
@@ -328,8 +345,14 @@ app.post('/api/users/push-token', authenticateToken, async (req: any, res) => {
   res.json({ success: true });
 });
 
-// Helper to send push notifications via FCM
-async function sendPushNotification(userId: number, title: string, body: string) {
+// Helper para envio de push notifications via FCM (data-only message)
+// Data-only garante entrega com app em background/killed (Melhoria 5)
+async function sendPushNotification(
+  userId: number,
+  title: string,
+  body: string,
+  extraData?: Record<string, string>
+) {
   try {
     const { data: user } = await supabase.from('users').select('push_token').eq('id', userId).single();
     if (!user?.push_token) {
@@ -338,23 +361,23 @@ async function sendPushNotification(userId: number, title: string, body: string)
     }
 
     console.log(`[PUSH] Sending to User ${userId}: ${title}`);
-    
+
     if (admin.apps.length > 0) {
+      // Payload data-only: o FCM entrega mesmo com app fechado/morto.
+      // O MyFirebaseMessagingService nativo no Android lê os campos e exibe
+      // a notificação local via NotificationCompat.
       const message = {
-        notification: { title, body },
         token: user.push_token,
-        android: {
-          priority: 'high' as const,
-          notification: {
-            sound: 'default',
-            channelId: 'default',
-            icon: 'stock_ticker_update', // Should match your app icon resource
-            color: '#001F3F'
-          }
-        },
         data: {
-          click_action: 'FLUTTER_NOTIFICATION_CLICK', // Legacy but sometimes helps
-          userId: String(userId)
+          title,
+          body,
+          type: extraData?.type ?? 'general',
+          conversationId: extraData?.conversationId ?? '',
+          click_action: 'FLUTTER_NOTIFICATION_CLICK',
+          ...extraData
+        },
+        android: {
+          priority: 'high' as const
         }
       };
 
@@ -366,7 +389,6 @@ async function sendPushNotification(userId: number, title: string, body: string)
   } catch (err) {
     console.error(`[PUSH ERROR] Failed to send notification to User ${userId}:`, err);
   }
-}
 
 // Clients
 app.get('/api/clients', authenticateToken, async (req: any, res) => {
@@ -2053,12 +2075,28 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
           console.error('[WEBHOOK ERROR] Erro inesperado ao salvar mensagem:', err.message, err.details);
         }
 
-        // 3. Push Notification for Agents
-        if (conv?.assigned_to && !fromMe) {
-          await sendPushNotification(conv.assigned_to, 'WhatsApp', `Nova mensagem de ${conv.contact_name || phone}: ${text.substring(0, 50)}...`);
-        } else if (!fromMe) {
-          // If not assigned, maybe notify admins? 
-          // (Implementation detail: usually we don't spam everyone, but here we could)
+        // 3. Push Notification for Agents (Melhoria 6)
+        if (!fromMe && conv?.assigned_to) {
+          try {
+            const { data: agentUser } = await supabase
+              .from('users')
+              .select('push_token')
+              .eq('id', conv.assigned_to)
+              .eq('company_id', companyId)
+              .single();
+
+            if (agentUser?.push_token && admin.apps.length > 0) {
+              const pushTitle = conv.contact_name || conv.name || phone;
+              const pushBody = mediaType ? "📎 Mídia recebida" : (text ? text.slice(0, 80) : "");
+
+              await sendPushNotification(conv.assigned_to, pushTitle, pushBody, {
+                type: 'whatsapp_message',
+                conversationId: conversationId
+              });
+            }
+          } catch (err: any) {
+            console.error('[WEBHOOK PUSH ERROR] Falha ao enviar notificação push:', err.message);
+          }
         }
       }
     }
