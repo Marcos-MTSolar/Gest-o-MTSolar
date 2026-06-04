@@ -1,4 +1,4 @@
-package io.ionic.starter;
+package com.mtsolar.mtsolv;
 
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -10,12 +10,15 @@ import androidx.core.app.NotificationCompat;
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
 import java.util.Map;
+// O namespace do projeto permanece br.com.mtsolar.gestao (onde estão R e MainActivity)
+import br.com.mtsolar.gestao.MainActivity;
+import br.com.mtsolar.gestao.R;
 
 /**
  * MyFirebaseMessagingService
  *
  * Processa mensagens FCM data-only quando o app está em background ou morto (killed state).
- * Melhoria 5: payload do backend agora usa exclusivamente o campo "data" (sem "notification"),
+ * Payload do backend usa exclusivamente o campo "data" (sem "notification"),
  * o que força o Android a rotear a mensagem para onMessageReceived() mesmo com app fechado.
  * Este serviço então exibe a notificação local via NotificationCompat.
  */

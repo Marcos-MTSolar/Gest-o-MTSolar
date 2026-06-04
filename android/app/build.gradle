@@ -4,7 +4,7 @@ android {
     namespace = "br.com.mtsolar.gestao"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "br.com.mtsolar.gestao"
+        applicationId "com.mtsolar.mtsolv"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 8

@@ -655,6 +655,30 @@ O fluxo de processamento de mídias foi otimizado para evitar expiração rápid
   * *Data e hora da alteração:* 03/06/2026 às 12:20 (Horário Local)
   * *Arquivos modificados:* `api/index.ts`
 
+* **Correção de Pacote Java do MyFirebaseMessagingService e Geração do Android App Bundle (.aab) Assinado:**
+  * *O que foi feito:*
+    * **Problema identificado:** O arquivo `MyFirebaseMessagingService.java` estava declarado no pacote legado `io.ionic.starter` (template Ionic), incompatível com o namespace real do projeto `br.com.mtsolar.gestao`. Isso causava erros de compilação `cannot find symbol` para `MainActivity.class` e `R.mipmap.ic_launcher`.
+    * **Solução aplicada:**
+      1. Criado novo `MyFirebaseMessagingService.java` no pacote correto `br.com.mtsolar.gestao` em `android/app/src/main/java/br/com/mtsolar/gestao/`.
+      2. Removido o arquivo antigo do pacote `io.ionic.starter`.
+      3. Atualizado `AndroidManifest.xml` para referenciar o serviço no novo pacote (`br.com.mtsolar.gestao.MyFirebaseMessagingService`).
+    * **Build gerado:** `app-release.aab` (6,11 MB), assinado com a keystore `mtsolar.jks` localizada em `C:\Users\aurel\Desktop\APK\`, certificado `CN=Marcos Nascimento`, algoritmo `SHA256withRSA`, chave RSA de 2048 bits, válido até `01/05/2051`. Verificação `jarsigner`: **`jar verified`**.
+    * **Localização do arquivo final:** `android/app/build/outputs/bundle/release/app-release.aab` (e cópia em `C:\Users\aurel\Desktop\APK\app-release.aab`).
+    * **Configuração de assinatura no `build.gradle`:** `storeFile = C:\Users\aurel\Desktop\APK\mtsolar.jks`, `keyAlias = mtsolar`, `minifyEnabled = true`.
+  * *Data e hora da alteração:* 04/06/2026 às 16:51 (Horário Local)
+  * *Arquivos modificados:* `android/app/src/main/java/br/com/mtsolar/gestao/MyFirebaseMessagingService.java` (novo), `android/app/src/main/AndroidManifest.xml`
+
+* **Alteração de applicationId para com.mtsolar.mtsolv e Novo .aab Gerado:**
+  * *O que foi feito:*
+    * **`android/app/build.gradle`:** `applicationId` alterado de `br.com.mtsolar.gestao` para `com.mtsolar.mtsolv`. O `namespace` permaneceu `br.com.mtsolar.gestao` (controla o pacote de `R` e `BuildConfig`).
+    * **`android/app/src/main/java/com/mtsolar/mtsolv/MyFirebaseMessagingService.java`:** Arquivo Java recriado na nova estrutura de pastas com `package com.mtsolar.mtsolv;`. Os imports de `MainActivity` e `R` apontam explicitamente para `br.com.mtsolar.gestao` onde essas classes são geradas/definidas.
+    * **`android/app/src/main/AndroidManifest.xml`:** Referência do serviço FCM atualizada para `com.mtsolar.mtsolv.MyFirebaseMessagingService`.
+    * **`android/app/google-services.json`:** `package_name` atualizado de `br.com.mtsolar.gestao` para `com.mtsolar.mtsolv` (necessário pois o plugin `google-services` bloqueia o build se não houver match).
+    * **Build gerado:** `app-release.aab` (6,11 MB) com `applicationId = com.mtsolar.mtsolv` confirmado no manifest compilado (`build/intermediates/bundle_manifest`). Assinado com a keystore `mtsolar.jks` (`CN=Marcos Nascimento`, RSA 2048 bits, válido até 01/05/2051).
+    * **Localização:** `android/app/build/outputs/bundle/release/app-release.aab` e cópia em `C:\Users\aurel\Desktop\APK\app-release.aab`.
+  * *Data e hora da alteração:* 04/06/2026 às 17:01 (Horário Local)
+  * *Arquivos modificados:* `android/app/build.gradle`, `android/app/src/main/java/com/mtsolar/mtsolv/MyFirebaseMessagingService.java` (novo), `android/app/src/main/AndroidManifest.xml`, `android/app/google-services.json`
+
 ---
 
 
