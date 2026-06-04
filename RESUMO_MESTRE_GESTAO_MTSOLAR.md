@@ -658,6 +658,13 @@ O fluxo de processamento de mídias foi otimizado para evitar expiração rápid
   * *Data e hora da alteração:* 03/06/2026 às 12:20 (Horário Local)
   * *Arquivos modificados:* `api/index.ts`
 
+* **Correção na Listagem e Cadastro de Funcionários / Usuários com Colunas Ausentes (PostgREST 42703) e Permissão de ADMIN:**
+  * *O que foi feito:*
+    * **Mecanismo de Fallback:** Atualizadas as rotas `GET /api/users`, `POST /api/users` e `PUT /api/users/:id` no backend (`api/index.ts`) para capturar o código de erro `42703` (além de `PGRST204`), que representa coluna inexistente no PostgreSQL. Com isso, o fallback de persistência e leitura sem as colunas `cpf`, `cargo` e `data_admissao` funciona de forma robusta e transparente caso a tabela `users` do Supabase não possua essas colunas no schema atual.
+    * **Permissões de ADMIN:** Ajustada a validação da rota `POST /api/users` para aceitar requisições de usuários com perfil `ADMIN` (`req.user.role === 'ADMIN'`), igualando ao comportamento do `GET` e `PUT` que já permitiam, resolvendo o erro 403 Forbidden que impedia administradores de criarem funcionários.
+  * *Data e hora da alteração:* 04/06/2026 às 19:25 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`
+
 ---
 
 

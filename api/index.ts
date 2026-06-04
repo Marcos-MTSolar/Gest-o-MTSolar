@@ -265,8 +265,8 @@ app.get('/api/users', authenticateToken, async (req: any, res) => {
     .select('id, name, email, role, active, created_at, cpf, cargo, data_admissao')
     .eq('company_id', req.user.company_id);
 
-  // Se falhar por colunas inexistentes no banco (PGRST204), retenta sem os campos opcionais
-  if (error?.code === 'PGRST204') {
+  // Se falhar por colunas inexistentes no banco (PGRST204 ou 42703), retenta sem os campos opcionais
+  if (error?.code === 'PGRST204' || error?.code === '42703' || String(error?.code) === '42703') {
     console.warn('[users GET] Colunas opcionais ausentes no schema — retentando sem cpf/cargo/data_admissao');
     const fallback = await supabase
       .from('users')
@@ -280,7 +280,7 @@ app.get('/api/users', authenticateToken, async (req: any, res) => {
 });
 
 app.post('/api/users', authenticateToken, async (req: any, res) => {
-  if (req.user.role !== 'CEO') return res.sendStatus(403);
+  if (req.user.role !== 'CEO' && req.user.role !== 'ADMIN') return res.sendStatus(403);
   const { name, email, password, role, cpf, cargo, data_admissao } = req.body;
   const hash = bcrypt.hashSync(password, 10);
 
@@ -302,8 +302,8 @@ app.post('/api/users', authenticateToken, async (req: any, res) => {
   // Tenta inserir com campos opcionais
   let { data, error } = await supabase.from('users').insert(fullInsert).select().single();
 
-  // Se falhar por coluna inexistente no banco (PGRST204), retenta sem os campos opcionais
-  if (error?.code === 'PGRST204') {
+  // Se falhar por coluna inexistente no banco (PGRST204 ou 42703), retenta sem os campos opcionais
+  if (error?.code === 'PGRST204' || error?.code === '42703' || String(error?.code) === '42703') {
     console.warn('[users POST] Colunas opcionais ausentes no schema — retentando sem cpf/cargo/data_admissao');
     ({ data, error } = await supabase.from('users').insert(baseInsert).select().single());
   }
@@ -339,8 +339,8 @@ app.put('/api/users/:id', authenticateToken, async (req: any, res) => {
   // Tenta atualizar com campos opcionais
   let { error } = await supabase.from('users').update(fullUpdate).eq('id', req.params.id).eq('company_id', req.user.company_id);
 
-  // Se falhar por coluna inexistente no banco (PGRST204), retenta sem os campos opcionais
-  if (error?.code === 'PGRST204') {
+  // Se falhar por coluna inexistente no banco (PGRST204 ou 42703), retenta sem os campos opcionais
+  if (error?.code === 'PGRST204' || error?.code === '42703' || String(error?.code) === '42703') {
     console.warn('[users PUT] Colunas opcionais ausentes no schema — retentando sem cpf/cargo/data_admissao');
     ({ error } = await supabase.from('users').update(baseUpdate).eq('id', req.params.id).eq('company_id', req.user.company_id));
   }
