@@ -754,6 +754,14 @@ Abaixo estão listadas todas as variáveis cruciais exigidas para o funcionament
     * **BLOCO 5 — Tabela do Kit Fotovoltaico no PDF:** Substituída a lista numerada por tabela manual com 3 colunas (Item 15% | Qtd. 15% | Produto 70%), desenhada com `doc.rect()` e `doc.line()`. Cabeçalho com fundo azul-claro (`fillColor 230,235,245`), paginação dinâmica com redesenho de cabeçalho em nova página, e suporte a quebra de linha automática na coluna Produto.
     * **BLOCO 6 — Correções gramaticais e de coesão:** Aplicadas 8 correções de redação nas cláusulas do contrato (3ª, 5ª, 7ª e 8ª); correções incluem crases ausentes, concordâncias verbais, erros de regência e pontuação. Adicionado comentário `// REVISAR:` no trecho de agente de atendimento da Cláusula Quinta para revisão jurídica futura.
   * *Data e hora da alteração:* 15/06/2026 às 11:30 (Horário Local)
+* **5 Novas Correções no Gerador de Contratos PDF (Blocos A–E):**
+  * *O que foi feito:*
+    * **Diagnóstico / BLOCO A — Opacidade da marca d'água:** O valor de opacidade atual era de `0.35`. O diagnóstico confirmou que existe apenas 1 local de desenho da marca d'água no PDF, e a restauração de opacidade com `doc.setGState(new doc.GState({ opacity: 1.0 }))` ocorre imediatamente depois, na mesma página, sem vazar. O valor de `0.35` (35%) foi mantido em todas as ocorrências de marca d'água do arquivo.
+    * **BLOCO B — Remover o "x" da coluna "Qtd.":** Ajustado o parsing na tabela para remover o "x" exibido ao lado do número na coluna de quantidade, alterando a atribuição de `qtdStr` de `${item.quantity}x` para `String(item.quantity)`.
+    * **BLOCO C — Correção na Cláusula Quinta:** Alterado o sujeito de "após serem reportadas pela CONTRATADA" para "após serem reportadas pelo CONTRATANTE", corrigindo o sentido de quem comunica as falhas nos equipamentos e removendo o comentário temporário de revisão.
+    * **BLOCO D — Espaçamento após a tabela do Kit:** Aumentado o espaçamento entre o término da tabela do kit fotovoltaico e o título da Cláusula Segunda de `3mm` para `8mm` (`currentY += 8;`), criando uma separação consistente.
+    * **BLOCO E — Ajuste de quebra de página (bloco final):** Refatorado o cálculo de `alturaTotalBlocoFinal` para `alturaParaFinal + 48` (removendo margem redundante de segurança), reduzindo a altura calculada de 64mm para 60mm e evitando que o bloco final seja empurrado desnecessariamente para a página seguinte.
+  * *Data e hora da alteração:* 15/06/2026 às 12:00 (Horário Local)
   * *Arquivos modificados:* `src/pages/Contracts.tsx`
 
 ---

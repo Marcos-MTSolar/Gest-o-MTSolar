@@ -221,7 +221,7 @@ export default function Contracts() {
 
     kitItems.forEach((item, idx) => {
       const numItem = String(idx + 1).padStart(2, '0');
-      const qtdStr = `${item.quantity}x`;
+      const qtdStr = String(item.quantity);
       const descStr = item.description;
       const descLines = doc.splitTextToSize(descStr, colWidths[2] - 4);
       const cellHeight = Math.max(kitRowHeight, descLines.length * 5 + 2);
@@ -247,7 +247,7 @@ export default function Contracts() {
     doc.setFontSize(10);
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.2);
-    currentY += 3;
+    currentY += 8;
 
     addText('CLÁUSULA SEGUNDA – DESCRIÇÃO DOS TRABALHOS A REALIZAR', { bold: true });
     addText('Os trabalhos relacionados ao objeto acima identificado compreendem equipamentos, mão de obra e acessórios para instalação de sistemas de energia fotovoltaico, desde a elaboração do projeto até a homologação do sistema junto a concessionária de sua região.');
@@ -276,8 +276,7 @@ export default function Contracts() {
     addText('- Fornecer ao CONTRATANTE todos os dados solicitados que se fizerem necessários ao bom entendimento e acompanhamento do serviço contratado;');
     addText('- Executar a instalação de acordo com as normas técnicas oficiais em vigor;');
     addText('- Auxiliar o CONTRATANTE no monitoramento do sistema de geração fotovoltaico de Gestão de Energia até 01 (Um) ano. Podendo, após isso, o CONTRATANTE renovar o contrato com a CONTRATADA para dar continuidade ao monitoramento.');
-    // REVISAR: verificar se quem reporta a falha é o CONTRATANTE ou a CONTRATADA antes de finalizar este texto.
-    addText('- Atender às possíveis ocorrências de falha nos equipamentos, objeto deste contrato, após serem reportadas pela CONTRATADA.');
+    addText('- Atender às possíveis ocorrências de falha nos equipamentos, objeto deste contrato, após serem reportadas pelo CONTRATANTE.');
     addText('- Realizar o contato com os fabricantes dos equipamentos em caso de falha que exija substituição ou reparo, gerenciando o envio e recebimento para troca ou reparo; não se responsabilizando por eventuais cobranças no período de pausa na produção até o reestabelecimento do sistema;');
     addText('- É de responsabilidade da CONTRATADA viabilizar para o CONTRATANTE todo o processo de compra do equipamento, independente do fornecedor;');
     addText('- Respeitar e fazer com que seus colaboradores respeitem as normas de segurança e higiene no trabalho, incluindo o devido uso de EPIs e EPCs;');
@@ -338,8 +337,9 @@ export default function Contracts() {
     const textoFinal = 'E por estarem assim justas e acertadas, as partes firmam o presente instrumento em 2 (duas) vias de igual teor e forma, tudo na presença das duas testemunhas abaixo.';
     const linhasFinal = doc.splitTextToSize(textoFinal, contentWidth);
     const alturaParaFinal = (linhasFinal.length * 5) + 2;
-    // alturaData (~7) + espaço antes assinatura (20) + linha + labels (~15)
-    const alturaTotalBlocoFinal = alturaParaFinal + 10 + 7 + 20 + 15;
+    // Cálculo preciso da altura real necessária para evitar quebras de página prematuras:
+    // alturaParaFinal + 10 (espaço) + 7 (data) + 20 (espaço) + 5 (margem linha) + 6 (linhas de texto labels) = alturaParaFinal + 48
+    const alturaTotalBlocoFinal = alturaParaFinal + 48;
     if (currentY + alturaTotalBlocoFinal > pageHeight - 30) {
       doc.addPage();
       addBackground();
