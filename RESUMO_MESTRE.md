@@ -668,6 +668,15 @@ O fluxo de processamento de mídias foi otimizado para evitar expiração rápid
   * *Data e hora da alteração:* 04/06/2026 às 16:51 (Horário Local)
   * *Arquivos modificados:* `android/app/src/main/java/br/com/mtsolar/gestao/MyFirebaseMessagingService.java` (novo), `android/app/src/main/AndroidManifest.xml`
 
+* **Incremento de Versão (versionCode 9 / versionName 1.0.1) e Novo Bundle app-release-v2.aab:**
+  * *O que foi feito:*
+    * **`android/app/build.gradle`:** `versionCode` incrementado de `8` para `9` e `versionName` atualizado de `"1.2.5"` para `"1.0.1"` dentro do bloco `defaultConfig`.
+    * **Build gerado:** `bundleRelease` executado com sucesso em ≈18s via `.\gradlew bundleRelease` — **BUILD SUCCESSFUL (252 tasks, 15 executadas, 237 up-to-date)**.
+    * **Arquivo final:** `app-release.aab` (6,11 MB), assinado com a keystore `mtsolar.jks` (`CN=Marcos Nascimento`, RSA 2048 bits, válido até 01/05/2051).
+    * **Cópia de entrega:** `C:\Users\aurel\Desktop\APK\app-release-v2.aab`.
+  * *Data e hora da alteração:* 04/06/2026 às 19:38 (Horário Local)
+  * *Arquivos modificados:* `android/app/build.gradle`
+
 * **Alteração de applicationId para com.mtsolar.mtsolv e Novo .aab Gerado:**
   * *O que foi feito:*
     * **`android/app/build.gradle`:** `applicationId` alterado de `br.com.mtsolar.gestao` para `com.mtsolar.mtsolv`. O `namespace` permaneceu `br.com.mtsolar.gestao` (controla o pacote de `R` e `BuildConfig`).
@@ -735,6 +744,17 @@ Abaixo estão listadas todas as variáveis cruciais exigidas para o funcionament
 * **`FIREBASE_PROJECT_ID`:** ID de identificação do projeto configurado no console do Google Firebase.
 * **`FIREBASE_PRIVATE_KEY`:** Chave privada criptográfica em string do Firebase Admin para autenticação de push.
 * **`FIREBASE_CLIENT_EMAIL`:** E-mail de serviço configurado para comunicação com a API FCM do Firebase.
+
+* **6 Correções Pontuais no Gerador de Contratos PDF (Blocos 1–6):**
+  * *O que foi feito:*
+    * **BLOCO 1 — Opacidade da marca d'água:** Aumentada a opacidade da logomarca de fundo no PDF do contrato de `opacity: 0.3` para `opacity: 0.35` (+5 p.p.) via `doc.setGState`.
+    * **BLOCO 2 — Quebra de página antes do bloco final:** Restruturada a lógica de paginação das assinaturas. Agora o sistema pré-calcula a altura total necessária (parágrafo "E por estarem assim justas...", linha da data, espaço e as duas colunas de assinatura com labels) e verifica *antes* de renderizar o parágrafo final se tudo cabe na página. A quebra, quando necessária, ocorre antes do parágrafo inicial do bloco, garantindo que parágrafo, data e assinaturas fiquem sempre juntos.
+    * **BLOCO 3 — Data sem problema de fuso UTC:** Substituída a formação da data no PDF (que usava `new Date(data).toLocaleDateString(...)` e sofria de deslocamento UTC-3) por desestruturação direta da string `YYYY-MM-DD` e montagem com array `mesesPtBR` usando índice local. Também corrigida a data inicial do campo de formulário (de `toISOString().split('T')[0]` para IIFE com `getFullYear()/getMonth()/getDate()`).
+    * **BLOCO 4 — Máscara CPF/CNPJ dinâmica:** Criada função `formatarCpfCnpj(valor: string): string` que remove não-numéricos, limita a 14 dígitos e aplica progressivamente a máscara `000.000.000-00` (até 11 dígitos) ou `00.000.000/0000-00` (12–14 dígitos). Campo alterado para `type="text"`, `inputMode="numeric"` e `maxLength={18}`.
+    * **BLOCO 5 — Tabela do Kit Fotovoltaico no PDF:** Substituída a lista numerada por tabela manual com 3 colunas (Item 15% | Qtd. 15% | Produto 70%), desenhada com `doc.rect()` e `doc.line()`. Cabeçalho com fundo azul-claro (`fillColor 230,235,245`), paginação dinâmica com redesenho de cabeçalho em nova página, e suporte a quebra de linha automática na coluna Produto.
+    * **BLOCO 6 — Correções gramaticais e de coesão:** Aplicadas 8 correções de redação nas cláusulas do contrato (3ª, 5ª, 7ª e 8ª); correções incluem crases ausentes, concordâncias verbais, erros de regência e pontuação. Adicionado comentário `// REVISAR:` no trecho de agente de atendimento da Cláusula Quinta para revisão jurídica futura.
+  * *Data e hora da alteração:* 15/06/2026 às 11:30 (Horário Local)
+  * *Arquivos modificados:* `src/pages/Contracts.tsx`
 
 ---
 

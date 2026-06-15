@@ -57,7 +57,7 @@ export default function Contracts() {
     
     // Data e Local
     cidade_contrato: 'Jaboatão dos Guararapes',
-    data_contrato: new Date().toISOString().split('T')[0],
+    data_contrato: (() => { const h = new Date(); return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-${String(h.getDate()).padStart(2, '0')}`; })(),
     genero: 'masculino'
   });
 
@@ -81,7 +81,29 @@ export default function Contracts() {
 
   const updateForm = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-  };  const gerarPDF = async () => {
+  };
+
+  // BLOCO 4 — Máscara dinâmica de CPF (11 dígitos) ou CNPJ (14 dígitos)
+  const formatarCpfCnpj = (valor: string): string => {
+    // Remove todos os caracteres não numéricos e limita a 14 dígitos
+    const numeros = valor.replace(/\D/g, '').slice(0, 14);
+    if (numeros.length <= 11) {
+      // Formato CPF: 000.000.000-00
+      return numeros
+        .replace(/^(\d{3})(\d)/, '$1.$2')
+        .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2');
+    } else {
+      // Formato CNPJ: 00.000.000/0000-00
+      return numeros
+        .replace(/^(\d{2})(\d)/, '$1.$2')
+        .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/\.(\d{3})(\d)/, '.$1/$2')
+        .replace(/(\/\d{4})(\d{1,2})$/, '$1-$2');
+    }
+  };
+
+  const gerarPDF = async () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const imgTimbrado = '/Papel_-_timbrado.png';
     const pageWidth = 210;
@@ -165,9 +187,67 @@ export default function Contracts() {
     addText(`1.2- O equipamento adquirido será instalado no endereço: ${formData.endereco_instalacao || '{{ endereco_instalacao }}'}`);
 
     addText('KIT FOTOVOLTAICO:', { bold: true });
+    // BLOCO 5 — Tabela manual do kit: Item | Qtd. | Produto
+    const colWidths = [contentWidth * 0.15, contentWidth * 0.15, contentWidth * 0.70];
+    const colX = [marginLeft, marginLeft + colWidths[0], marginLeft + colWidths[0] + colWidths[1]];
+    const kitRowHeight = 7;
+    const kitHeaderHeight = 7;
+
+    const desenharCabecalhoKit = () => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setFillColor(230, 235, 245);
+      doc.setDrawColor(150, 150, 150);
+      doc.setLineWidth(0.3);
+      doc.rect(marginLeft, currentY, contentWidth, kitHeaderHeight, 'FD');
+      doc.setTextColor(30, 30, 30);
+      doc.text('Item', colX[0] + 2, currentY + 5);
+      doc.text('Qtd.', colX[1] + 2, currentY + 5);
+      doc.text('Produto', colX[2] + 2, currentY + 5);
+      currentY += kitHeaderHeight;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.2);
+    };
+
+    if (currentY + kitHeaderHeight + kitRowHeight > pageHeight - 30) {
+      doc.addPage();
+      addBackground();
+      currentY = marginTop;
+    }
+    desenharCabecalhoKit();
+
     kitItems.forEach((item, idx) => {
-      addText(`${String(idx + 1).padStart(2, '0')} – ${item.quantity}x ${item.description}`);
+      const numItem = String(idx + 1).padStart(2, '0');
+      const qtdStr = `${item.quantity}x`;
+      const descStr = item.description;
+      const descLines = doc.splitTextToSize(descStr, colWidths[2] - 4);
+      const cellHeight = Math.max(kitRowHeight, descLines.length * 5 + 2);
+      if (currentY + cellHeight > pageHeight - 30) {
+        doc.addPage();
+        addBackground();
+        currentY = marginTop;
+        desenharCabecalhoKit();
+      }
+      doc.setDrawColor(180, 180, 180);
+      doc.setLineWidth(0.2);
+      doc.rect(marginLeft, currentY, contentWidth, cellHeight, 'D');
+      doc.line(colX[1], currentY, colX[1], currentY + cellHeight);
+      doc.line(colX[2], currentY, colX[2], currentY + cellHeight);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(0, 0, 0);
+      doc.text(numItem, colX[0] + 2, currentY + 5);
+      doc.text(qtdStr, colX[1] + 2, currentY + 5);
+      doc.text(descLines, colX[2] + 2, currentY + 5);
+      currentY += cellHeight;
     });
+    doc.setFontSize(10);
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.2);
+    currentY += 3;
 
     addText('CLÁUSULA SEGUNDA – DESCRIÇÃO DOS TRABALHOS A REALIZAR', { bold: true });
     addText('Os trabalhos relacionados ao objeto acima identificado compreendem equipamentos, mão de obra e acessórios para instalação de sistemas de energia fotovoltaico, desde a elaboração do projeto até a homologação do sistema junto a concessionária de sua região.');
@@ -178,11 +258,11 @@ export default function Contracts() {
     addText('- Cabeamentos DC e AC devidamente certificados e de características adequadas;');
     addText('- Inversor de frequência certificado;');
     addText('- Quadro de proteção (String box), quando necessário.');
-    addText('2.4- Os serviços contratados incluem Projeto inicial, ART, tratativas junto a concessionária local, instalação total dos equipamentos, cercamento do local, construção da casa de máquina, limpeza do terreno, serviços de engenharia e homologação do sistema.');
+    addText('2.4- Os serviços contratados incluem projeto inicial, ART, tratativas junto à concessionária local, instalação total dos equipamentos, cercamento do local, construção da casa de máquina, limpeza do terreno, serviços de engenharia e homologação do sistema.');
 
     addText('CLÁUSULA TERCEIRA – PREÇO E FORMA DE PAGAMENTO', { bold: true });
     addText(`- Como pagamento pela aquisição do sistema fotovoltaico e pelos serviços prestados, o CONTRATANTE pagará a CONTRATADA a quantia total de R$ ${parseFloat(formData.valor_total || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${formData.valor_extenso || '{{ valor_extenso }}'}).`);
-    addText(`- O pagamento a CONTRATADA será efetuado ${formData.forma_pagamento || '{{ forma_pagamento }}'}.`);
+    addText(`- O pagamento à CONTRATADA será efetuado da seguinte forma: ${formData.forma_pagamento || '{{ forma_pagamento }}'}.`);
 
     addText('CLÁUSULA QUARTA – DO PRAZO, ENTREGA E EXECUÇÃO DOS SERVIÇOS', { bold: true });
     addText('A administração, supervisão e gerenciamento no que tange à execução de todos os serviços prestados pelos profissionais encaminhados pela CONTRATADA, ficarão sob responsabilidade exclusiva da mesma.');
@@ -196,8 +276,9 @@ export default function Contracts() {
     addText('- Fornecer ao CONTRATANTE todos os dados solicitados que se fizerem necessários ao bom entendimento e acompanhamento do serviço contratado;');
     addText('- Executar a instalação de acordo com as normas técnicas oficiais em vigor;');
     addText('- Auxiliar o CONTRATANTE no monitoramento do sistema de geração fotovoltaico de Gestão de Energia até 01 (Um) ano. Podendo, após isso, o CONTRATANTE renovar o contrato com a CONTRATADA para dar continuidade ao monitoramento.');
-    addText('- Atender as possíveis ocorrências de falhas de equipamentos, objeto deste contrato, após serem reportadas pela CONTRATADA.');
-    addText('- Realizar o contato com os fabricantes dos equipamentos in caso de falha que exija substituição ou reparo, gerenciando o envio e recebimento para troca ou reparo; não se responsabilizando por eventuais cobranças no período de pausa na produção até o reestabelecimento do sistema;');
+    // REVISAR: verificar se quem reporta a falha é o CONTRATANTE ou a CONTRATADA antes de finalizar este texto.
+    addText('- Atender às possíveis ocorrências de falha nos equipamentos, objeto deste contrato, após serem reportadas pela CONTRATADA.');
+    addText('- Realizar o contato com os fabricantes dos equipamentos em caso de falha que exija substituição ou reparo, gerenciando o envio e recebimento para troca ou reparo; não se responsabilizando por eventuais cobranças no período de pausa na produção até o reestabelecimento do sistema;');
     addText('- É de responsabilidade da CONTRATADA viabilizar para o CONTRATANTE todo o processo de compra do equipamento, independente do fornecedor;');
     addText('- Respeitar e fazer com que seus colaboradores respeitem as normas de segurança e higiene no trabalho, incluindo o devido uso de EPIs e EPCs;');
     addText('- Assumir integral responsabilidade pelas obrigações de natureza trabalhista e/ou previdenciária relativas aos trabalhadores alocados para a execução dos serviços.');
@@ -214,17 +295,17 @@ export default function Contracts() {
     addText('OBS: Solicitamos laudo estrutural reconhecido por Engenheiro ou técnico estrutural. Não nos responsabilizamos por problemas já existentes no telhado.');
 
     addText('CLÁUSULA SÉTIMA – EXCLUSÕES', { bold: true });
-    addText('7.1 A CONTRATADA não é de nenhuma forma responsável se houver alterações em regulamentos, normas ou leis que mudem as especificações técnicas necessárias para instalações fotovoltaicas após a entrega do sistema pronto ao CONTRATANTE.');
+    addText('7.1 A CONTRATADA não é, de nenhuma forma, responsável caso haja alterações em regulamentos, normas ou leis que modifiquem as especificações técnicas necessárias para instalações fotovoltaicas após a entrega do sistema pronto ao CONTRATANTE.');
     addText('- A CONTRATADA não se responsabiliza por danos causados na rede elétrica da edificação caso não tenham sido comprovadamente causados pelo sistema fotovoltaico. A comprovação deve se dar através de laudo técnico emitido por empresa ou engenheiro eletricista;');
     addText('- Não estão inclusos no escopo deste contrato adaptações na rede elétrica da edificação não estritamente relacionadas à instalação do sistema, como: troca de lâmpadas, troca ou conserto de quadros elétricos, consertos de tomadas, passagem de cabos, malha de terra existente, SPDA, sistema de combate a incêndio, ou quaisquer outros itens não necessários à operação do sistema fotovoltaico;');
     addText('- A CONTRATADA não será responsável por ineficácia dos equipamentos já instalados de energia solar fotovoltaica no caso de força maior ou caso fortuito, como: tempestades, guerras, desordens, sabotagens e atos terroristas na forma prevista em lei. Casos de força maior estão diretamente ligados a desastres decorrentes da natureza que podem comprometer a eficácia dos equipamentos devido ao fato do mesmo depender das condições climáticas da região;');
     addText('- Este contrato não celebra nenhum serviço ou adaptação de natureza civil, estando assim sob responsabilidade do CONTRATANTE;');
-    addText('- O projeto de execução elaborado pela empresa CONTRATADA baseia-se nas contas de energia e consumo adicional fornecidas pelo CONTRATANTE. Sendo assim, havendo aumento do consumo diferentemente daquele garantido no projeto, a empresa CONTRATADA não se responsabiliza pela não compensação do consumo excedente, tendo em vista a incapacidade do sistema instalado suprir à quantidade de energia superior daquela pelo qual foi exclusivamente designada.');
+    addText('- O projeto de execução elaborado pela empresa CONTRATADA baseia-se nas contas de energia e consumo adicional fornecidas pelo CONTRATANTE. Sendo assim, havendo aumento do consumo diferente daquele previsto no projeto, a CONTRATADA não se responsabiliza pela não compensação do consumo excedente, tendo em vista a incapacidade do sistema instalado de suprir uma quantidade de energia superior àquela para a qual foi exclusivamente dimensionado.');
     addText('- Os valores de produção do sistema são estimados e podem sofrer variações em decorrência das condições climáticas. Portanto, a CONTRATADA não garante os exatos valores de geração e produção;');
     addText('- Os cálculos de economia e projeção financeira informados na proposta comercial são estimados e podem alterar em decorrência dos reajustes inflacionários e energéticos.');
 
     addText('CLÁUSULA OITAVA – DA RESCISÃO CONTRATUAL', { bold: true });
-    addText('8.1- A eventual rescisão do presente contrato, por culpa ou descumprimento das obrigações por qualquer das partes, acarretará a parte infratora o pagamento de multa penal, fixada em 10% (dez por cento) do valor total do negócio, a outra parte, além de responder por perdas e danos e pagamento dos ônus sucumbenciais, custas e honorários advocatícios.');
+    addText('8.1- A eventual rescisão do presente contrato, por culpa ou descumprimento das obrigações por qualquer das partes, acarretará à parte infratora o pagamento, à outra parte, de multa penal fixada em 10% (dez por cento) do valor total do negócio, além da responsabilidade por perdas e danos e pelo pagamento dos ônus sucumbenciais, custas e honorários advocatícios.');
     addText(`8.2- Em havendo desistência por parte d${g.o} CONTRATANTE, que não seja ocasionada por negativa de crédito ou inviabilidade técnica, fica ${g.artigo} CONTRATANTE ${g.obrigado} a pagar à CONTRATADA os custos referentes à vistoria, preparação e execução do projeto até o momento da rescisão, limitado a 10% (dez por cento) do valor total do contrato.`);
 
     addText('CLÁUSULA NONA – DIREITO DE IMAGEM', { bold: true });
@@ -252,18 +333,27 @@ export default function Contracts() {
     addText('CLÁUSULA DÉCIMA SEGUNDA – DO FORO', { bold: true });
     addText('As partes elegem o Foro da Comarca da cidade de Jaboatão dos Guararapes – Pernambuco, para dirimir qualquer questão decorrente deste contrato, com exclusão de qualquer outro, por mais privilegiado que seja.');
 
-    addText('E por estarem assim justas e acertadas, as partes firmam o presente instrumento em 2 (duas) vias de igual teor e forma, tudo na presença das duas testemunhas abaixo.');
-
-    currentY += 10;
-    const dataFormatada = new Date(formData.data_contrato).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-    addText(`${formData.cidade_contrato} - PE, ${dataFormatada}.`, { align: 'center' });
-
-    // Verificar se o bloco de assinaturas cabe na página respeitando o limite do rodapé
-    if (currentY + 35 > pageHeight - 30) {
+    // BLOCO 2 — Calcular altura total do bloco final para garantir que parágrafo,
+    // data e assinaturas fiquem sempre na mesma página, nunca separados.
+    const textoFinal = 'E por estarem assim justas e acertadas, as partes firmam o presente instrumento em 2 (duas) vias de igual teor e forma, tudo na presença das duas testemunhas abaixo.';
+    const linhasFinal = doc.splitTextToSize(textoFinal, contentWidth);
+    const alturaParaFinal = (linhasFinal.length * 5) + 2;
+    // alturaData (~7) + espaço antes assinatura (20) + linha + labels (~15)
+    const alturaTotalBlocoFinal = alturaParaFinal + 10 + 7 + 20 + 15;
+    if (currentY + alturaTotalBlocoFinal > pageHeight - 30) {
       doc.addPage();
       addBackground();
       currentY = marginTop;
     }
+
+    addText(textoFinal);
+
+    // BLOCO 3 — Formatação da data usando métodos locais para evitar problema de fuso UTC
+    currentY += 10;
+    const mesesPtBR = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+    const [anoData, mesData, diaData] = formData.data_contrato.split('-').map(Number);
+    const dataFormatada = `${diaData} de ${mesesPtBR[mesData - 1]} de ${anoData}`;
+    addText(`${formData.cidade_contrato} - PE, ${dataFormatada}.`, { align: 'center' });
 
     currentY += 20;
     doc.line(marginLeft, currentY, marginLeft + 70, currentY);
@@ -287,7 +377,7 @@ export default function Contracts() {
         const y = (pageHeight - watermarkHeight) / 2;
         
         // @ts-ignore
-        doc.setGState(new doc.GState({ opacity: 0.3 }));
+        doc.setGState(new doc.GState({ opacity: 0.35 }));
         doc.addImage(imgBase64, 'PNG', x, y, watermarkWidth, watermarkHeight);
         // @ts-ignore
         doc.setGState(new doc.GState({ opacity: 1.0 }));
@@ -363,9 +453,12 @@ export default function Contracts() {
                 </div>
                 <div>
                   <label className={labelStyle}>CPF / CNPJ</label>
-                  <input 
-                    value={formData.cpf_cnpj_contratante} 
-                    onChange={e => updateForm('cpf_cnpj_contratante', e.target.value)}
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={18}
+                    value={formData.cpf_cnpj_contratante}
+                    onChange={e => updateForm('cpf_cnpj_contratante', formatarCpfCnpj(e.target.value))}
                     className={inputStyle}
                     placeholder="000.000.000-00"
                   />
