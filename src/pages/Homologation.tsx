@@ -36,7 +36,8 @@ export default function Homologation() {
       const res = await api.get('/api/projects');
       if (Array.isArray(res.data)) {
         setProjects(res.data.filter((p: any) =>
-          p.current_stage === 'homologation' && p.homologation_status !== 'connection_point_approved'
+          (p.current_stage === 'homologation' || p.current_stage === 'installation') &&
+          p.homologation_status !== 'connection_point_approved'
         ));
       } else {
         setProjects([]);

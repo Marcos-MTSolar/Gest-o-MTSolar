@@ -865,8 +865,14 @@ Abaixo estão listadas todas as variáveis cruciais exigidas para o funcionament
     * **Frontend (`ObraSchedule.tsx`):**
       * Adicionados campos `address`, `city` e `state` como opcionais na interface `ProjectSchedule`.
       * Inserido card visual cinza claro (`bg-gray-50`) exibindo o endereço do cliente cadastrado caso esteja preenchido (`project.address`, `project.city`, `project.state`), posicionado estrategicamente acima dos dados do kit negociado no detalhe expandível do cronograma.
-  * *Data e hora da alteração:* 16/06/2026 às 13:15 (Horário Local)
-  * *Arquivos modificados:* `api/index.ts`, `src/pages/Commercial.tsx`, `src/pages/ObraSchedule.tsx`, `RESUMO_MESTRE.md`
+* **Reestruturação e Alinhamento do Funil de Obras:**
+  * *O que foi feito:*
+    * **Backend (`api/index.ts`):**
+      * `GET /api/projects-schedule` — Alterado o filtro do cronograma de obras para exibir somente projetos que estejam no estágio de instalação (`current_stage: 'installation'`) E cujo kit de equipamentos já tenha sido entregue (`kit_entregue: true`), garantindo que o cronograma represente apenas obras prontas para início.
+    * **Frontend (`Homologation.tsx`):**
+      * Ajustado o filtro da listagem de homologações para exibir projetos tanto no estágio `'homologation'` quanto no estágio paralelo `'installation'`. Isso permite que o processo de homologação ocorra em paralelo com a compra do Kit Solar e a execução da Obra, logo após a conclusão da Vistoria Técnica.
+  * *Data e hora da alteração:* 16/06/2026 às 13:25 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/Homologation.tsx`, `RESUMO_MESTRE.md`
 
 ---
 
