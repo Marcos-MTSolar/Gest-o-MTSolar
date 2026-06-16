@@ -2748,8 +2748,7 @@ app.get('/api/projects-schedule', authenticateToken, async (req: any, res) => {
     .from('projects')
     .select('id, client_name, title, schedule_order, schedule_notes, schedule_status, schedule_issue_notes, current_stage, company_id, client_id, clients (inversor_marca, inversor_modelo, inversor_potencia, modulo_modelo, modulo_potencia, estrutura_tipo)')
     .eq('company_id', req.user.company_id)
-    .eq('current_stage', 'installation')
-    .eq('kit_entregue', true)
+    .not('current_stage', 'in', '("registration","completed")')
     .order('schedule_order', { ascending: true });
 
   if (error) return res.status(500).json({ error: error.message });
