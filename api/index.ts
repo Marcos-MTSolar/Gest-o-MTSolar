@@ -912,9 +912,9 @@ app.put('/api/projects/:id/technical', authenticateToken, upload.any(), async (r
     return res.status(500).json({ error: upsertError.message });
   }
 
-  // Update project stage when vistoria is finalized â€” goes directly to homologation
+  // Update project stage when vistoria is finalized — goes to installation
   if (status === 'vistoria_concluida') {
-    await supabase.from('projects').update({ current_stage: 'homologation', status: 'vistoria_concluida', updated_at: new Date() }).eq('id', req.params.id).eq('company_id', req.user.company_id);
+    await supabase.from('projects').update({ current_stage: 'installation', status: 'vistoria_concluida', updated_at: new Date() }).eq('id', req.params.id).eq('company_id', req.user.company_id);
   }
 
 
@@ -2748,7 +2748,8 @@ app.get('/api/projects-schedule', authenticateToken, async (req: any, res) => {
     .from('projects')
     .select('id, client_name, title, schedule_order, schedule_notes, schedule_status, schedule_issue_notes, current_stage, company_id, client_id, clients (inversor_marca, inversor_modelo, inversor_potencia, modulo_modelo, modulo_potencia, estrutura_tipo)')
     .eq('company_id', req.user.company_id)
-    .neq('current_stage', 'completed')
+    .eq('current_stage', 'installation')
+    .eq('kit_entregue', true)
     .order('schedule_order', { ascending: true });
 
   if (error) return res.status(500).json({ error: error.message });

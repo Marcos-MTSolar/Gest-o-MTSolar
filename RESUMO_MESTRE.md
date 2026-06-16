@@ -834,6 +834,26 @@ Abaixo estão listadas todas as variáveis cruciais exigidas para o funcionament
   * *Data e hora da alteração:* 16/06/2026 às 12:00 (Horário Local)
   * *Arquivos modificados:* `api/index.ts`, `src/pages/Homologation.tsx`, `RESUMO_MESTRE.md`
 
+* **Correção de Fluxo de Estágios (Funil Completo):**
+  * *O que foi feito:*
+    * **Backend (`api/index.ts`):**
+      * `PUT /api/projects/:id/technical` — corrigida a transição ao concluir a vistoria: `current_stage` agora avança para `installation` (era incorretamente `homologation`).
+      * `GET /api/projects-schedule` — substituído o filtro `.neq('current_stage', 'completed')` por `.eq('current_stage', 'installation').eq('kit_entregue', true)`. O cronograma agora exibe **somente** projetos em fase de instalação com kit confirmado como entregue.
+      * `PUT /api/projects/:id/installation` — mantida sem alteração: ao concluir a obra (`status: 'approved'`), o projeto avança corretamente para `homologation`.
+    * **Frontends verificados (sem alteração necessária):**
+      * `Technical.tsx` — já usava `PUT /api/projects/:id/technical` com `status: 'vistoria_concluida'` ✅
+      * `Obra.tsx` — já usava `PUT /api/projects/:id/installation` com `status: 'approved'` ✅
+      * `KitPurchase.tsx` — já usava `PUT /api/projects/:id/kit` com `kit_entregue` ✅
+  * *Fluxo correto após as correções:*
+    1. Área Comercial → `(proposta_enviada)` → `current_stage: inspection`
+    2. Vistoria Técnica → `(vistoria_concluida)` → `current_stage: installation`
+    3. Kit Solar → `(kit_entregue: true)` → projeto elegível para Cronograma
+    4. Cronograma → filtro: `installation` + `kit_entregue = true`
+    5. Obra → `(status: approved)` → `current_stage: homologation`
+    6. Homologação → `(connection_point_approved)` → `current_stage: conclusion`
+  * *Data e hora da alteração:* 16/06/2026 às 12:30 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `RESUMO_MESTRE.md`
+
 ---
 
 > [!WARNING]
