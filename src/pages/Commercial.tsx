@@ -841,23 +841,13 @@ export default function Commercial() {
                   Salvar Alterações
                 </button>
                 {selectedProject.commercial_status !== 'proposta_enviada' && selectedProject.commercial_status !== 'approved' && (
-                  <div
-                    title={!selectedProject.kit_entregue ? 'Aguardando entrega do material — confirme a entrega do kit no módulo Kit Solar antes de aprovar.' : undefined}
-                    className="flex"
+                  <button 
+                    onClick={() => handleSaveCommercialChanges('proposta_enviada')} 
+                    className="px-8 py-3 rounded-xl font-bold shadow-md flex items-center gap-2 transform transition-all bg-green-600 text-white hover:bg-green-700 active:scale-95"
                   >
-                    <button 
-                      onClick={() => handleSaveCommercialChanges('proposta_enviada')} 
-                      disabled={!selectedProject.kit_entregue}
-                      className={`px-8 py-3 rounded-xl font-bold shadow-md flex items-center gap-2 transform transition-all ${
-                        selectedProject.kit_entregue
-                          ? 'bg-green-600 text-white hover:bg-green-700 active:scale-95'
-                          : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
-                      }`}
-                    >
-                      <CheckCircle size={20} /> 
-                      {selectedProject.kit_entregue ? 'Aprovar Proposta Comercial' : 'Aguardando Entrega do Kit'}
-                    </button>
-                  </div>
+                    <CheckCircle size={20} /> 
+                    Aprovar Proposta Comercial
+                  </button>
                 )}
               </div>
             </div>

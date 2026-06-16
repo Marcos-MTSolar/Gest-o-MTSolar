@@ -860,11 +860,13 @@ Abaixo estão listadas todas as variáveis cruciais exigidas para o funcionament
       * `POST /api/clients` — Adicionado `current_stage: 'registration'` na inserção da tabela `projects`, garantindo que novos projetos iniciem no funil na etapa correta de cadastro.
       * `GET /api/projects-schedule` — Adicionado os campos `address`, `city` e `state` no select de join da tabela `clients` e incluído o mapeamento plano em `mappedProjects`.
       * `PUT /api/projects/:id/commercial` e `PUT /api/commercial-data/:projectId` — Removida a validação de `kit_entregue` ao aprovar a proposta comercial (`status: 'proposta_enviada'`), permitindo o avanço correto para a etapa de vistoria técnica (`current_stage: 'inspection'`) sem travas prematuras.
+    * **Frontend (`Commercial.tsx`):**
+      * Removido o bloqueio `disabled={!selectedProject.kit_entregue}` e a condicional do botão "Aprovar Proposta Comercial", permitindo que o vendedor envie a proposta e avance o projeto para vistoria sem exigir entrega prévia do kit (que só ocorre na fase de instalação/obra).
     * **Frontend (`ObraSchedule.tsx`):**
       * Adicionados campos `address`, `city` e `state` como opcionais na interface `ProjectSchedule`.
       * Inserido card visual cinza claro (`bg-gray-50`) exibindo o endereço do cliente cadastrado caso esteja preenchido (`project.address`, `project.city`, `project.state`), posicionado estrategicamente acima dos dados do kit negociado no detalhe expandível do cronograma.
-  * *Data e hora da alteração:* 16/06/2026 às 13:05 (Horário Local)
-  * *Arquivos modificados:* `api/index.ts`, `src/pages/ObraSchedule.tsx`, `RESUMO_MESTRE.md`
+  * *Data e hora da alteração:* 16/06/2026 às 13:15 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/Commercial.tsx`, `src/pages/ObraSchedule.tsx`, `RESUMO_MESTRE.md`
 
 ---
 
