@@ -38,6 +38,10 @@ interface ProjectSchedule {
   modulo_modelo?: string | null;
   modulo_potencia?: string | number | null;
   estrutura_tipo?: string | null;
+  // Endereço do cliente (vindo da tabela clients)
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
 }
 
 interface ScheduleDetails {
@@ -451,6 +455,18 @@ export default function ObraSchedule() {
                                 placeholder="Rua, Número, Bairro..."
                               />
                             </div>
+
+                            {/* Endereço do cliente (vindo da tabela clients) */}
+                            {(project.address || project.city || project.state) && (
+                              <div className="sm:col-span-2 lg:col-span-3 bg-gray-50 rounded-2xl border border-gray-100 p-4">
+                                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                  <MapPin size={13} className="text-red-400" /> Endereço da Instalação (Cadastro do Cliente)
+                                </p>
+                                <p className="text-sm font-bold text-gray-800">
+                                  {project.address || '—'}{project.city ? `, ${project.city}` : ''}{project.state ? ` - ${project.state}` : ''}
+                                </p>
+                              </div>
+                            )}
 
                             {/* Kit Negociado (Somente Leitura — dados da tabela clients) */}
                             {(project.inversor_modelo || project.modulo_modelo || project.inversor_potencia || project.modulo_potencia) && (

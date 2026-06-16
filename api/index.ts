@@ -494,6 +494,7 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
         client_name: name, // Persiste o nome para histórico
         title: `Projeto Solar - ${name}`, 
         status: 'pending',
+        current_stage: 'registration',
         company_id: req.user.company_id
       })
       .select()
@@ -738,18 +739,13 @@ app.put('/api/projects/:id/commercial', authenticateToken, async (req: any, res)
     .eq('company_id', req.user.company_id);
 
   if (status === 'proposta_enviada') {
-    // Validação: kit deve estar entregue antes de avançar para vistoria
-    const { data: projectCheck } = await supabase.from('projects').select('kit_entregue, client_name').eq('id', req.params.id).eq('company_id', req.user.company_id).single();
-    if (!projectCheck?.kit_entregue) {
-      return res.status(422).json({ error: 'O material ainda não foi entregue. Confirme a entrega do kit antes de aprovar a proposta.' });
-    }
     await supabase.from('projects').update({ current_stage: 'inspection', status: 'proposta_enviada', updated_at: new Date() }).eq('id', req.params.id).eq('company_id', req.user.company_id);
     
     // Notifica técnicos
-    const { data: techUsers } = await supabase.from('users').select('id').eq('role', 'TECHNICAL');
+    const { data: techUsers } = await supabase.from('users').select('id, client_name').eq('role', 'TECHNICAL');
     if (techUsers) {
       for (const u of techUsers) {
-        await sendPushNotification(u.id, 'Novo Projeto', `Um novo projeto para ${projectCheck?.client_name || 'Cliente'} está disponível para vistoria.`);
+        await sendPushNotification(u.id, 'Novo Projeto', `Um novo projeto está disponível para vistoria.`);
       }
     }
   } else if (status === 'pendente_comercial') {
@@ -791,17 +787,12 @@ app.put('/api/commercial-data/:projectId', authenticateToken, async (req: any, r
 
     // Também atualizamos o status geral do projeto se necessário
     if (status === 'proposta_enviada') {
-      // Validação: kit deve estar entregue antes de avançar para vistoria
-      const { data: projectCheck } = await supabase.from('projects').select('kit_entregue, client_name').eq('id', project_id).eq('company_id', req.user.company_id).single();
-      if (!projectCheck?.kit_entregue) {
-        return res.status(422).json({ error: 'O material ainda não foi entregue. Confirme a entrega do kit antes de aprovar a proposta.' });
-      }
       await supabase.from('projects').update({ current_stage: 'inspection', status: 'proposta_enviada', updated_at: new Date() }).eq('id', project_id).eq('company_id', req.user.company_id);
       
       const { data: techUsers } = await supabase.from('users').select('id').eq('role', 'TECHNICAL');
       if (techUsers) {
         for (const u of techUsers) {
-          await sendPushNotification(u.id, 'Novo Projeto', `Um novo projeto para ${projectCheck?.client_name || 'Cliente'} está disponível para vistoria.`);
+          await sendPushNotification(u.id, 'Novo Projeto', `Um novo projeto está disponível para vistoria.`);
         }
       }
     } else if (status === 'pendente_comercial') {
@@ -2746,7 +2737,7 @@ app.get('/api/stats', authenticateToken, async (req: any, res) => {
 app.get('/api/projects-schedule', authenticateToken, async (req: any, res) => {
   const { data: projects, error } = await supabase
     .from('projects')
-    .select('id, client_name, title, schedule_order, schedule_notes, schedule_status, schedule_issue_notes, current_stage, company_id, client_id, clients (inversor_marca, inversor_modelo, inversor_potencia, modulo_modelo, modulo_potencia, estrutura_tipo)')
+    .select('id, client_name, title, schedule_order, schedule_notes, schedule_status, schedule_issue_notes, current_stage, company_id, client_id, clients (inversor_marca, inversor_modelo, inversor_potencia, modulo_modelo, modulo_potencia, estrutura_tipo, address, city, state)')
     .eq('company_id', req.user.company_id)
     .not('current_stage', 'in', '("registration","completed")')
     .order('schedule_order', { ascending: true });
@@ -2761,7 +2752,10 @@ app.get('/api/projects-schedule', authenticateToken, async (req: any, res) => {
       inversor_potencia: project.clients?.inversor_potencia || null,
       modulo_modelo: project.clients?.modulo_modelo || null,
       modulo_potencia: project.clients?.modulo_potencia || null,
-      estrutura_tipo: project.clients?.estrutura_tipo || null
+      estrutura_tipo: project.clients?.estrutura_tipo || null,
+      address: project.clients?.address || null,
+      city: project.clients?.city || null,
+      state: project.clients?.state || null
     };
   });
 
