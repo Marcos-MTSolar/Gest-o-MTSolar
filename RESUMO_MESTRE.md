@@ -874,6 +874,16 @@ Abaixo estão listadas todas as variáveis cruciais exigidas para o funcionament
   * *Data e hora da alteração:* 16/06/2026 às 13:25 (Horário Local)
   * *Arquivos modificados:* `api/index.ts`, `src/pages/Homologation.tsx`, `RESUMO_MESTRE.md`
 
+* **Correção do Cronograma: Projetos em Instalação Não Apareciam:**
+  * *Causa Raiz:*
+    * O cronograma filtrava por `kit_entregue = true`, mas o campo pode ser `null` no banco caso o fallback `PGRST204` seja ativado (colunas ausentes no schema), fazendo com que projetos em `installation` não apareçam.
+  * *O que foi feito:*
+    * **Backend (`api/index.ts`):**
+      * `GET /api/projects-schedule` — Removido o filtro `kit_entregue = true` da query do Supabase. O cronograma agora exibe todos os projetos no estágio `current_stage: 'installation'`, sem depender da coluna `kit_entregue` como filtro de banco.
+      * `PUT /api/projects/:id/kit` — Adicionado `current_stage: 'installation'` ao payload base de atualização, garantindo que ao salvar o kit (comprado ou entregue) o projeto permaneça no estágio correto de instalação. O status foi ajustado: `'kit_entregue'` quando entregue, `'kit_definido'` caso contrário.
+  * *Data e hora da alteração:* 16/06/2026 às 13:36 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `RESUMO_MESTRE.md`
+
 ---
 
 > [!WARNING]

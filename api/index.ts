@@ -820,9 +820,12 @@ app.put('/api/projects/:id/kit', authenticateToken, async (req: any, res) => {
     }).eq('project_id', req.params.id).eq('company_id', req.user.company_id);
 
     // Monta payload base de atualização do projeto
+    // Quando kit for marcado como entregue, garante que o current_stage seja 'installation'
+    const kitEntregueFlag = kit_entregue === true || kit_entregue === 'true';
     const projectUpdate: any = {
       kit_purchased,
-      status: 'kit_definido',
+      status: kitEntregueFlag ? 'kit_entregue' : 'kit_definido',
+      current_stage: 'installation',
       updated_at: new Date()
     };
 
@@ -2740,7 +2743,6 @@ app.get('/api/projects-schedule', authenticateToken, async (req: any, res) => {
     .select('id, client_name, title, schedule_order, schedule_notes, schedule_status, schedule_issue_notes, current_stage, company_id, client_id, clients (inversor_marca, inversor_modelo, inversor_potencia, modulo_modelo, modulo_potencia, estrutura_tipo, address, city, state)')
     .eq('company_id', req.user.company_id)
     .eq('current_stage', 'installation')
-    .eq('kit_entregue', true)
     .order('schedule_order', { ascending: true });
 
   if (error) return res.status(500).json({ error: error.message });
