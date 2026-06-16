@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../lib/api';
-import { ShoppingCart, Trash2, Package, Truck, Store, CheckCircle2, Clock } from 'lucide-react';
+import { ShoppingCart, Trash2, Package, Truck, Store, CheckCircle2, Clock, Info } from 'lucide-react';
 
 export default function KitPurchase() {
   const [projects, setProjects] = useState<any[]>([]);
@@ -170,33 +170,22 @@ export default function KitPurchase() {
                       onClick={async () => {
                         const res = await api.get(`/api/projects/${p.id}`);
                         const project = res.data;
-                        let preFilled = false;
-
-                        // Pré-preenche com dados da proposta se o kit ainda não foi definido
-                        if (!project.inverter_model && project.proposal_inverter_model) {
-                          project.inverter_model = project.proposal_inverter_model;
-                          preFilled = true;
-                        }
-                        if (!project.inverter_power && project.proposal_inverter_power) {
-                          project.inverter_power = project.proposal_inverter_power;
-                          preFilled = true;
-                        }
-                        if (!project.module_model && project.proposal_module_model) {
-                          project.module_model = project.proposal_module_model;
-                          preFilled = true;
-                        }
-                        if (!project.module_power && project.proposal_module_power) {
-                          project.module_power = project.proposal_module_power;
-                          preFilled = true;
-                        }
-
-                        setUsingProposalData(preFilled);
+                        setUsingProposalData(false);
                         setSelectedProject(project);
-                        setInverterModel(project.inverter_model || project.proposal_inverter_model || '');
-                        setInverterPower(project.inverter_power || project.proposal_inverter_power || '');
-                        setModuleModel(project.module_model || project.proposal_module_model || '');
-                        setModulePower(project.module_power || project.proposal_module_power || '');
-                        // Pré-carrega novos campos
+
+                        // Modelo do inversor salvo tem prioridade; fallback para dados do kit negociado (cadastro do cliente)
+                        const clientInverterModel = [project.inversor_marca, project.inversor_modelo].filter(Boolean).join(' ');
+                        setInverterModel(project.inverter_model || clientInverterModel || '');
+                        setInverterPower(project.inverter_power || (project.inversor_potencia ? String(project.inversor_potencia) : '') || '');
+                        setModuleModel(project.module_model || project.modulo_modelo || '');
+                        setModulePower(project.module_power || (project.modulo_potencia ? String(project.modulo_potencia) : '') || '');
+
+                        // Indica ao usuário que os campos foram pré-preenchidos com dados do kit negociado
+                        const hasKitSaved = project.inverter_model || project.inverter_power || project.module_model || project.module_power;
+                        const hasClientKit = clientInverterModel || project.inversor_potencia || project.modulo_modelo || project.modulo_potencia;
+                        setUsingProposalData(!hasKitSaved && !!hasClientKit);
+
+                        // Pré-carrega campos de compra e entrega
                         setDataCompraKit(project.data_compra_kit || '');
                         setDataPrevistaEntrega(project.data_prevista_entrega || '');
                         setDistribuidora(project.distribuidora || '');
@@ -237,6 +226,16 @@ export default function KitPurchase() {
                   selectedProject.structure_type || selectedProject.technical_data?.structure_type || selectedProject.technical_data?.[0]?.structure_type || 'Não informado'}
               </p>
             </div>
+
+            {/* Banner de pré-preenchimento com dados do kit negociado */}
+            {usingProposalData && (
+              <div className="mb-5 flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+                <Info size={16} className="mt-0.5 shrink-0 text-blue-500" />
+                <span>
+                  Os campos abaixo foram pré-preenchidos com o <strong>kit negociado no cadastro do cliente</strong>. Edite livremente caso o kit comprado seja diferente.
+                </span>
+              </div>
+            )}
 
             <form onSubmit={handleUpdate} className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Dados do Inversor e Módulo */}

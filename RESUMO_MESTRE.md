@@ -884,6 +884,17 @@ Abaixo estão listadas todas as variáveis cruciais exigidas para o funcionament
   * *Data e hora da alteração:* 16/06/2026 às 13:36 (Horário Local)
   * *Arquivos modificados:* `api/index.ts`, `RESUMO_MESTRE.md`
 
+* **Auto-preenchimento do Kit Negociado em KitPurchase.tsx:**
+  * *O que foi feito:*
+    * **Frontend (`KitPurchase.tsx`):**
+      * Corrigido o fallback de pré-preenchimento dos campos do formulário de Kit Solar ao abrir um projeto. Anteriormente, o código tentava usar `project.proposal_inverter_model`, `project.proposal_inverter_power` etc., que **não existem** no payload da API. Agora o fallback correto usa os campos da tabela `clients`: `inversor_marca + inversor_modelo` (concatenados) para o modelo do inversor, `inversor_potencia` para a potência do inversor, `modulo_modelo` para o modelo do módulo e `modulo_potencia` para a potência do módulo.
+      * **Prioridade garantida:** Se já existirem dados salvos de compra de kit (`inverter_model`, `inverter_power`, `module_model`, `module_power`), esses valores têm prioridade e os dados do cliente **não sobrescrevem**.
+      * **Tratamento de nulos:** Caso os campos do cliente estejam vazios/nulos, os inputs exibem o placeholder normalmente, sem erros.
+      * **Banner informativo:** Adicionado aviso em azul (`bg-blue-50`) que aparece apenas quando os campos foram pré-preenchidos com dados do kit negociado (estado `usingProposalData: true`), orientando o usuário a editar livremente caso o kit comprado seja diferente.
+      * Adicionada importação do ícone `Info` do `lucide-react` para uso no banner.
+  * *Data e hora da alteração:* 16/06/2026 às 14:00 (Horário Local)
+  * *Arquivos modificados:* `src/pages/KitPurchase.tsx`, `RESUMO_MESTRE.md`
+
 ---
 
 > [!WARNING]
