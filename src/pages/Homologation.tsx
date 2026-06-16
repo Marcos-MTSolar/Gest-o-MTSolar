@@ -36,7 +36,7 @@ export default function Homologation() {
       const res = await api.get('/api/projects');
       if (Array.isArray(res.data)) {
         setProjects(res.data.filter((p: any) =>
-          ['homologation', 'conclusion', 'completed'].includes(p.current_stage)
+          p.current_stage === 'homologation' && p.homologation_status !== 'connection_point_approved'
         ));
       } else {
         setProjects([]);
@@ -53,6 +53,11 @@ export default function Homologation() {
       if (expectedDate !== null) payload.homologation_expected_date = expectedDate;
 
       await api.put(`/api/projects/${id}/homologation`, payload);
+
+      // Remove do estado local para que suma da lista imediatamente
+      if (status === 'connection_point_approved') {
+        setProjects(prev => prev.filter(p => p.id !== id));
+      }
 
       await sendUpdateNotification('homologation', selectedProject?.client_name || 'Cliente');
 

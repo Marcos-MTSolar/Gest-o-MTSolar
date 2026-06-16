@@ -163,7 +163,7 @@ export default function Commercial() {
         finance_grace_period: selectedProject.finance_grace_period || 0
       };
 
-      await api.put(`/api/projects/${selectedProject.id}/commercial`, commercialData);
+      await api.put(`/api/commercial-data/${selectedProject.id}`, commercialData);
       await sendUpdateNotification('commercial', selectedProject.client_name);
       alert(action === 'proposta_enviada' ? "Proposta Comercial Aprovada! O projeto seguiu para Vistoria." : "Preferências salvas com sucesso.");
       await fetchProjectsPendentes();
@@ -652,46 +652,69 @@ export default function Commercial() {
                 </h3>
                 
                 <div>
-                  <p className="text-xs font-bold text-gray-400 uppercase">Valor da Proposta</p>
-                  <p className="text-lg font-bold text-gray-800">
-                    {selectedProject.proposal_value ? `R$ ${parseFloat(selectedProject.proposal_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Não informado'}
-                  </p>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">VALOR DA PROPOSTA (R$)</label>
+                  <input 
+                    type="number" 
+                    placeholder="0.00" 
+                    className="w-full border p-2 rounded" 
+                    value={selectedProject.proposal_value || ''} 
+                    onChange={e => setSelectedProject({ ...selectedProject, proposal_value: e.target.value })} 
+                  />
                 </div>
 
                 <div>
-                  <p className="text-xs font-bold text-gray-400 uppercase">Forma de Pagamento</p>
-                  <p className="text-lg font-bold text-gray-800">
-                    {selectedProject.payment_method === 'cash' ? 'À Vista' : 
-                     selectedProject.payment_method === 'financing' ? 'Financiamento' : 
-                     selectedProject.payment_method === 'card' ? 'Cartão de Crédito' : 
-                     selectedProject.payment_method || 'Não informado'}
-                  </p>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">FORMA DE PAGAMENTO</label>
+                  <select 
+                    className="w-full border p-2 rounded bg-white" 
+                    value={selectedProject.payment_method || 'cash'} 
+                    onChange={e => setSelectedProject({ ...selectedProject, payment_method: e.target.value })}
+                  >
+                    <option value="cash">À Vista</option>
+                    <option value="financing">Financiamento</option>
+                    <option value="card">Cartão de Crédito</option>
+                  </select>
                 </div>
 
                 <div>
-                  <p className="text-xs font-bold text-gray-400 uppercase">Fornecedor do Kit</p>
-                  <p className="text-lg font-bold text-gray-800">{selectedProject.kit_supplier || 'Não informado'}</p>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">FORNECEDOR DO KIT</label>
+                  <input 
+                    placeholder="Ex: Aldo, WEG..." 
+                    className="w-full border p-2 rounded" 
+                    value={selectedProject.kit_supplier || ''} 
+                    onChange={e => setSelectedProject({ ...selectedProject, kit_supplier: e.target.value })} 
+                  />
                 </div>
 
                 {selectedProject.payment_method === 'financing' && (
                   <div>
-                    <p className="text-xs font-bold text-gray-400 uppercase">Carência (Meses)</p>
-                    <p className="text-lg font-bold text-gray-800">{selectedProject.finance_grace_period || 0} meses</p>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">CARÊNCIA (MESES)</label>
+                    <input 
+                      type="number" 
+                      className="w-full border p-2 rounded" 
+                      value={selectedProject.finance_grace_period || 0} 
+                      onChange={e => setSelectedProject({ ...selectedProject, finance_grace_period: parseInt(e.target.value) || 0 })} 
+                    />
                   </div>
                 )}
 
                 <div className="md:col-span-2">
-                  <p className="text-xs font-bold text-amber-600 uppercase">Pendências / Restrições</p>
-                  <p className="text-sm text-amber-900 bg-amber-50 p-3 rounded-lg border border-amber-100 mt-1">
-                    {selectedProject.commercial_pendencies || 'Nenhuma pendência registrada.'}
-                  </p>
+                  <label className="block text-xs font-bold text-amber-700 mb-1">PENDÊNCIAS / RESTRIÇÕES PARA FECHAR VENDA</label>
+                  <input 
+                    placeholder="O que falta para concluir o fechamento?" 
+                    className="w-full border p-2 rounded bg-amber-50 border-amber-200" 
+                    value={selectedProject.commercial_pendencies || ''} 
+                    onChange={e => setSelectedProject({ ...selectedProject, commercial_pendencies: e.target.value })} 
+                  />
                 </div>
 
                 <div className="md:col-span-2">
-                  <p className="text-xs font-bold text-gray-400 uppercase">Observações Comerciais</p>
-                  <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg border mt-1 whitespace-pre-wrap">
-                    {selectedProject.commercial_notes || 'Sem observações.'}
-                  </p>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">OBSERVAÇÕES COMERCIAIS</label>
+                  <textarea 
+                    placeholder="Notas internas..." 
+                    className="w-full border p-2 rounded h-20" 
+                    value={selectedProject.commercial_notes || ''} 
+                    onChange={e => setSelectedProject({ ...selectedProject, commercial_notes: e.target.value })} 
+                  />
                 </div>
 
                 <h3 className="md:col-span-2 font-bold text-amber-900 flex items-center gap-2 border-b pb-2 mt-4 bg-amber-50/50 p-2 rounded">
@@ -818,12 +841,23 @@ export default function Commercial() {
                   Salvar Alterações
                 </button>
                 {selectedProject.commercial_status !== 'proposta_enviada' && selectedProject.commercial_status !== 'approved' && (
-                  <button 
-                    onClick={() => handleSaveCommercialChanges('proposta_enviada')} 
-                    className="bg-green-600 text-white px-8 py-3 rounded-xl hover:bg-green-700 font-bold shadow-md flex items-center gap-2 transform active:scale-95 transition-all"
+                  <div
+                    title={!selectedProject.kit_entregue ? 'Aguardando entrega do material — confirme a entrega do kit no módulo Kit Solar antes de aprovar.' : undefined}
+                    className="flex"
                   >
-                    <CheckCircle size={20} /> Aprovar Proposta Comercial
-                  </button>
+                    <button 
+                      onClick={() => handleSaveCommercialChanges('proposta_enviada')} 
+                      disabled={!selectedProject.kit_entregue}
+                      className={`px-8 py-3 rounded-xl font-bold shadow-md flex items-center gap-2 transform transition-all ${
+                        selectedProject.kit_entregue
+                          ? 'bg-green-600 text-white hover:bg-green-700 active:scale-95'
+                          : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                      }`}
+                    >
+                      <CheckCircle size={20} /> 
+                      {selectedProject.kit_entregue ? 'Aprovar Proposta Comercial' : 'Aguardando Entrega do Kit'}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

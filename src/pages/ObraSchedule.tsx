@@ -31,6 +31,13 @@ interface ProjectSchedule {
   schedule_status: 'pending' | 'in_progress' | 'completed' | 'issue';
   schedule_issue_notes: string;
   current_stage: string;
+  // Campos do Kit Fotovoltaico (vindos da tabela clients)
+  inversor_marca?: string | null;
+  inversor_modelo?: string | null;
+  inversor_potencia?: string | number | null;
+  modulo_modelo?: string | null;
+  modulo_potencia?: string | number | null;
+  estrutura_tipo?: string | null;
 }
 
 interface ScheduleDetails {
@@ -444,6 +451,33 @@ export default function ObraSchedule() {
                                 placeholder="Rua, Número, Bairro..."
                               />
                             </div>
+
+                            {/* Kit Negociado (Somente Leitura — dados da tabela clients) */}
+                            {(project.inversor_modelo || project.modulo_modelo || project.inversor_potencia || project.modulo_potencia) && (
+                              <div className="sm:col-span-2 lg:col-span-3">
+                                <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                  <Cpu size={13} className="text-amber-500" /> Kit Negociado (Proposta Comercial)
+                                </p>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                  <div className="bg-amber-50 rounded-xl border border-amber-100 p-3">
+                                    <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Inversor Modelo</p>
+                                    <p className="text-sm font-bold text-gray-800">{project.inversor_modelo || '—'}</p>
+                                  </div>
+                                  <div className="bg-amber-50 rounded-xl border border-amber-100 p-3">
+                                    <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Potência Inversor</p>
+                                    <p className="text-sm font-bold text-gray-800">{project.inversor_potencia ? `${project.inversor_potencia} kW` : '—'}</p>
+                                  </div>
+                                  <div className="bg-amber-50 rounded-xl border border-amber-100 p-3">
+                                    <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Módulo Modelo</p>
+                                    <p className="text-sm font-bold text-gray-800">{project.modulo_modelo || '—'}</p>
+                                  </div>
+                                  <div className="bg-amber-50 rounded-xl border border-amber-100 p-3">
+                                    <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Potência Módulo</p>
+                                    <p className="text-sm font-bold text-gray-800">{project.modulo_potencia ? `${project.modulo_potencia} Wp` : '—'}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
 
                             {/* Observações Gerais do Card */}
                             {general && (

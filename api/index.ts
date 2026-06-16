@@ -437,15 +437,52 @@ app.get('/api/clients', authenticateToken, async (req: any, res) => {
 app.post('/api/clients', authenticateToken, async (req: any, res) => {
   const { 
     name, phone, email, address, city, state, cpf_cnpj,
-    proposal_value, payment_method, kit_supplier, pendencies, notes, finance_grace_period 
+    proposal_value, payment_method, kit_supplier, pendencies, notes, finance_grace_period,
+    inversor_marca = null, inversor_modelo = null, inversor_potencia = null,
+    modulo_modelo = null, modulo_potencia = null, estrutura_tipo = null
   } = req.body;
 
   try {
-    const { data: client, error } = await supabase
+    const insertPayload = {
+      name,
+      phone,
+      email,
+      address,
+      city,
+      state,
+      cpf_cnpj,
+      inversor_marca,
+      inversor_modelo,
+      inversor_potencia: inversor_potencia !== null && inversor_potencia !== '' && !isNaN(parseFloat(inversor_potencia)) ? parseFloat(inversor_potencia) : null,
+      modulo_modelo,
+      modulo_potencia: modulo_potencia !== null && modulo_potencia !== '' && !isNaN(parseFloat(modulo_potencia)) ? parseFloat(modulo_potencia) : null,
+      estrutura_tipo,
+      created_by: req.user.id,
+      company_id: req.user.company_id
+    };
+
+    let client;
+    let error;
+
+    const { data: clientData, error: initialError } = await supabase
       .from('clients')
-      .insert({ name, phone, email, address, city, state, cpf_cnpj, created_by: req.user.id, company_id: req.user.company_id })
+      .insert(insertPayload)
       .select()
       .single();
+
+    client = clientData;
+    error = initialError;
+
+    if (error && (error.code === 'PGRST204' || error.code === '42703' || String(error.code) === '42703')) {
+      console.warn('[clients POST] Colunas extras ausentes no schema - retentando sem campos do kit negociado');
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('clients')
+        .insert({ name, phone, email, address, city, state, cpf_cnpj, created_by: req.user.id, company_id: req.user.company_id })
+        .select()
+        .single();
+      client = fallbackData;
+      error = fallbackError;
+    }
 
     if (error) throw error;
 
@@ -464,19 +501,19 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
 
     if (projectError) throw projectError;
 
-      // Inserir dados comerciais unificados
-      await supabase.from('commercial_data').insert({ 
-        project_id: project.id,
-        proposal_value: proposal_value && !isNaN(parseFloat(proposal_value)) ? parseFloat(proposal_value) : null,
-        payment_method: payment_method || 'cash',
-        kit_supplier: kit_supplier || null,
-        pendencies: pendencies || null,
-        notes: notes || null,
-        finance_grace_period: parseInt(finance_grace_period) || 0,
-        status: 'pendente_comercial',
-        company_id: req.user.company_id
-      });
-      await supabase.from('technical_data').insert({ project_id: project.id, company_id: req.user.company_id });
+    // Inserir dados comerciais unificados
+    await supabase.from('commercial_data').insert({ 
+      project_id: project.id,
+      proposal_value: proposal_value && !isNaN(parseFloat(proposal_value)) ? parseFloat(proposal_value) : null,
+      payment_method: payment_method || 'cash',
+      kit_supplier: kit_supplier || null,
+      pendencies: pendencies || null,
+      notes: notes || null,
+      finance_grace_period: parseInt(finance_grace_period) || 0,
+      status: 'pendente_comercial',
+      company_id: req.user.company_id
+    });
+    await supabase.from('technical_data').insert({ project_id: project.id, company_id: req.user.company_id });
 
     res.json({ id: client.id, project_id: project?.id });
   } catch (error: any) {
@@ -486,11 +523,46 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
 });
 
 app.put('/api/clients/:id', authenticateToken, async (req: any, res) => {
-  const { name, phone, email, address, city, state, cpf_cnpj } = req.body;
-  await supabase.from('clients')
-    .update({ name, phone, email, address, city, state, cpf_cnpj })
+  const { 
+    name, phone, email, address, city, state, cpf_cnpj,
+    inversor_marca = null, inversor_modelo = null, inversor_potencia = null,
+    modulo_modelo = null, modulo_potencia = null, estrutura_tipo = null
+  } = req.body;
+
+  const updatePayload = {
+    name,
+    phone,
+    email,
+    address,
+    city,
+    state,
+    cpf_cnpj,
+    inversor_marca,
+    inversor_modelo,
+    inversor_potencia: inversor_potencia !== null && inversor_potencia !== '' && !isNaN(parseFloat(inversor_potencia)) ? parseFloat(inversor_potencia) : null,
+    modulo_modelo,
+    modulo_potencia: modulo_potencia !== null && modulo_potencia !== '' && !isNaN(parseFloat(modulo_potencia)) ? parseFloat(modulo_potencia) : null,
+    estrutura_tipo
+  };
+
+  let { error: updateError } = await supabase.from('clients')
+    .update(updatePayload)
     .eq('id', req.params.id)
     .eq('company_id', req.user.company_id);
+
+  if (updateError && (updateError.code === 'PGRST204' || updateError.code === '42703' || String(updateError.code) === '42703')) {
+    console.warn('[clients PUT] Colunas extras ausentes no schema - retentando sem campos do kit negociado');
+    const { error: fallbackError } = await supabase.from('clients')
+      .update({ name, phone, email, address, city, state, cpf_cnpj })
+      .eq('id', req.params.id)
+      .eq('company_id', req.user.company_id);
+    updateError = fallbackError;
+  }
+
+  if (updateError) {
+    return res.status(500).json({ error: updateError.message });
+  }
+
   res.json({ success: true });
 });
 
@@ -539,14 +611,13 @@ app.get('/api/projects', authenticateToken, async (req: any, res) => {
 
   res.json(formatted);
 });
-
 app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
   // Complex join
   const { data: project } = await supabase
     .from('projects')
     .select(`
       *,
-      clients (name, phone, address, city, state),
+      clients (*),
       commercial_data (*),
       technical_data (*)
     `)
@@ -559,7 +630,6 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
   const { data: documents } = await supabase.from('documents').select('*').eq('project_id', project.id);
 
   // Flatten
-  // Flatten
   const techData = (Array.isArray(project.technical_data) ? project.technical_data[0] : project.technical_data) || {};
   const commData = (Array.isArray(project.commercial_data) ? project.commercial_data[0] : project.commercial_data) || {};
 
@@ -570,6 +640,14 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
     address: project.clients?.address || null,
     city: project.clients?.city || null,
     state: project.clients?.state || null,
+    cpf_cnpj: project.clients?.cpf_cnpj || null,
+    zip_code: project.clients?.zip_code || null,
+    inversor_marca: project.clients?.inversor_marca || null,
+    inversor_modelo: project.clients?.inversor_modelo || null,
+    inversor_potencia: project.clients?.inversor_potencia || null,
+    modulo_modelo: project.clients?.modulo_modelo || null,
+    modulo_potencia: project.clients?.modulo_potencia || null,
+    estrutura_tipo: project.clients?.estrutura_tipo || null,
 
     // Commercial
     proposal_value: commData.proposal_value,
@@ -660,14 +738,18 @@ app.put('/api/projects/:id/commercial', authenticateToken, async (req: any, res)
     .eq('company_id', req.user.company_id);
 
   if (status === 'proposta_enviada') {
-    const { data: proj } = await supabase.from('projects').select('client_name').eq('id', req.params.id).eq('company_id', req.user.company_id).single();
+    // Validação: kit deve estar entregue antes de avançar para vistoria
+    const { data: projectCheck } = await supabase.from('projects').select('kit_entregue, client_name').eq('id', req.params.id).eq('company_id', req.user.company_id).single();
+    if (!projectCheck?.kit_entregue) {
+      return res.status(422).json({ error: 'O material ainda não foi entregue. Confirme a entrega do kit antes de aprovar a proposta.' });
+    }
     await supabase.from('projects').update({ current_stage: 'inspection', status: 'proposta_enviada', updated_at: new Date() }).eq('id', req.params.id).eq('company_id', req.user.company_id);
     
-    // Notify all technical users (since they all see the technical queue)
+    // Notifica técnicos
     const { data: techUsers } = await supabase.from('users').select('id').eq('role', 'TECHNICAL');
     if (techUsers) {
       for (const u of techUsers) {
-        await sendPushNotification(u.id, 'Novo Projeto', `Um novo projeto para ${proj?.client_name || 'Cliente'} está disponível para vistoria.`);
+        await sendPushNotification(u.id, 'Novo Projeto', `Um novo projeto para ${projectCheck?.client_name || 'Cliente'} está disponível para vistoria.`);
       }
     }
   } else if (status === 'pendente_comercial') {
@@ -678,32 +760,117 @@ app.put('/api/projects/:id/commercial', authenticateToken, async (req: any, res)
   res.json({ success: true });
 });
 
+// Upsert Commercial Data
+app.put('/api/commercial-data/:projectId', authenticateToken, async (req: any, res) => {
+  const { 
+    proposal_value, payment_method, notes, status,
+    pendencies, kit_supplier, finance_grace_period,
+    include_inspection_photos, inspection_photos
+  } = req.body;
+  const project_id = req.params.projectId;
+
+  try {
+    const { error } = await supabase
+      .from('commercial_data')
+      .upsert({
+        project_id,
+        company_id: req.user.company_id,
+        proposal_value: proposal_value && !isNaN(parseFloat(proposal_value)) ? parseFloat(proposal_value) : null,
+        payment_method: payment_method || 'cash',
+        notes: notes || null,
+        pendencies: pendencies || null,
+        status: status || 'pendente_comercial',
+        kit_supplier: kit_supplier || null,
+        finance_grace_period: parseInt(finance_grace_period) || 0,
+        include_inspection_photos: include_inspection_photos !== undefined ? include_inspection_photos : false,
+        inspection_photos: Array.isArray(inspection_photos) ? JSON.stringify(inspection_photos) : inspection_photos,
+        updated_at: new Date()
+      }, { onConflict: 'project_id' });
+
+    if (error) throw error;
+
+    // Também atualizamos o status geral do projeto se necessário
+    if (status === 'proposta_enviada') {
+      // Validação: kit deve estar entregue antes de avançar para vistoria
+      const { data: projectCheck } = await supabase.from('projects').select('kit_entregue, client_name').eq('id', project_id).eq('company_id', req.user.company_id).single();
+      if (!projectCheck?.kit_entregue) {
+        return res.status(422).json({ error: 'O material ainda não foi entregue. Confirme a entrega do kit antes de aprovar a proposta.' });
+      }
+      await supabase.from('projects').update({ current_stage: 'inspection', status: 'proposta_enviada', updated_at: new Date() }).eq('id', project_id).eq('company_id', req.user.company_id);
+      
+      const { data: techUsers } = await supabase.from('users').select('id').eq('role', 'TECHNICAL');
+      if (techUsers) {
+        for (const u of techUsers) {
+          await sendPushNotification(u.id, 'Novo Projeto', `Um novo projeto para ${projectCheck?.client_name || 'Cliente'} está disponível para vistoria.`);
+        }
+      }
+    } else if (status === 'pendente_comercial') {
+      await supabase.from('projects').update({ status: 'pendente_comercial', updated_at: new Date() }).eq('id', project_id).eq('company_id', req.user.company_id);
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("Erro ao salvar dados comerciais via upsert:", error);
+    res.status(500).json({ error: error?.message || "Erro interno ao salvar dados comerciais" });
+  }
+});
+
 // Kit Purchase Update
 app.put('/api/projects/:id/kit', authenticateToken, async (req: any, res) => {
-  const { kit_purchased, inverter_model, inverter_power, module_model, module_power } = req.body;
+  const {
+    kit_purchased, inverter_model, inverter_power, module_model, module_power,
+    data_compra_kit, data_prevista_entrega, distribuidora, kit_entregue
+  } = req.body;
 
-  // Let's assume these columns might not exist if we missed a migration, but KitPurchase requires them.
-  // We'll update projects table. If it fails, we catch the error gracefully vs crashing.
   try {
-    const updatePayload: any = {
-      kit_purchased,
-      updated_at: new Date()
-    };
-
-    // Some schemas put these in technical_data. We'll try to put them in technical_data.
+    // Atualiza dados técnicos do kit (inversor/módulo)
     await supabase.from('technical_data').update({
       inverter_model, inverter_power, module_model, module_power, updated_at: new Date()
     }).eq('project_id', req.params.id).eq('company_id', req.user.company_id);
 
-    // Update main project status
-    await supabase.from('projects').update({ ...updatePayload, status: 'kit_definido' }).eq('id', req.params.id).eq('company_id', req.user.company_id);
+    // Monta payload base de atualização do projeto
+    const projectUpdate: any = {
+      kit_purchased,
+      status: 'kit_definido',
+      updated_at: new Date()
+    };
 
+    // Tenta incluir os novos campos de compra com fallback PGRST204
+    try {
+      const { error: fullUpdateError } = await supabase.from('projects').update({
+        ...projectUpdate,
+        data_compra_kit: data_compra_kit || null,
+        data_prevista_entrega: data_prevista_entrega || null,
+        distribuidora: distribuidora || null,
+        kit_entregue: kit_entregue === true || kit_entregue === 'true'
+      }).eq('id', req.params.id).eq('company_id', req.user.company_id);
+
+      if (fullUpdateError) {
+        const errCode = (fullUpdateError as any)?.code || '';
+        const errMsg = fullUpdateError.message || '';
+        if (errCode === 'PGRST204' || errMsg.includes('42703') || errMsg.includes('does not exist')) {
+          console.warn('[kit] Colunas de compra ainda não existem no banco. Fazendo fallback sem elas.');
+          await supabase.from('projects').update(projectUpdate).eq('id', req.params.id).eq('company_id', req.user.company_id);
+        } else {
+          throw fullUpdateError;
+        }
+      }
+    } catch (innerErr: any) {
+      const msg = innerErr?.message || '';
+      if (msg.includes('42703') || msg.includes('does not exist')) {
+        console.warn('[kit] Fallback ativado — colunas ausentes no schema.');
+        await supabase.from('projects').update(projectUpdate).eq('id', req.params.id).eq('company_id', req.user.company_id);
+      } else {
+        throw innerErr;
+      }
+    }
 
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // Technical Update
 app.put('/api/projects/:id/technical', authenticateToken, upload.any(), async (req: any, res) => {
@@ -855,10 +1022,10 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
       // Busca fotos da obra para exclusão
       const { data: techData } = await supabase.from('technical_data').select('*').eq('project_id', req.params.id).eq('company_id', req.user.company_id).single();
 
-      // Atualiza o projeto para finalizado
+      // Atualiza o projeto para finalizado (estágio de conclusão/pós-venda)
       await supabase.from('projects').update({ 
-        current_stage: 'completed', 
-        status: 'completed', 
+        current_stage: 'conclusion', 
+        status: 'conclusion', 
         updated_at: new Date() 
       }).eq('id', req.params.id).eq('company_id', req.user.company_id);
 
@@ -925,8 +1092,8 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
       // 4. Limpeza de dados do cronograma e stage
       try {
         await supabase.from('projects').update({ 
-          current_stage: 'completed', 
-          status: 'completed', 
+          current_stage: 'conclusion', 
+          status: 'conclusion', 
           schedule_notes: null,
           schedule_order: null,
           schedule_status: null,
@@ -2579,13 +2746,26 @@ app.get('/api/stats', authenticateToken, async (req: any, res) => {
 app.get('/api/projects-schedule', authenticateToken, async (req: any, res) => {
   const { data: projects, error } = await supabase
     .from('projects')
-    .select('id, client_name, title, schedule_order, schedule_notes, schedule_status, schedule_issue_notes, current_stage, company_id')
+    .select('id, client_name, title, schedule_order, schedule_notes, schedule_status, schedule_issue_notes, current_stage, company_id, client_id, clients (inversor_marca, inversor_modelo, inversor_potencia, modulo_modelo, modulo_potencia, estrutura_tipo)')
     .eq('company_id', req.user.company_id)
     .neq('current_stage', 'completed')
     .order('schedule_order', { ascending: true });
 
   if (error) return res.status(500).json({ error: error.message });
-  res.json(projects || []);
+
+  const mappedProjects = (projects || []).map((project: any) => {
+    return {
+      ...project,
+      inversor_marca: project.clients?.inversor_marca || null,
+      inversor_modelo: project.clients?.inversor_modelo || null,
+      inversor_potencia: project.clients?.inversor_potencia || null,
+      modulo_modelo: project.clients?.modulo_modelo || null,
+      modulo_potencia: project.clients?.modulo_potencia || null,
+      estrutura_tipo: project.clients?.estrutura_tipo || null
+    };
+  });
+
+  res.json(mappedProjects);
 });
 
 app.put('/api/projects/:id/schedule', authenticateToken, async (req: any, res) => {

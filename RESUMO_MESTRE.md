@@ -764,6 +764,76 @@ Abaixo estão listadas todas as variáveis cruciais exigidas para o funcionament
   * *Data e hora da alteração:* 15/06/2026 às 12:00 (Horário Local)
   * *Arquivos modificados:* `src/pages/Contracts.tsx`
 
+* **Reordenação do item Comercial no menu lateral:**
+  * *O que foi feito:*
+    * O item "Comercial" (rota `/commercial`) foi reposicionado no array `menuItems` para a segunda posição, logo após o item "Dashboard" (rota `/`).
+  * *Data e hora da alteração:* 16/06/2026 às 10:30 (Horário Local)
+  * *Arquivos modificados:* `src/components/Layout.tsx`
+
+* **Auditoria Completa do Ciclo de Vida do Cliente e Projeto:**
+  * *O que foi feito:*
+    * Auditoria granular de ponta a ponta do ciclo de vida no sistema, do cadastro à finalização/completed.
+    * Mapeamento de 7 etapas principais: Cadastro, Kanban, Proposta Comercial, Vistoria Técnica, Obra/Instalação, Homologação/Concessionária, Conclusão com Higienização e LGPD.
+    * Levantamento de campos frontend, persistência de banco de dados e fluxos de remoção automática de dados sensíveis e arquivos de storage (buckets `obras-fotos` e `propostas`).
+    * Identificação de gaps de segurança, persistência assíncrona de PDF e regras de integridade física.
+    * Criação do relatório técnico de auditoria `auditoria_fluxo_gestao_mtsolar.md`.
+  * *Data e hora da alteração:* 16/06/2026 às 13:40 (Horário Local)
+  * *Arquivos modificados/criados:* `RESUMO_MESTRE.md`, `auditoria_fluxo_gestao_mtsolar.md` (Criado)
+
+* **Seção 8 — Divergências e Lacunas adicionada ao relatório de auditoria:**
+  * *O que foi feito:*
+    * Análise cruzada entre frontend (Commercial.tsx, ProposalGenerator.tsx, Technical.tsx, Obra.tsx, ObraSchedule.tsx, Homologation.tsx, NeoenergiaProtocols.tsx, FinishedProjects.tsx), backend (api/index.ts) e schema (supabase_schema.sql).
+    * **Q1 — Campos orphãos no frontend:** Identificados 7 campos coletados e validados como obrigatórios em Commercial.tsx (`zip_code`, `inversor_marca`, `inversor_modelo`, `inversor_potencia`, `modulo_potencia`, `modulo_modelo`, `estrutura_tipo`) que são descartados silenciosamente pela rota `POST /api/clients` sem nenhuma persistência.
+    * **Q2 — Colunas do banco nunca preenchidas:** Identificadas 7 colunas sem rota de escrita: `clients.status`, `projects.description`, `commercial_data.contract_url`, `projects.homologation_protocol`, `projects.homologation_entry_date`, `projects.homologation_notes` e `proposal_history.project_id` (crítico: torna a limpeza de propostas ineficaz na finalização do projeto).
+    * **Q3 — Transições sem validação backend:** Confirmado que não existe Kanban drag-and-drop. As 3 transições de estágio (`registration→inspection`, `inspection→homologation`, `installation→homologation`) avançam sem qualquer validação de campos no backend — toda validação é client-side e bypassável.
+    * **Q4 — Divergência de documentação de fotos:** Os nomes dos 3 campos citados no RESUMO_MESTRE estão corretos. A divergência é de incompletude: 7 dos 10 campos de foto (`photo_inverter_label`, `photo_grounding`, `photo_ac_voltage`, `photo_dc_voltage`, `photo_generation_plate`, `photo_ac_stringbox`, `photo_connection_point`) estão ausentes da documentação, mas existem no código, schema e cleanup do backend.
+  * *Data e hora da alteração:* 16/06/2026 às 11:04 (Horário Local)
+  * *Arquivos modificados:* `RESUMO_MESTRE.md`, `auditoria_fluxo_gestao_mtsolar.md` (Seção 8 adicionada)
+
+* **Persistência de Dados do Kit Negociado e Correção do Fechamento Comercial:**
+  * *O que foi feito:*
+    * **Parte 1 (Dados do Kit):**
+      * Atualizadas as rotas `POST /api/clients` e `PUT /api/clients/:id` no backend (`api/index.ts`) para receber, processar e inserir os dados do kit (`inversor_marca`, `inversor_modelo`, `inversor_potencia`, `modulo_modelo`, `modulo_potencia`, `estrutura_tipo`) na tabela `clients`. Implementamos tratamento de erro (`PGRST204` / `42703`) resiliente para fallback (tentando novamente sem os campos extras caso as colunas ainda não estejam criadas no banco).
+      * Modificado o join do `GET /api/projects/:id` no backend para selecionar de forma flexível todas as colunas de `clients` usando `clients (*)` e mapear as novas propriedades no objeto planificado que retorna ao frontend.
+      * Confirmado que o formulário de cadastro de novo cliente (`newClient`) e o formulário de edição de cliente (`editClientData`) no frontend (`Commercial.tsx`) já coletavam, controlavam e submetiam adequadamente os payloads com esses 6 campos.
+    * **Parte 2 (Fechamento Comercial):**
+      * Criada a rota `PUT /api/commercial-data/:projectId` no backend (`api/index.ts`) para realizar o `upsert` dos dados do fechamento comercial na tabela `commercial_data` com chave de conflito em `project_id`. A rota valida o token do usuário (`authenticateToken`), assegura o isolamento de tenant (`company_id`) e executa a atualização e o disparo de regras de transição de status de projeto (ex: avançar para vistoria em caso de `proposta_enviada` com disparador de notificações push).
+      * Convertidos os textos estáticos de exibição das "Informações Comerciais do Fechamento" na tela de detalhes do projeto do frontend (`Commercial.tsx`) em inputs de formulário interativos e dinâmicos vinculados ao estado de `selectedProject`.
+      * Atualizada a ação do botão "Salvar Alterações" no frontend (`Commercial.tsx`) para chamar a nova rota `PUT /api/commercial-data/:projectId` enviando o payload correspondente e atualizando o estado do componente.
+  * *Data e hora da alteração:* 16/06/2026 às 11:43 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/Commercial.tsx`, `RESUMO_MESTRE.md`
+
+* **Parte 3 — Exibição do Kit Negociado no Cronograma de Obras:**
+  * *O que foi feito:*
+    * **Backend (`api/index.ts`):** Atualizada a rota `GET /api/projects-schedule` para fazer join com a tabela `clients` selecionando os campos `inversor_marca`, `inversor_modelo`, `inversor_potencia`, `modulo_modelo`, `modulo_potencia` e `estrutura_tipo`. O resultado é mapeado de forma planificada (flat), preservando retrocompatibilidade com todos os campos anteriores da rota.
+    * **Frontend (`ObraSchedule.tsx`):** Expandida a interface `ProjectSchedule` com os seis novos campos opcionais do kit (todos tipados como `string | number | null`). Na seção expandível de cada card do cronograma, adicionado um bloco somente-leitura com fundo âmbar mostrando **Inversor Modelo**, **Potência Inversor (kW)**, **Módulo Modelo** e **Potência Módulo (Wp)**. O bloco só é exibido quando ao menos um desses campos está preenchido; campos vazios/nulos exibem `—` como valor padrão.
+  * *Data e hora da alteração:* 16/06/2026 às 11:46 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/ObraSchedule.tsx`, `RESUMO_MESTRE.md`
+
+* **Parte 4 — Campos de Compra do Kit e Bloqueio de Estágio:**
+  * *O que foi feito:*
+    * **Backend (`api/index.ts`):** 
+      * Atualizada a rota `PUT /api/projects/:id/kit` para aceitar os campos `data_compra_kit`, `data_prevista_entrega`, `distribuidora` e `kit_entregue` e persisti-los na tabela `projects`.
+      * Adicionado tratamento com bloco try-catch resiliente contra colunas inexistentes no banco (erro `PGRST204` / `42703`), garantindo o fallback e funcionamento das demais atualizações mesmo sem essas colunas fisicamente criadas no banco.
+      * Adicionada validação de transição nas rotas `PUT /api/projects/:id/commercial` e `PUT /api/commercial-data/:projectId`: agora a transição de `current_stage` para `inspection` (Vistoria) é rejeitada com status HTTP `422` se o kit não tiver sido marcado como entregue (`kit_entregue` for falso).
+    * **Frontend (`KitPurchase.tsx`):**
+      * Adicionados os campos "Data de Compra do Kit", "Data Prevista de Entrega", "Distribuidora" e a checkbox "Material Entregue?" no formulário de gerenciar kit do projeto.
+      * Exibidos de forma clara e organizada os dados de compra na listagem de projetos e adicionados badges dinâmicos baseados no status da entrega ("Material Entregue" em verde e "Aguardando Entrega" em amarelo).
+    * **Frontend (`Commercial.tsx`):**
+      * O botão "Aprovar Proposta Comercial" (que envia o estágio do projeto para Vistoria) agora é desabilitado com opacidade e cursor não-permitido se `kit_entregue` for falso, mostrando um tooltip avisando sobre a pendência da entrega.
+  * *Data e hora da alteração:* 16/06/2026 às 11:55 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/KitPurchase.tsx`, `src/pages/Commercial.tsx`, `RESUMO_MESTRE.md`
+
+* **Parte 5 — Desaparecimento de Clientes Homologados:**
+  * *O que foi feito:*
+    * **Backend (`api/index.ts`):** 
+      * Ajustada a rota `PUT /api/projects/:id/homologation` para que, ao receber o status `connection_point_approved` (Ponto de Conexão Aprovado), atualize o `current_stage` e o `status` do projeto para `conclusion` (Conclusão / Pós-venda) em vez de `completed`. Isso move o projeto para a próxima fase natural do funil.
+    * **Frontend (`Homologation.tsx`):**
+      * Atualizado o filtro de projetos carregados no método `fetchProjects` para manter na tela apenas aqueles com estágio `homologation` e cujo `homologation_status` seja diferente de `connection_point_approved`.
+      * Adicionada atualização reativa imediata no método `handleUpdate` que remove síncronamente o projeto da listagem local (`projects`) assim que o status aprovado é salvo com sucesso.
+  * *Data e hora da alteração:* 16/06/2026 às 12:00 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/Homologation.tsx`, `RESUMO_MESTRE.md`
+
 ---
 
 > [!WARNING]
@@ -771,3 +841,4 @@ Abaixo estão listadas todas as variáveis cruciais exigidas para o funcionament
 
 > [!IMPORTANT]
 > A Evolution API depende que os webhooks estejam ativados no painel correspondente direcionando para `https://gest-o-mt-solar.vercel.app/api/webhooks/whatsapp`. Caso o endpoint do webhook seja alterado ou o deploy Vercel seja recriado com uma nova URL, os webhooks devem ser reconfigurados imediatamente no painel da Evolution.
+
