@@ -25,6 +25,7 @@ export default function Technical() {
         // 2. Have not yet completed technical inspection
         const TECHNICAL_STAGES = ['inspection', 'installation'];
         setProjects(res.data.filter((p: any) =>
+          p.current_stage !== 'conclusion' && p.current_stage !== 'completed' &&
           p.technical_status !== 'approved' && p.technical_status !== 'vistoria_concluida' &&
           (
             TECHNICAL_STAGES.includes(p.current_stage) ||

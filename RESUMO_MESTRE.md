@@ -895,6 +895,38 @@ Abaixo estão listadas todas as variáveis cruciais exigidas para o funcionament
   * *Data e hora da alteração:* 16/06/2026 às 14:00 (Horário Local)
   * *Arquivos modificados:* `src/pages/KitPurchase.tsx`, `RESUMO_MESTRE.md`
 
+* **Correção da Localização do Endereço no Cronograma (ObraSchedule.tsx):**
+  * *O que foi feito:*
+    * **Frontend (`ObraSchedule.tsx`):**
+      * Removido o campo manual/duplicado de "Endereço da Instalação" (que permitia input manual) que estava posicionado junto aos campos técnicos de Inversor e Telhado.
+      * Na listagem do card da obra (onde o cliente, título e endereço são exibidos de forma comprimida), o campo de endereço que tentava renderizar o endereço manual antigo (`details.endereco`) foi substituído pela formatação do endereço real vindo da tabela `clients` (`project.city` e `project.state`, com fallback para `project.address`), mantendo assim a consistência com o card expandível.
+      * O card cinza chiaro "Endereço da Instalação (Cadastro do Cliente)" foi mantido como a única fonte de endereço da instalação, evitando informações duplicadas e confusas.
+  * *Data e hora da alteração:* 16/06/2026 às 14:06 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ObraSchedule.tsx`, `RESUMO_MESTRE.md`
+
+* **Limpeza, Anonimização e Ocultação de Projetos Finalizados (Conclusion / Completed):**
+  * *O que foi feito:*
+    * **Backend (`api/index.ts` - `PUT /api/projects/:id/homologation`):**
+      * Refatorada a rotina de encerramento do projeto (quando atinge `connection_point_approved`).
+      * O estágio agora transita diretamente para `completed` (e `status = 'completed'`).
+      * **Exclusão Física (Storage):** Adicionado suporte para excluir mídias de vistoria da tabela `technical_data` (`uploads`), mídias e contratos de `commercial_data` (`uploads`), documentos de homologação da tabela `documents` (`homologacao-docs`), e históricos de propostas JSON (`propostas`), economizando espaço e protegendo dados sensíveis.
+      * **Soft-Delete (Anonimização LGPD):** Em vez de excluir o projeto, os dados sensíveis da tabela `clients` (`cpf_cnpj`, `phone`, `email`, `address`) são anulados para nulo. Cidade, Estado, e os parâmetros técnicos do inversor e módulo são preservados, mantendo o vínculo `client_id` ativo. Campos de notas textuais livres (`observations` e `notes`) de todas as tabelas acessórias são sumariamente apagados. A tabela de `proposal_history` para aquele projeto é removida do banco.
+    * **Frontend:**
+      * Os projetos finalizados e concluídos foram sumariamente bloqueados (ocultados) de aparecer nas listagens ativas:
+        * `Commercial.tsx` (Filtro `installationProjects` ajustado)
+        * `Technical.tsx` (Adicionado `current_stage !== 'conclusion'` e `completed`)
+        * `Obra.tsx` (Removido `'conclusion'` do array permissivo)
+        * `KitPurchase.tsx` (Removido `'conclusion'` do array permissivo)
+      * A tela `FinishedProjects.tsx` passa a absorver todos esses projetos limpos e exibe-os apenas com os dados brutos restantes (Cidade, Cliente, Data), sem quebrar e sem permitir o uso indevido de PIIs finalizados.
+  * *Data e hora da alteração:* 16/06/2026 às 14:22 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/Commercial.tsx`, `src/pages/Technical.tsx`, `src/pages/Obra.tsx`, `src/pages/KitPurchase.tsx`, `RESUMO_MESTRE.md`
+
+* **Correção no Filtro da Aba Instalação do CRM Comercial (Soft-Delete):**
+  * *O que foi feito:*
+    * Adicionada exclusão explícita de projetos com estágio `completed` no filtro da aba Instalação em `Commercial.tsx`, eliminando o edge case onde projetos concluídos e anonimizados poderiam ser exibidos se passassem nos critérios de whitelist de estágios.
+  * *Data e hora da alteração:* 16/06/2026 às 14:37 (Horário Local)
+  * *Arquivos modificados:* `src/pages/Commercial.tsx`, `RESUMO_MESTRE.md`
+
 ---
 
 > [!WARNING]

@@ -92,9 +92,10 @@ export default function Commercial() {
         ));
 
         // Filter projects for Installation tab
-        // Aguardando Instalação, Executando, Finalizada
+        // Aguardando Instalação, Executando, Finalizada — Excluir projetos já concluídos (soft-delete)
         setInstallationProjects(res.data.filter((p: any) => 
-          ['installation', 'homologation', 'conclusion'].includes(p.current_stage)
+          ['installation', 'homologation'].includes(p.current_stage) &&
+          p.current_stage !== 'completed'
         ));
       } else {
         setProjectsPendentes([]);

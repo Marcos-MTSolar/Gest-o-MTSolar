@@ -55,7 +55,7 @@ export default function Obra() {
       const res = await api.get('/api/projects');
       if (Array.isArray(res.data)) {
         setProjects(res.data.filter((p: any) =>
-          ['installation', 'homologation', 'conclusion'].includes(p.current_stage)
+          ['installation', 'homologation'].includes(p.current_stage)
         ));
       } else {
         setProjects([]);

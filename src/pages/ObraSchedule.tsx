@@ -332,7 +332,11 @@ export default function ObraSchedule() {
                           </span>
                         </div>
                         <p className="text-sm text-gray-500 font-medium truncate">{project.title}</p>
-                        <p className="text-sm text-gray-400 truncate">{project.client_name ? (details.endereco || 'Endereço não informado') : ''}</p>
+                        <p className="text-sm text-gray-400 truncate">
+                          {project.client_name ? (
+                            project.city ? `${project.city}${project.state ? ` - ${project.state}` : ''}` : (project.address || 'Endereço não informado')
+                          ) : ''}
+                        </p>
                       </div>
 
                       {/* Status & Actions */}
@@ -440,21 +444,7 @@ export default function ObraSchedule() {
                               />
                             </div>
 
-                            {/* Endereço */}
-                            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm lg:col-span-2">
-                              <label className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
-                                <MapPin size={14} className="text-red-500" /> Endereço da Instalação
-                              </label>
-                              <input 
-                                type="text"
-                                disabled={!canEdit}
-                                className="w-full text-sm font-bold text-gray-800 bg-transparent outline-none focus:text-blue-900 disabled:opacity-70"
-                                value={details.endereco || ''}
-                                onChange={e => setProjects(prev => prev.map(p => p.id === project.id ? { ...p, schedule_notes: JSON.stringify({ ...details, endereco: e.target.value, general }) } : p))}
-                                onBlur={e => handleUpdateDetails(project.id, 'endereco', e.target.value)}
-                                placeholder="Rua, Número, Bairro..."
-                              />
-                            </div>
+
 
                             {/* Endereço do cliente (vindo da tabela clients) */}
                             {(project.address || project.city || project.state) && (

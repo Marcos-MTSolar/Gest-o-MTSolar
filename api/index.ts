@@ -1018,8 +1018,8 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
 
       // Atualiza o projeto para finalizado (estágio de conclusão/pós-venda)
       await supabase.from('projects').update({ 
-        current_stage: 'conclusion', 
-        status: 'conclusion', 
+        current_stage: 'completed', 
+        status: 'completed', 
         updated_at: new Date() 
       }).eq('id', req.params.id).eq('company_id', req.user.company_id);
 
@@ -1075,19 +1075,38 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
         console.error(`[DELETE ERROR] Erro ao excluir propostas:`, e);
       }
 
-      // 3. Exclusão dos dados comerciais
+      // 3. Exclusão de arquivos extras (uploads: vistoria, contratos, etc.) e documentos de homologação
       try {
-        console.log(`Removendo dados comerciais para o projeto ${req.params.id}`);
-        await supabase.from('commercial_data').delete().eq('project_id', req.params.id).eq('company_id', req.user.company_id);
+        // Mídias de vistoria no technical_data
+        if (techData && techData.inspection_media) {
+           let inspectionFiles: string[] = [];
+           try {
+             const mediaArr = JSON.parse(techData.inspection_media);
+             inspectionFiles = mediaArr.map((url: string) => url.split('/').pop()).filter(Boolean);
+           } catch(e) {}
+           if (inspectionFiles.length > 0) {
+             await supabase.storage.from('uploads').remove(inspectionFiles);
+           }
+        }
+
+        // Homologação docs
+        const { data: docs } = await supabase.from('documents').select('file_path').eq('project_id', req.params.id).eq('company_id', req.user.company_id);
+        if (docs && docs.length > 0) {
+          const docsFiles = docs.map(d => d.file_path).filter(Boolean) as string[];
+          if (docsFiles.length > 0) {
+            await supabase.storage.from('homologacao-docs').remove(docsFiles);
+          }
+          await supabase.from('documents').delete().eq('project_id', req.params.id).eq('company_id', req.user.company_id);
+        }
       } catch (e) {
-        console.error(`[DELETE ERROR] Erro ao excluir commercial_data:`, e);
+        console.error(`[DELETE ERROR] Erro ao excluir arquivos extras:`, e);
       }
 
       // 4. Limpeza de dados do cronograma e stage
       try {
         await supabase.from('projects').update({ 
-          current_stage: 'conclusion', 
-          status: 'conclusion', 
+          current_stage: 'completed', 
+          status: 'completed', 
           schedule_notes: null,
           schedule_order: null,
           schedule_status: null,
@@ -1095,19 +1114,95 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
           updated_at: new Date() 
         }).eq('id', req.params.id).eq('company_id', req.user.company_id);
       } catch (e) {
-        console.error(`[DELETE ERROR] Erro ao limpar dados do cronograma:`, e);
+        console.error(`[DELETE ERROR] Erro ao atualizar projeto:`, e);
       }
 
-      // 5. Exclusão dos dados sensíveis do cliente (tabela clients)
-      if (projData?.client_id) {
+      // 5. Soft-Delete nos dados comerciais (Limpar notas e links)
+      try {
+        const { data: commData } = await supabase.from('commercial_data').select('*').eq('project_id', req.params.id).eq('company_id', req.user.company_id).single();
+        if (commData) {
+           if (commData.inspection_photos) {
+              let inspFiles: string[] = [];
+              try {
+                const inspArr = JSON.parse(commData.inspection_photos);
+                inspFiles = inspArr.map((url: string) => url.split('/').pop()).filter(Boolean);
+              } catch(e) {}
+              if (inspFiles.length > 0) {
+                await supabase.storage.from('uploads').remove(inspFiles);
+              }
+           }
+           await supabase.from('commercial_data').update({
+             notes: null,
+             inspection_photos: null
+           }).eq('project_id', req.params.id).eq('company_id', req.user.company_id);
+        }
+      } catch (e) {
+        console.error(`[DELETE ERROR] Erro ao limpar commercial_data:`, e);
+      }
+
+      // 5-B. Exclusão do contrato (contract_url) do storage e anulação no banco
+      try {
+        const { data: commForContract } = await supabase
+          .from('commercial_data')
+          .select('contract_url')
+          .eq('project_id', req.params.id)
+          .eq('company_id', req.user.company_id)
+          .single();
+
+        if (commForContract?.contract_url) {
+          const contractFileName = commForContract.contract_url.split('/').pop();
+          if (contractFileName) {
+            console.log(`[5-B] Excluindo contract_url do storage: ${contractFileName}`);
+            await supabase.storage.from('propostas').remove([contractFileName]);
+          }
+          await supabase.from('commercial_data').update({ contract_url: null })
+            .eq('project_id', req.params.id)
+            .eq('company_id', req.user.company_id);
+        }
+      } catch (e) {
+        console.error('[DELETE ERROR] Erro ao excluir contract_url:', e);
+      }
+
+      // 6. Limpeza de dados de vistoria textuais em technical_data
+      if (techData) {
         try {
-          console.log(`Finalizando projeto ${req.params.id}. Removendo dados do cliente ${projData.client_id}`);
-          await supabase.from('projects').update({ client_id: null }).eq('id', req.params.id).eq('company_id', req.user.company_id);
-          await supabase.from('clients').delete().eq('id', projData.client_id).eq('company_id', req.user.company_id);
+           await supabase.from('technical_data').update({
+             observations: null,
+             inspection_media: null
+           }).eq('project_id', req.params.id).eq('company_id', req.user.company_id);
         } catch (e) {
-          console.error(`[DELETE ERROR] Erro ao limpar dados do cliente:`, e);
+           console.error(`[DELETE ERROR] Erro ao limpar observações em technical_data:`, e);
         }
       }
+
+      // 7. Soft-Delete na tabela clients (Anonimização)
+      if (projData?.client_id) {
+        try {
+          console.log(`Finalizando projeto ${req.params.id}. Anonimizando cliente ${projData.client_id}`);
+          // Não setamos client_id = null no projects para manter a relação! Apenas apagamos o PII.
+          await supabase.from('clients').update({
+            cpf_cnpj: null,
+            phone: null,
+            email: null,
+            address: null
+          }).eq('id', projData.client_id).eq('company_id', req.user.company_id);
+        } catch (e) {
+          console.error(`[DELETE ERROR] Erro ao anonimizar cliente:`, e);
+        }
+      }
+
+      // 7-B. Anulação de campos de texto livre do projeto (observações e notas de homologação)
+      try {
+        await supabase.from('projects').update({
+          homologation_observations: null,
+          homologation_notes: null,
+          rejection_reason: null
+        }).eq('id', req.params.id).eq('company_id', req.user.company_id);
+        console.log(`[7-B] Campos textuais de homologação anulados para o projeto ${req.params.id}`);
+      } catch (e) {
+        console.error('[DELETE ERROR] Erro ao anular campos textuais do projeto:', e);
+      }
+
     } else if (homologation_status === 'technical_analysis' && project?.homologation_status !== 'technical_analysis') {
     // Log the automatic transition
     await supabase.from('logs').insert({ user_id: req.user.id, action: 'HOMOLOGATION_STARTED', details: `Checklist concluÃ­do. Processo de homologaÃ§Ã£o iniciado para o projeto ID ${req.params.id}`, company_id: req.user.company_id });

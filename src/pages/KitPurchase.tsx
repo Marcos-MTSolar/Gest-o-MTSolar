@@ -25,11 +25,14 @@ export default function KitPurchase() {
       const res = await api.get('/api/projects');
       if (Array.isArray(res.data)) {
         // Exibe projetos aprovados comercialmente ou em estágios avançados
-        const KIT_STAGES = ['inspection', 'installation', 'homologation', 'conclusion', 'completed'];
+        const KIT_STAGES = ['inspection', 'installation', 'homologation'];
         setProjects(res.data.filter((p: any) =>
-          p.commercial_status === 'approved' ||
-          p.commercial_status === 'proposta_enviada' ||
-          KIT_STAGES.includes(p.current_stage)
+          p.current_stage !== 'conclusion' && p.current_stage !== 'completed' &&
+          (
+            p.commercial_status === 'approved' ||
+            p.commercial_status === 'proposta_enviada' ||
+            KIT_STAGES.includes(p.current_stage)
+          )
         ));
       } else {
         setProjects([]);
