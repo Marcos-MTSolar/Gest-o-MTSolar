@@ -14,6 +14,10 @@ export default function Homologation() {
   const [statusNote, setStatusNote] = useState('');
   const [statusDate, setStatusDate] = useState('');
 
+  const [homoDocsOpen, setHomoDocsOpen] = useState<number | null>(null);
+  const [homoDocs, setHomoDocs] = useState<any[]>([]);
+  const [homoDocsLoading, setHomoDocsLoading] = useState(false);
+
   const [activeTab, setActiveTab] = useState<'observations' | 'process'>('observations');
   const [observationsText, setObservationsText] = useState('');
   const [checklist, setChecklist] = useState<{ id: string, label: string, completed: boolean }[]>([]);
@@ -44,6 +48,18 @@ export default function Homologation() {
       }
     } catch {
       setProjects([]);
+    }
+  };
+
+  const fetchHomoDocs = async (projectId: number) => {
+    setHomoDocsLoading(true);
+    try {
+      const res = await api.get(`/api/homologation-documents/${projectId}`);
+      setHomoDocs(res.data || []);
+    } catch {
+      setHomoDocs([]);
+    } finally {
+      setHomoDocsLoading(false);
     }
   };
 
@@ -309,7 +325,72 @@ export default function Homologation() {
                   >
                     <Trash2 size={18} />
                   </button>
+                  <button
+                    onClick={() => {
+                      if (homoDocsOpen === p.id) {
+                        setHomoDocsOpen(null);
+                      } else {
+                        setHomoDocsOpen(p.id);
+                        fetchHomoDocs(p.id);
+                      }
+                    }}
+                    className="flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-200 font-medium shrink-0 ml-2 border border-gray-300"
+                    title="Documentos do Cadastro"
+                  >
+                    📄 Documentos do Cadastro
+                  </button>
                 </div>
+                
+                {homoDocsOpen === p.id && (
+                  <div className="w-full mt-4 bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-inner">
+                    <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                      <FileText size={18} className="text-blue-600" /> Documentos do Cadastro para Homologação
+                    </h4>
+                    {homoDocsLoading ? (
+                      <p className="text-sm text-gray-500 flex items-center gap-2">Carregando documentos...</p>
+                    ) : homoDocs.length === 0 ? (
+                      <p className="text-sm text-gray-400 italic">Nenhum documento de cadastro disponível.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {homoDocs.map((doc: any) => (
+                          <div key={doc.id} className="flex flex-col p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-200 transition-all">
+                            <div className="flex items-center gap-2 mb-2">
+                              <FileText size={16} className="text-blue-500 shrink-0" />
+                              <div className="overflow-hidden">
+                                <p className="text-sm font-bold text-gray-700 truncate" title={doc.file_name}>{doc.file_name}</p>
+                                <p className="text-xs text-gray-500">Tipo: {doc.document_type} | Expira em: {new Date(doc.expires_at).toLocaleDateString('pt-BR')}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-100">
+                              <a
+                                href={doc.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 text-xs font-bold transition-colors"
+                              >
+                                Baixar / Visualizar
+                              </a>
+                              <button
+                                onClick={async () => {
+                                  if (!window.confirm('Excluir este documento definitivamente?')) return;
+                                  try {
+                                    await api.delete(`/api/homologation-documents/${doc.id}`);
+                                    setHomoDocs(prev => prev.filter(d => d.id !== doc.id));
+                                  } catch (err) {
+                                    alert('Erro ao excluir documento.');
+                                  }
+                                }}
+                                className="text-red-500 hover:text-red-700 text-xs font-bold transition-colors"
+                              >
+                                Excluir
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -15,6 +15,12 @@ export default function Commercial() {
     inversor_marca: '', inversor_modelo: '', inversor_potencia: '', 
     modulo_potencia: '', modulo_modelo: '', estrutura_tipo: ''
   });
+  const [homologacaoDocs, setHomologacaoDocs] = useState<{
+    rg_cnh: File | null;
+    conta_energia: File | null;
+    contas_beneficiarias: File | null;
+    contrato_social: File | null;
+  }>({ rg_cnh: null, conta_energia: null, contas_beneficiarias: null, contrato_social: null });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const { user } = useAuth();
 
@@ -125,7 +131,31 @@ export default function Commercial() {
           proposal_value: selectedProposal.total_value?.toString() || newClient.proposal_value
         } : {})
       };
-      await api.post('/api/clients', clientPayload);
+      const createdClient = await api.post('/api/clients', clientPayload);
+      const clientId = createdClient.data.id;
+      const projectId = createdClient.data.project_id;
+
+      // Upload de documentos de homologação (opcionais)
+      const docEntries = Object.entries(homologacaoDocs).filter(([_, file]) => file !== null);
+      if (docEntries.length > 0) {
+        try {
+          for (const [docType, file] of docEntries) {
+            const fd = new FormData();
+            fd.append('file', file as File);
+            fd.append('document_type', docType);
+            fd.append('client_id', String(clientId));
+            fd.append('project_id', String(projectId));
+            await api.post('/api/homologation-documents/upload', fd);
+          }
+        } catch (err) {
+          console.error('Erro ao enviar documentos de homologação:', err);
+          // Não reverter o cadastro — apenas avisar
+          alert('Cliente cadastrado com sucesso, mas houve um erro ao enviar os documentos de homologação. Você pode adicioná-los na página de Homologação.');
+        }
+      }
+      
+      // Resetar estado de docs após uso
+      setHomologacaoDocs({ rg_cnh: null, conta_energia: null, contas_beneficiarias: null, contrato_social: null });
 
       setShowNewClient(false);
       setNewClient({ 
@@ -442,6 +472,33 @@ export default function Commercial() {
                         value={newClient.notes} 
                         onChange={e => setNewClient({ ...newClient, notes: e.target.value })} 
                       />
+                    </div>
+                  </div>
+
+                  {/* Documentos para Homologação */}
+                  <div className="md:col-span-2 mt-4 grid grid-cols-1 gap-4 border-t pt-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-1">
+                      <FileText size={18} className="text-blue-900" /> Documentos para Homologação (opcional)
+                    </h3>
+                    <p className="text-xs text-gray-500 mb-2">Estes documentos ficarão disponíveis na página de Homologação por 2 meses.</p>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">RG ou CNH</label>
+                        <input type="file" accept="image/*,.pdf" className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" onChange={e => setHomologacaoDocs(prev => ({ ...prev, rg_cnh: e.target.files?.[0] || null }))} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">Conta de energia (local de instalação)</label>
+                        <input type="file" accept="image/*,.pdf" className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" onChange={e => setHomologacaoDocs(prev => ({ ...prev, conta_energia: e.target.files?.[0] || null }))} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">Contas beneficiárias (se houver)</label>
+                        <input type="file" accept="image/*,.pdf" className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" onChange={e => setHomologacaoDocs(prev => ({ ...prev, contas_beneficiarias: e.target.files?.[0] || null }))} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">Contrato Social (somente PJ)</label>
+                        <input type="file" accept="image/*,.pdf" className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" onChange={e => setHomologacaoDocs(prev => ({ ...prev, contrato_social: e.target.files?.[0] || null }))} />
+                      </div>
                     </div>
                   </div>
 

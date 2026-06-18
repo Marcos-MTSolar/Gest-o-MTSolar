@@ -229,20 +229,23 @@ export default function Agenda() {
                       key={event.id}
                       onClick={(e) => handleEventClick(e, event)}
                       className={`
-                        text-xs p-1 rounded truncate flex items-center gap-1
+                        text-xs p-1.5 rounded overflow-hidden break-words flex flex-col sm:flex-row sm:items-center gap-1 transition-all
                         ${event.completed
                           ? 'bg-gray-50 text-[#9CA3AF] border-l-2 border-[#9CA3AF] line-through opacity-80'
                           : `${getColor(event.color).bg} ${getColor(event.color).text} border-l-2 ${getColor(event.color).border}`
                         }
                       `}
                     >
-                      {event.completed
-                        ? <CheckCircle2 size={10} className="text-[#9CA3AF]" />
-                        : event.is_reminder
-                          ? <Bell size={10} />
-                          : null
-                      }
-                      <span className="truncate">{format(parseISO(event.event_date), 'HH:mm')} {event.title}</span>
+                      <div className="flex items-center gap-1 flex-wrap shrink-0">
+                        {event.completed
+                          ? <CheckCircle2 size={10} className="text-[#9CA3AF]" />
+                          : event.is_reminder
+                            ? <Bell size={10} />
+                            : null
+                        }
+                        <span className="font-semibold whitespace-nowrap">{format(parseISO(event.event_date), 'HH:mm')}</span>
+                      </div>
+                      <span className="line-clamp-2 sm:truncate leading-tight w-full">{event.title}</span>
                     </div>
                   ))}
                 </div>
@@ -255,20 +258,20 @@ export default function Agenda() {
       {/* Event Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="flex justify-between items-center p-4 border-b bg-gray-50">
-              <h3 className="font-bold text-lg text-gray-800">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden max-h-[95vh] flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b bg-gray-50 shrink-0">
+              <h3 className="font-bold text-lg text-gray-800 break-words line-clamp-2">
                 {editingEvent ? 'Editar Evento' : 'Novo Evento'}
               </h3>
-              <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-gray-700">
+              <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-gray-700 p-1">
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-4 space-y-4">
+            <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto custom-scrollbar">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Data</label>
-                <div className="text-gray-900 font-medium flex items-center gap-2">
+                <div className="text-gray-900 font-medium flex items-center gap-2 bg-gray-50 p-2 rounded border border-gray-200">
                   <CalendarIcon size={18} className="text-gray-500" />
                   {selectedDate && format(selectedDate, "d 'de' MMMM 'de' yyyy", { locale: ptBR })}
                 </div>
@@ -279,29 +282,29 @@ export default function Agenda() {
                 <input
                   type="text"
                   required
-                  className={`w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none ${formData.completed ? 'line-through text-[#9CA3AF]' : ''}`}
+                  className={`w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm sm:text-base ${formData.completed ? 'line-through text-[#9CA3AF]' : ''}`}
                   value={formData.title}
                   onChange={e => setFormData({ ...formData, title: e.target.value })}
                   placeholder="Reunião, Visita, etc."
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Horário</label>
                   <div className="relative">
-                    <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
+                    <Clock size={16} className="absolute left-3 top-2.5 text-gray-400" />
                     <input
                       type="time"
                       required
-                      className="w-full border p-2 pl-9 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="w-full border p-2 pl-9 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm sm:text-base"
                       value={formData.time}
                       onChange={e => setFormData({ ...formData, time: e.target.value })}
                     />
                   </div>
                 </div>
-                <div className="flex items-center pt-6">
-                  <label className="flex items-center gap-2 cursor-pointer">
+                <div className="flex items-center sm:pt-6">
+                  <label className="flex items-center gap-2 cursor-pointer bg-gray-50 sm:bg-transparent p-2 sm:p-0 rounded border border-gray-200 sm:border-none w-full">
                     <input
                       type="checkbox"
                       className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
@@ -325,7 +328,7 @@ export default function Agenda() {
                       type="button"
                       onClick={() => setFormData({ ...formData, color: color.id })}
                       className={`
-                        flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border-2 transition-all
+                        flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border-2 transition-all flex-shrink-0
                         ${formData.color === color.id
                           ? `${color.bg} ${color.text} ${color.border} scale-105 shadow-sm`
                           : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-400'
@@ -342,7 +345,7 @@ export default function Agenda() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
                 <textarea
-                  className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm sm:text-base"
                   rows={3}
                   value={formData.description}
                   onChange={e => setFormData({ ...formData, description: e.target.value })}
@@ -370,12 +373,12 @@ export default function Agenda() {
                 </div>
               )}
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4 border-t mt-2">
                 {editingEvent && (
                   <button
                     type="button"
                     onClick={handleDelete}
-                    className="px-4 py-2 text-red-600 hover:bg-red-50 rounded font-medium flex items-center gap-2 mr-auto"
+                    className="px-4 py-2 text-red-600 hover:bg-red-50 rounded font-medium flex items-center justify-center gap-2 sm:mr-auto w-full sm:w-auto order-3 sm:order-1 border sm:border-none border-red-100"
                   >
                     <Trash2 size={18} /> Excluir
                   </button>
@@ -383,13 +386,13 @@ export default function Agenda() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded font-medium"
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded font-medium w-full sm:w-auto order-2 border sm:border-none border-gray-200"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-blue-900 text-white rounded hover:bg-blue-800 font-medium shadow-sm"
+                  className="px-6 py-2 bg-blue-900 text-white rounded hover:bg-blue-800 font-medium shadow-sm w-full sm:w-auto order-1 sm:order-3"
                 >
                   Salvar
                 </button>

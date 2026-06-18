@@ -142,16 +142,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 bg-blue-900 text-white transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:inset-0",
-          isOpen ? "translate-x-0" : "-translate-x-full"
+          "fixed inset-y-0 left-0 z-50 bg-blue-900 text-white transform transition-all duration-300 ease-in-out flex flex-col group overflow-hidden",
+          "w-64 md:w-16 hover:md:w-64 lg:w-64",
+          isOpen ? "translate-x-0" : "-translate-x-full",
+          "md:translate-x-0 md:static"
         )}
       >
-        <div className="flex items-center justify-center h-20 bg-blue-950 px-4 gap-3">
+        <div className="flex items-center h-20 bg-blue-950 px-4 gap-3 whitespace-nowrap overflow-hidden">
           {logoUrl && (
-            <img src={logoUrl} alt="MT Solar" className="h-10 w-auto object-contain bg-white rounded p-1" />
+            <img src={logoUrl} alt="MT Solar" className="h-10 w-auto object-contain bg-white rounded p-1 shrink-0" />
           )}
-          <span className="text-xl font-bold text-amber-400">MT Solar</span>
-          <button onClick={toggleSidebar} className="md:hidden absolute right-4 text-white">
+          <span className="text-xl font-bold text-amber-400 transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100 lg:opacity-100">
+            MT Solar
+          </span>
+          <button onClick={toggleSidebar} className="md:hidden absolute right-4 text-white shrink-0">
             <X size={24} />
           </button>
         </div>
@@ -163,17 +167,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  "flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors relative",
+                  "flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors relative whitespace-nowrap overflow-hidden",
                   location.pathname === item.path
                     ? "bg-blue-800 text-amber-400"
                     : "text-gray-300 hover:bg-blue-800 hover:text-white"
                 )}
                 onClick={() => { if (window.innerWidth < 768) setIsOpen(false); }}
               >
-                <item.icon className="w-5 h-5 mr-3" />
-                {item.name}
+                <item.icon className="w-5 h-5 mr-3 shrink-0" />
+                <span className="transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100 lg:opacity-100">
+                  {item.name}
+                </span>
                 {item.name === 'Mensagens' && unreadCount > 0 && (
-                  <span className="absolute right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  <span className="absolute right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100 lg:opacity-100">
                     {unreadCount}
                   </span>
                 )}
@@ -181,12 +187,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
 
-          <div className="p-4 border-t border-blue-800">
+          <div className="p-4 border-t border-blue-800 whitespace-nowrap overflow-hidden">
             <div className="flex items-center mb-4">
-              <div className="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center text-blue-900 font-bold">
+              <div className="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center text-blue-900 font-bold shrink-0">
                 {user?.name.charAt(0)}
               </div>
-              <div className="ml-3">
+              <div className="ml-3 transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100 lg:opacity-100">
                 <p className="text-sm font-medium text-white">{user?.name}</p>
                 <p className="text-xs text-gray-400">
                   {user?.role === 'ADMIN' ? 'Administrador' :
@@ -201,17 +207,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 if (window.innerWidth < 768) setIsOpen(false);
                 logout();
               }}
-              className="flex items-center w-full px-4 py-2 text-sm text-gray-300 hover:bg-blue-800 hover:text-white rounded-lg transition-colors"
+              className="flex items-center w-full px-2 py-2 text-sm text-gray-300 hover:bg-blue-800 hover:text-white rounded-lg transition-colors overflow-hidden"
             >
-              <LogOut className="w-5 h-5 mr-3" />
-              Sair
+              <LogOut className="w-5 h-5 mr-3 shrink-0" />
+              <span className="transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100 lg:opacity-100">
+                Sair
+              </span>
             </button>
           </div>
         </div>
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden relative z-10">
         <header className="flex items-center justify-between h-16 px-4 md:px-6 bg-white border-b border-gray-200">
           <div className="flex items-center md:hidden">
             <button onClick={toggleSidebar} className="text-gray-500 focus:outline-none mr-3">
