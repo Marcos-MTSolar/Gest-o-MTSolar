@@ -129,25 +129,17 @@ const authenticateToken = (req: any, res: any, next: any) => {
   });
 };
 
-// Helper to upload file to Supabase Storage
+// Helper para upload de arquivo para o Cloudflare R2
+// O parâmetro 'bucket' é mantido para compatibilidade com chamadores existentes,
+// mas agora é usado apenas como prefixo de pasta no R2.
 async function uploadFile(file: Express.Multer.File, bucket: string = 'uploads'): Promise<string | null> {
   try {
     const filename = `${Date.now()}-${file.originalname}`;
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(filename, file.buffer, {
-        contentType: file.mimetype,
-      });
-
-    if (error) {
-      console.error(`Supabase Storage Upload Error (Bucket: ${bucket}):`, error);
-      return null;
-    }
-
-    const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(filename);
-    return publicUrlData.publicUrl;
+    const filePath = `${bucket}/${filename}`;
+    const url = await uploadToR2(file.buffer, filePath, file.mimetype);
+    return url;
   } catch (e) {
-    console.error('Upload helper error:', e);
+    console.error('[R2] Erro no upload:', e);
     return null;
   }
 }
@@ -919,7 +911,14 @@ app.put('/api/projects/:id/technical', authenticateToken, upload.any(), async (r
 // Installation Update - Receives metadata and URLs from frontend to avoid 413 error
 app.put('/api/projects/:id/installation', authenticateToken, async (req: any, res) => {
   try {
-    const { pendencies, status, ...photoUrls } = req.body;
+    const { 
+      pendencies, 
+      status, 
+      is_trifasico, 
+      mppt_photos, 
+      obra_photos_uploaded_at, 
+      ...photoUrls 
+    } = req.body;
     const idParam = req.params.id;
 
     console.log(`--- [DEBUG] PUT /api/projects/${idParam}/installation ---`);
@@ -939,11 +938,34 @@ app.put('/api/projects/:id/installation', authenticateToken, async (req: any, re
     const updates: any = { 
       pendencies, 
       ...photoUrls,
+      is_trifasico: is_trifasico ?? false,
+      mppt_photos: mppt_photos ?? [],
+      obra_photos_uploaded_at: obra_photos_uploaded_at ?? {},
       updated_at: new Date() 
     };
 
     console.log('Executando update em technical_data com:', updates);
-    const { error: techError } = await supabase.from('technical_data').update(updates).eq('project_id', projectId).eq('company_id', req.user.company_id);
+    
+    // Fallback block for missing columns
+    let techError = null;
+    try {
+      const { error } = await supabase.from('technical_data').update(updates).eq('project_id', projectId).eq('company_id', req.user.company_id);
+      techError = error;
+      
+      if (error && (error.code === 'PGRST204' || error.code === '42703')) {
+        console.warn('Fallback ativado para update de installation, colunas novas não existem no banco. Atualizando apenas originais.');
+        const fallbackUpdates = {
+          pendencies,
+          ...photoUrls,
+          updated_at: new Date()
+        };
+        const { error: fallbackError } = await supabase.from('technical_data').update(fallbackUpdates).eq('project_id', projectId).eq('company_id', req.user.company_id);
+        techError = fallbackError;
+      }
+    } catch (e: any) {
+      techError = e;
+    }
+
     if (techError) {
       console.error('Erro ao atualizar technical_data:', techError);
       return res.status(500).json({ error: `Erro no Banco (technical_data): ${techError.message}` });
@@ -1249,6 +1271,116 @@ app.post('/api/projects/:id/homologation/documents', authenticateToken, upload.s
 
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
+});
+
+
+// Homologation Documents (R2)
+app.post('/api/homologation-documents/upload', authenticateToken, upload.single('file'), async (req: any, res) => {
+  try {
+    const { document_type, client_id, project_id } = req.body;
+    const file = req.file;
+
+    if (!file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+
+    const ext = file.originalname.split('.').pop();
+    const filePath = `homologacao-docs/${req.user.company_id}/${client_id}/${document_type}-${Date.now()}.${ext}`;
+    
+    const file_url = await uploadToR2(file.buffer, filePath, file.mimetype);
+    if (!file_url) return res.status(500).json({ error: 'Erro ao fazer upload para o R2' });
+
+    const expiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 dias (2 meses aproximado)
+
+    const { data, error } = await supabase
+      .from('homologation_documents')
+      .insert([{
+        company_id: req.user.company_id,
+        client_id: parseInt(client_id),
+        project_id: parseInt(project_id),
+        document_type,
+        file_name: file.originalname,
+        file_url,
+        file_path: filePath,
+        expires_at: expiresAt
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (error: any) {
+    console.error('Erro no upload do documento de homologacao:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/homologation-documents/:projectId', authenticateToken, async (req: any, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('homologation_documents')
+      .select('*')
+      .eq('project_id', req.params.projectId)
+      .eq('company_id', req.user.company_id)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json(data || []);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/homologation-documents/:id', authenticateToken, async (req: any, res) => {
+  try {
+    const { data: doc, error: fetchError } = await supabase
+      .from('homologation_documents')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('company_id', req.user.company_id)
+      .single();
+
+    if (fetchError || !doc) return res.status(404).json({ error: 'Documento não encontrado' });
+
+    await deleteFromR2(doc.file_path);
+
+    const { error: deleteError } = await supabase
+      .from('homologation_documents')
+      .delete()
+      .eq('id', req.params.id);
+
+    if (deleteError) throw deleteError;
+
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+// Upload de fotos adicionais da Obra para R2
+app.post('/api/obra/upload-foto', authenticateToken, upload.single('file'), async (req: any, res) => {
+  try {
+    const { campo, project_id } = req.body;
+    const file = req.file;
+
+    if (!file || !campo || !project_id) {
+      return res.status(400).json({ error: 'Arquivo, campo e project_id são obrigatórios.' });
+    }
+
+    const ext = file.originalname.split('.').pop();
+    const filePath = `obras-fotos/${req.user.company_id}/${project_id}/${campo}-${Date.now()}.${ext}`;
+    
+    const file_url = await uploadToR2(file.buffer, filePath, file.mimetype);
+    if (!file_url) return res.status(500).json({ error: 'Erro ao fazer upload para o R2' });
+
+    res.json({ 
+      url: file_url, 
+      filePath, 
+      campo, 
+      uploadedAt: new Date().toISOString() 
+    });
+  } catch (error: any) {
+    console.error('Erro no upload de foto da obra:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Messages
@@ -1615,17 +1747,9 @@ app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) =>
     // Salvar no banco
     if (conversationId) {
       const audioBuffer = Buffer.from(audio, 'base64');
-      const audioFileName = `${req.user.company_id}/${conversationId}/audio-${Date.now()}.ogg`;
-      await supabaseAdmin.storage
-        .from('whatsapp-media')
-        .upload(audioFileName, audioBuffer, {
-          contentType: 'audio/ogg',
-          upsert: false
-        });
-      const { data: audioPublicUrlData } = supabaseAdmin.storage
-        .from('whatsapp-media')
-        .getPublicUrl(audioFileName);
-      const audioPublicUrl = audioPublicUrlData.publicUrl;
+      // Caminho no R2: whatsapp-media/{company_id}/{conversationId}/audio-{timestamp}.ogg
+      const audioFileName = `whatsapp-media/${req.user.company_id}/${conversationId}/audio-${Date.now()}.ogg`;
+      const audioPublicUrl = await uploadToR2(audioBuffer, audioFileName, 'audio/ogg');
 
       await supabase.from('whatsapp_messages').insert({
         conversation_id: conversationId,
@@ -1668,29 +1792,11 @@ app.post('/api/whatsapp/upload-media', authenticateToken, upload.single('file'),
   console.log('[WA UPLOAD] service_role_key presente:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   try {
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from('whatsapp-media')
-      .upload(filePath, req.file.buffer, {
-        contentType: req.file.mimetype,
-        upsert: false
-      });
+    // Upload para o Cloudflare R2; URL pública permanente (sem assinatura temporária)
+    const publicUrl = await uploadToR2(req.file!.buffer, filePath, req.file!.mimetype);
 
-    if (uploadError) {
-      console.error("[WA UPLOAD] Erro no upload do Supabase:", uploadError);
-      throw uploadError;
-    }
-
-    const { data: signedUrlData, error: signedError } = await supabaseAdmin.storage
-      .from('whatsapp-media')
-      .createSignedUrl(filePath, 600);
-
-    if (signedError) {
-      console.error("[WA UPLOAD] Erro ao gerar URL assinada:", signedError);
-      throw signedError;
-    }
-
-    console.log(`[WA UPLOAD] Upload concluído: ${filePath}. URL assinada gerada.`);
-    res.json({ mediaUrl: signedUrlData.signedUrl, filePath });
+    console.log(`[WA UPLOAD] Upload concluído no R2: ${filePath}.`);
+    res.json({ mediaUrl: publicUrl, filePath });
   } catch (err: any) {
     console.error("[WA UPLOAD ERROR] Detalhes:", err);
     res.status(500).json({ error: err.message });
@@ -1750,10 +1856,8 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
 
     // Salvar no banco
     if (conversationId) {
-      const { data: publicUrlData } = supabaseAdmin.storage
-        .from('whatsapp-media')
-        .getPublicUrl(filePath);
-      const publicUrl = publicUrlData.publicUrl;
+      // Construir URL pública do R2 diretamente a partir do filePath enviado pelo frontend
+      const publicUrl = `${R2_PUBLIC_URL}/${filePath}`;
 
       await supabase.from('whatsapp_messages').insert({
         conversation_id: conversationId,
@@ -2229,23 +2333,10 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
 
         console.log(`[WEBHOOK MEDIA] Fazendo upload para whatsapp-media/${storagePath}`);
 
-        const uploadResult = await supabaseAdmin.storage
-          .from('whatsapp-media')
-          .upload(storagePath, buffer, { contentType, upsert: true });
-        console.log('[WA-UPLOAD] resultado:', JSON.stringify(uploadResult).slice(0, 200));
-        const { error: uploadError } = uploadResult;
-
-        if (uploadError) {
-          console.warn('[WEBHOOK MEDIA] Erro no upload para Supabase Storage:', uploadError.message, '— usando URL original.');
-          return fallbackUrl;
-        }
-
-        const { data: publicUrlData } = supabaseAdmin.storage
-          .from('whatsapp-media')
-          .getPublicUrl(storagePath);
-
-        console.log(`[WEBHOOK MEDIA] Upload concluído. URL pública: ${publicUrlData.publicUrl}`);
-        return publicUrlData.publicUrl;
+        // Upload para o Cloudflare R2
+        const publicUrl = await uploadToR2(buffer, storagePath, contentType);
+        console.log(`[WEBHOOK MEDIA] Upload concluído no R2. URL pública: ${publicUrl}`);
+        return publicUrl;
       } catch (err: any) {
         console.warn('[WEBHOOK MEDIA] Erro inesperado no download/upload de mídia:', err.message, '— usando URL original.');
         return fallbackUrl;
@@ -2562,7 +2653,7 @@ app.post('/api/proposal-history', authenticateToken, async (req: any, res) => {
   // Define data de expiração para 7 dias a partir de agora
   const data_geracao = new Date();
   const data_expiracao = new Date();
-  data_expiracao.setDate(data_geracao.getDate() + 7);
+  data_expiracao.setDate(data_geracao.getDate() + 30);
 
   const { data, error } = await supabase
     .from('proposal_history')
@@ -2838,6 +2929,7 @@ app.get('/api/projects-schedule', authenticateToken, async (req: any, res) => {
     .select('id, client_name, title, schedule_order, schedule_notes, schedule_status, schedule_issue_notes, current_stage, company_id, client_id, clients (inversor_marca, inversor_modelo, inversor_potencia, modulo_modelo, modulo_potencia, estrutura_tipo, address, city, state)')
     .eq('company_id', req.user.company_id)
     .eq('current_stage', 'installation')
+    .or('kit_entregue.eq.true,kit_entregue.is.null')
     .order('schedule_order', { ascending: true });
 
   if (error) return res.status(500).json({ error: error.message });
@@ -3250,6 +3342,38 @@ app.post('/api/ponto/registrar', authenticateToken, async (req: any, res) => {
   }
 });
 
+// GET /api/ponto/fotos-verificacao — Verificação de fotos por gestor (CEO/ADMIN)
+app.get('/api/ponto/fotos-verificacao', authenticateToken, async (req: any, res) => {
+  try {
+    if (req.user.role !== 'CEO' && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Acesso restrito a gestores.' });
+    }
+
+    const { userId, data } = req.query;
+    if (!userId || !data) {
+      return res.status(400).json({ error: 'Parâmetros userId e data são obrigatórios.' });
+    }
+
+    // Monta intervalo do dia inteiro no fuso de Brasília
+    const inicioDia = `${data}T00:00:00-03:00`;
+    const fimDia = `${data}T23:59:59-03:00`;
+
+    const { data: records, error } = await supabaseAdmin
+      .from('time_records')
+      .select('id, type, timestamp, selfie_url, latitude, longitude, status')
+      .eq('company_id', req.user.company_id)
+      .eq('user_id', userId)
+      .gte('timestamp', inicioDia)
+      .lte('timestamp', fimDia)
+      .order('timestamp', { ascending: true });
+
+    if (error) throw error;
+    res.json(records || []);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/ponto/historico — Histórico do usuário logado
 app.get('/api/ponto/historico', authenticateToken, async (req: any, res) => {
   try {
@@ -3517,6 +3641,108 @@ app.get('/api/cron/cleanup-r2', async (req, res) => {
   }
 });
 
+// Cron: limpeza de fotos de obra com mais de 15 dias no R2
+app.get('/api/cron/cleanup-obra-fotos', async (req: any, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Busca registros com obra_photos_uploaded_at preenchido
+    const { data: records, error } = await supabaseAdmin
+      .from('technical_data')
+      .select('id, project_id, obra_photos_uploaded_at, photo_tensao_ca_neutro_terra, photo_aterramento_padrao, photo_fase_a_b, photo_fase_a_c, photo_fase_b_c, photo_stringbox_cc, mppt_photos')
+      .not('obra_photos_uploaded_at', 'is', null)
+      .neq('obra_photos_uploaded_at', '{}');
+
+    if (error) throw error;
+    if (!records || records.length === 0) return res.json({ cleaned: 0 });
+
+    const QUINZE_DIAS = 15 * 24 * 60 * 60 * 1000;
+    const agora = Date.now();
+    let cleaned = 0;
+
+    // Processar em lotes de 20
+    for (let i = 0; i < records.length; i += 20) {
+      const lote = records.slice(i, i + 20);
+      for (const record of lote) {
+        const uploadedAt: Record<string, string> = record.obra_photos_uploaded_at || {};
+        const novoUploadedAt: Record<string, string> = { ...uploadedAt };
+        const fieldsToNull: Record<string, null> = {};
+
+        for (const [campo, dataUpload] of Object.entries(uploadedAt)) {
+          if (agora - new Date(dataUpload).getTime() > QUINZE_DIAS) {
+            const url: string | null = record[campo as keyof typeof record] as string | null;
+            if (url) {
+              // Extrai o path relativo da URL para deletar do R2
+              try {
+                const urlObj = new URL(url);
+                const path = urlObj.pathname.replace(/^\//, '');
+                await deleteFromR2(path);
+              } catch (e) {
+                console.error(`Erro ao deletar ${campo} do R2:`, e);
+              }
+              fieldsToNull[campo] = null;
+              delete novoUploadedAt[campo];
+              cleaned++;
+            }
+          }
+        }
+
+        // Se houver campos para limpar, atualiza o banco
+        if (Object.keys(fieldsToNull).length > 0) {
+          await supabaseAdmin
+            .from('technical_data')
+            .update({ ...fieldsToNull, obra_photos_uploaded_at: novoUploadedAt })
+            .eq('id', record.id);
+        }
+      }
+    }
+
+    res.json({ cleaned });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Cron: limpeza de documentos de homologação expirados no R2
+app.get('/api/cron/cleanup-homologation-docs', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { data: expiredDocs, error: fetchError } = await supabaseAdmin
+      .from('homologation_documents')
+      .select('id, file_path')
+      .lt('expires_at', new Date().toISOString());
+
+    if (fetchError) throw fetchError;
+
+    if (!expiredDocs || expiredDocs.length === 0) {
+      return res.json({ deleted: 0 });
+    }
+
+    let deleted = 0;
+    for (const doc of expiredDocs) {
+      try {
+        await deleteFromR2(doc.file_path);
+        await supabaseAdmin.from('homologation_documents').delete().eq('id', doc.id);
+        deleted++;
+      } catch (err) {
+        console.error(`Erro ao limpar doc homologação ${doc.id}:`, err);
+      }
+    }
+
+    res.json({ deleted });
+  } catch (err: any) {
+    console.error('Erro no cleanup de homologation docs:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Cron: limpeza de mídias do WhatsApp com mais de 120 dias no Supabase Storage
 app.get('/api/cron/cleanup-whatsapp-media', async (req, res) => {
   try {
@@ -3554,13 +3780,11 @@ app.get('/api/cron/cleanup-whatsapp-media', async (req, res) => {
           continue;
         }
 
-        // Remover do storage do Supabase
-        const { error: deleteError } = await supabaseAdmin.storage
-          .from('whatsapp-media')
-          .remove([path]);
-
-        if (deleteError) {
-          console.error(`Erro ao remover arquivo ${path} do Supabase Storage:`, deleteError);
+        // Remover do Cloudflare R2
+        try {
+          await deleteFromR2(path);
+        } catch (deleteErr: any) {
+          console.error(`Erro ao remover arquivo ${path} do R2:`, deleteErr);
           errors++;
           continue;
         }

@@ -208,6 +208,9 @@ export default function ProposalGenerator() {
   });
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotalPages, setHistoryTotalPages] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
 
   useEffect(() => {
     if (location.state) {
@@ -223,12 +226,16 @@ export default function ProposalGenerator() {
   }, [location.state]);
 
 
-  const fetchHistory = async () => {
+  const fetchHistory = async (page = 1) => {
     try {
-      const res = await api.get('/api/proposal-history');
-      setHistory(res.data);
+      const res = await api.get(`/api/proposal-history?page=${page}&limit=10`);
+      setHistory(res.data.data ?? []);
+      setHistoryPage(res.data.page ?? 1);
+      setHistoryTotalPages(res.data.totalPages ?? 1);
+      setHistoryTotal(res.data.total ?? 0);
     } catch (error) {
       console.error('Erro ao buscar histórico:', error);
+      setHistory([]);
     }
   };
 
@@ -244,7 +251,7 @@ export default function ProposalGenerator() {
 
   useEffect(() => {
     if (activeTab === 'historico') {
-      fetchHistory();
+      fetchHistory(1);
     }
   }, [activeTab]);
 
@@ -305,7 +312,7 @@ export default function ProposalGenerator() {
         module_power: formData.modulePower
       });
 
-      fetchHistory();
+      fetchHistory(1);
     } catch (error) {
       console.error('Erro ao salvar no histórico:', error);
     }
@@ -332,109 +339,295 @@ export default function ProposalGenerator() {
   const generateServicePDF = async () => {
     const dataGerada = new Date().toLocaleDateString('pt-BR');
     const validityDateFormatted = new Date(serviceFormData.validityDate).toLocaleDateString('pt-BR');
-    
     const servicesList = AVAILABLE_SERVICES.filter(s => serviceFormData.selectedServices.includes(s.id));
 
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <style>
-          @page { margin: 0; }
-          body { font-family: Arial, sans-serif; color: #333; margin: 0; padding: 0; }
-          .page { width: 210mm; min-height: 297mm; padding: 15mm; margin: 0 auto; box-sizing: border-box; background: #fff; position: relative; }
-          .header { background: linear-gradient(135deg, #1e3a5f 0%, #2d5a8e 100%); height: 25mm; padding: 0 15mm; display: flex; align-items: center; justify-content: space-between; margin: -15mm -15mm 10mm -15mm; }
-          .header h1 { color: #fff; margin: 0; font-size: 18pt; }
-          .header .logo-text { color: #f59e0b; font-size: 10pt; font-weight: bold; }
-          .section-title { font-size: 14pt; font-weight: bold; color: #1e3a5f; border-bottom: 2px solid #f59e0b; padding-bottom: 2mm; margin-bottom: 5mm; text-transform: uppercase; }
-          .data-table { width: 100%; border-collapse: collapse; margin-bottom: 10mm; }
-          .data-table td { padding: 2mm 0; border-bottom: 1px solid #eee; }
-          .label { color: #666; font-size: 9pt; width: 30%; }
-          .value { font-weight: bold; color: #1e3a5f; }
-          .service-item { margin-bottom: 6mm; padding-bottom: 4mm; border-bottom: 1px dashed #ddd; }
-          .service-name { font-size: 12pt; font-weight: bold; color: #1e3a5f; margin-bottom: 1mm; }
-          .service-desc { font-size: 10pt; color: #444; line-height: 1.5; margin-bottom: 1mm; text-align: justify; }
-          .service-norms { font-size: 8.5pt; color: #166534; font-weight: bold; background: #f0fdf4; padding: 1mm 2mm; border-radius: 4px; display: inline-block; }
-          .conditions-card { background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 10px; padding: 6mm; margin-top: 10mm; }
-          .footer { border-top: 2px solid #f59e0b; padding-top: 4mm; margin-top: 15mm; font-size: 8pt; color: #666; }
-        </style>
-      </head>
-      <body>
-        <div class="page">
-          <div class="header">
-            <h1>Proposta de Serviços</h1>
-            <div style="text-align: right;">
-              <div class="logo-text">MT SOLAR</div>
-              <div style="color: #fff; font-size: 8pt;">ENERGIA RENOVÁVEL</div>
-            </div>
-          </div>
+    const { jsPDF } = await import('jspdf');
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const pageWidth = 210;
+    const pageHeight = 297;
+    const margemLateral = 15;
+    const margemTopo = 20;
+    const margemBase = 28;
+    const larguraUtil = pageWidth - margemLateral * 2;
+    let y = 0;
 
-          <div class="section-title">Dados do Cliente</div>
-          <table class="data-table">
-            <tr>
-              <td class="label">Cliente:</td>
-              <td class="value">${serviceFormData.clientName || '—'}</td>
-            </tr>
-            <tr>
-              <td class="label">Data de Emissão:</td>
-              <td class="value">${dataGerada}</td>
-            </tr>
-            <tr>
-              <td class="label">Responsável Técnico:</td>
-              <td class="value">${serviceFormData.responsible || '—'}</td>
-            </tr>
-          </table>
+    const checkPage = (altura: number) => {
+      if (y + altura > pageHeight - margemBase) {
+        doc.addPage();
+        y = margemTopo;
+        doc.setFontSize(8);
+        doc.setTextColor(100);
+        doc.text(`Proposta de Serviços — ${serviceFormData.clientName}`, margemLateral, 12);
+        doc.text(dataGerada, pageWidth - margemLateral, 12, { align: 'right' });
+        doc.setDrawColor(200);
+        doc.line(margemLateral, 15, pageWidth - margemLateral, 15);
+      }
+    };
 
-          <div class="section-title">Serviços Contratados</div>
-          ${servicesList.map(s => `
-            <div class="service-item">
-              <div class="service-name">✓ ${s.name}</div>
-              <div class="service-desc">${s.description}</div>
-              <div class="service-norms">Normas: ${s.norms}</div>
-            </div>
-          `).join('')}
+    // PÁGINA 1 — Capa
+    doc.setFillColor(30, 58, 95);
+    doc.rect(0, 0, pageWidth, 58, 'F');
 
-          <div class="section-title">Condições Comerciais</div>
-          <div class="conditions-card">
-            <table style="width: 100%;">
-              <tr>
-                <td>
-                  <div style="font-size: 9pt; color: #64748b; text-transform: uppercase;">Valor Total dos Serviços</div>
-                  <div style="font-size: 18pt; font-weight: 900; color: #1e3a5f;">R$ ${parseFloat(serviceFormData.totalValue || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                </td>
-                <td style="text-align: right;">
-                  <div style="font-size: 9pt; color: #64748b; text-transform: uppercase;">Tempo de Execução</div>
-                  <div style="font-size: 14pt; font-weight: bold; color: #1e3a5f;">${serviceFormData.executionTime}</div>
-                </td>
-              </tr>
-            </table>
-            <div style="margin-top: 4mm; font-size: 9pt; color: #666;">
-              Validade da Proposta: <strong>${validityDateFormatted}</strong>
-            </div>
-          </div>
+    try {
+      doc.addImage('/PNG_-_MT_SOLAR__1_.png', 'PNG', (pageWidth - 45) / 2, 6, 45, 18);
+    } catch (e) {
+      console.warn('Erro ao carregar logo no PDF:', e);
+    }
 
-          <div class="footer">
-            <div style="display: flex; justify-content: space-between;">
-              <div>
-                <strong>MT SOLAR — ENERGIA RENOVÁVEL</strong><br/>
-                mtsolar.energia@gmail.com | (81) 99700-3260
-              </div>
-              <div style="text-align: right;">
-                Nº da Proposta: <strong>SRV-${Date.now().toString().slice(-6)}</strong>
-              </div>
-            </div>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('PROPOSTA DE SERVIÇOS', pageWidth / 2, 40, { align: 'center' });
 
-    const newWindow = window.open('', '_blank');
-    if (!newWindow) return;
-    newWindow.document.write(htmlContent);
-    newWindow.document.close();
-    setTimeout(() => newWindow.print(), 1000);
+    doc.setTextColor(245, 166, 35);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('ENERGIA SOLAR FOTOVOLTAICA', pageWidth / 2, 48, { align: 'center' });
+
+    doc.setDrawColor(245, 166, 35);
+    doc.setLineWidth(1);
+    doc.line(0, 60, pageWidth, 60);
+
+    y = 70;
+    doc.setFillColor(245, 245, 245);
+    doc.rect(margemLateral, y, larguraUtil, 38, 'F');
+
+    doc.setFontSize(10);
+    
+    doc.setTextColor(100, 100, 100);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Nº da Proposta: ', margemLateral + 5, y + 5);
+    doc.setTextColor(30, 58, 95);
+    doc.setFont('helvetica', 'bold');
+    const propNumber = Date.now().toString().slice(-6);
+    doc.text(`SRV-${propNumber}`, margemLateral + 5 + doc.getTextWidth('Nº da Proposta: '), y + 5);
+
+    doc.setTextColor(100, 100, 100);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Data de Emissão: ', margemLateral + 5, y + 11);
+    doc.setTextColor(30, 58, 95);
+    doc.setFont('helvetica', 'bold');
+    doc.text(dataGerada, margemLateral + 5 + doc.getTextWidth('Data de Emissão: '), y + 11);
+
+    doc.setTextColor(100, 100, 100);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Validade: ', margemLateral + 5, y + 17);
+    doc.setTextColor(30, 58, 95);
+    doc.setFont('helvetica', 'bold');
+    doc.text(validityDateFormatted, margemLateral + 5 + doc.getTextWidth('Validade: '), y + 17);
+
+    doc.setTextColor(100, 100, 100);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Cliente: ', margemLateral + 5, y + 23);
+    doc.setTextColor(30, 58, 95);
+    doc.setFont('helvetica', 'bold');
+    doc.text(serviceFormData.clientName || '—', margemLateral + 5 + doc.getTextWidth('Cliente: '), y + 23);
+
+    doc.setTextColor(100, 100, 100);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Responsável Técnico: ', margemLateral + 5, y + 29);
+    doc.setTextColor(30, 58, 95);
+    doc.setFont('helvetica', 'bold');
+    doc.text(serviceFormData.responsible || '—', margemLateral + 5 + doc.getTextWidth('Responsável Técnico: '), y + 29);
+
+    y += 45;
+
+    // INSTITUCIONAL
+    checkPage(80);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(30, 58, 95);
+    doc.text('SOBRE A MT SOLAR', margemLateral, y);
+    
+    doc.setDrawColor(245, 166, 35);
+    doc.setLineWidth(0.5);
+    doc.line(margemLateral, y + 2, margemLateral + doc.getTextWidth('SOBRE A MT SOLAR'), y + 2);
+    y += 8;
+
+    const missao = 'Democratizar o acesso à energia solar limpa e sustentável, oferecendo soluções fotovoltaicas de alta qualidade com atendimento próximo, técnico e transparente, transformando a conta de energia de nossos clientes em investimento com retorno garantido.';
+    const visao = 'Ser referência regional em energia solar fotovoltaica, reconhecida pela excelência técnica, pela confiança dos clientes e pelo compromisso com um futuro mais sustentável e economicamente justo.';
+    const valores = 'Transparência · Qualidade · Sustentabilidade · Compromisso com o cliente · Inovação · Responsabilidade técnica';
+    const pq = 'A energia solar fotovoltaica é um dos investimentos com melhor relação custo-benefício disponíveis. Com retorno médio entre 3 e 5 anos e vida útil dos painéis superior a 25 anos, o sistema gera economia desde o primeiro mês de operação. Além disso, valoriza o imóvel em até 8%, reduz a emissão de CO2 e oferece independência energética frente às constantes variações tarifárias das concessionárias.';
+
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    
+    const linesMissao = doc.splitTextToSize(missao, larguraUtil - 10);
+    const linesVisao = doc.splitTextToSize(visao, larguraUtil - 10);
+    const linesValores = doc.splitTextToSize(valores, larguraUtil - 10);
+    const linesPq = doc.splitTextToSize(pq, larguraUtil - 10);
+
+    const alturaBloco = 5 + 4 + (linesMissao.length * 4) + 4 + 4 + (linesVisao.length * 4) + 4 + 4 + (linesValores.length * 4) + 4 + 4 + (linesPq.length * 4) + 5;
+    
+    doc.setFillColor(238, 243, 251);
+    doc.rect(margemLateral, y, larguraUtil, alturaBloco, 'F');
+    
+    let yInst = y + 5;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 58, 95);
+    doc.text('Nossa Missão:', margemLateral + 5, yInst);
+    yInst += 4;
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(60, 60, 60);
+    doc.text(linesMissao, margemLateral + 5, yInst);
+    yInst += linesMissao.length * 4 + 4;
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 58, 95);
+    doc.text('Nossa Visão:', margemLateral + 5, yInst);
+    yInst += 4;
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(60, 60, 60);
+    doc.text(linesVisao, margemLateral + 5, yInst);
+    yInst += linesVisao.length * 4 + 4;
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 58, 95);
+    doc.text('Nossos Valores:', margemLateral + 5, yInst);
+    yInst += 4;
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(60, 60, 60);
+    doc.text(linesValores, margemLateral + 5, yInst);
+    yInst += linesValores.length * 4 + 4;
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 58, 95);
+    doc.text('Por que contratar a MT Solar?:', margemLateral + 5, yInst);
+    yInst += 4;
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(60, 60, 60);
+    doc.text(linesPq, margemLateral + 5, yInst);
+
+    y += alturaBloco + 8;
+
+    // SERVIÇOS CONTRATADOS
+    checkPage(15);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(30, 58, 95);
+    doc.text('SERVIÇOS CONTRATADOS', margemLateral, y);
+    doc.setDrawColor(245, 166, 35);
+    doc.setLineWidth(0.5);
+    doc.line(margemLateral, y + 2, margemLateral + doc.getTextWidth('SERVIÇOS CONTRATADOS'), y + 2);
+    y += 8;
+
+    for (const s of servicesList) {
+      checkPage(30);
+
+      doc.setFillColor(39, 174, 96);
+      doc.rect(margemLateral, y, 5, 5, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(7);
+      doc.text('✓', margemLateral + 1.2, y + 3.8);
+
+      doc.setTextColor(30, 58, 95);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(s.name, margemLateral + 7, y + 4);
+      y += 7;
+
+      doc.setTextColor(68, 68, 68);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      const descLines = doc.splitTextToSize(s.description, larguraUtil - 6);
+      checkPage(descLines.length * 4 + 6);
+      doc.text(descLines, margemLateral + 6, y);
+      y += descLines.length * 4 + 3;
+
+      doc.setTextColor(136, 136, 136);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'italic');
+      const normLines = doc.splitTextToSize('Normas aplicáveis: ' + s.norms, larguraUtil - 6);
+      checkPage(normLines.length * 3.5 + 5);
+      doc.text(normLines, margemLateral + 6, y);
+      y += normLines.length * 3.5 + 4;
+
+      doc.setDrawColor(221, 221, 221);
+      doc.setLineWidth(0.3);
+      doc.setLineDash([1, 1]);
+      doc.line(margemLateral, y, pageWidth - margemLateral, y);
+      doc.setLineDash([]);
+      y += 6;
+    }
+
+    // CONDIÇÕES COMERCIAIS
+    checkPage(60);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(30, 58, 95);
+    doc.text('CONDIÇÕES COMERCIAIS', margemLateral, y);
+    doc.setDrawColor(245, 166, 35);
+    doc.setLineWidth(0.5);
+    doc.line(margemLateral, y + 2, margemLateral + doc.getTextWidth('CONDIÇÕES COMERCIAIS'), y + 2);
+    y += 10;
+
+    doc.setFillColor(30, 58, 95);
+    doc.rect(margemLateral, y, larguraUtil, 24, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('VALOR TOTAL DOS SERVIÇOS', pageWidth / 2, y + 8, { align: 'center' });
+    doc.setTextColor(245, 166, 35);
+    doc.setFontSize(18);
+    const valorFormatado = parseFloat(serviceFormData.totalValue || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    doc.text(`R$ ${valorFormatado}`, pageWidth / 2, y + 19, { align: 'center' });
+    y += 30;
+
+    doc.setTextColor(60, 60, 60);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Prazo de Execução: ${serviceFormData.executionTime}`, margemLateral, y);
+    y += 7;
+    doc.text(`Validade desta Proposta: ${validityDateFormatted}`, margemLateral, y);
+    y += 15;
+
+    checkPage(35);
+    const colW = larguraUtil / 2 - 5;
+    doc.setDrawColor(100);
+    doc.setLineWidth(0.4);
+
+    // Linha esquerda
+    doc.line(margemLateral, y + 20, margemLateral + colW, y + 20);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('MT Solar', margemLateral + colW / 2, y + 25, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text(serviceFormData.responsible || 'Responsável Técnico', margemLateral + colW / 2, y + 30, { align: 'center' });
+
+    // Linha direita
+    const xDir = margemLateral + colW + 10;
+    doc.line(xDir, y + 20, xDir + colW, y + 20);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text(serviceFormData.clientName || 'Contratante', xDir + colW / 2, y + 25, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('Contratante', xDir + colW / 2, y + 30, { align: 'center' });
+
+    const totalPages = doc.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.3);
+      doc.line(margemLateral, pageHeight - 18, pageWidth - margemLateral, pageHeight - 18);
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(120, 120, 120);
+      doc.text('MT SOLAR — ENERGIA RENOVÁVEL  |  mtsolar.energia@gmail.com  |  (81) 99700-3260', pageWidth / 2, pageHeight - 13, { align: 'center' });
+      doc.text(`Nº SRV-${propNumber}`, margemLateral, pageHeight - 8);
+      doc.text(`Página ${i} de ${totalPages}`, pageWidth - margemLateral, pageHeight - 8, { align: 'right' });
+    }
+
+    doc.save(`proposta-servicos-${serviceFormData.clientName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}-${new Date().toISOString().slice(0,10)}.pdf`);
 
     // Save to backend
     try {
@@ -826,17 +1019,111 @@ export default function ProposalGenerator() {
           <img src="/Pag__1.jpeg" style="width:100%;height:100%;object-fit:cover;display:block;" />
         </div>
 
-        <!-- PÁGINA 2: SOBRE NÓS -->
-        <div style="width:210mm;height:297mm;margin:0 auto;page-break-after:always;overflow:hidden;position:relative;">
-          <img src="/Pag__2.jpeg" style="width:100%;height:100%;object-fit:cover;display:block;" />
+        <!-- PÁGINA 2: SOBRE A MTSOLAR -->
+        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
+          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;position:relative;">
+
+          <!-- FAIXA TOPO -->
+          <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
+            height:22mm;padding:0 14mm;display:flex;align-items:center;
+            justify-content:space-between;">
+            <div>
+              <div style="color:#f59e0b;font-size:9pt;font-weight:bold;
+                letter-spacing:2px;text-transform:uppercase;">MT Solar — Energia Renovável</div>
+              <div style="color:#fff;font-size:16pt;font-weight:900;margin-top:1mm;">Sobre a MTSolar</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="color:rgba(255,255,255,0.7);font-size:8pt;">Proposta Nº</div>
+              <div style="color:#f59e0b;font-size:12pt;font-weight:bold;">PROP-${propNumber}</div>
+            </div>
+          </div>
+          <div style="height:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24,#f59e0b);"></div>
+
+          <div style="padding:10mm 14mm;">
+
+            <!-- INTRODUÇÃO -->
+            <p style="font-size:10.5pt;color:#374151;line-height:1.8;text-align:justify;margin:0 0 8mm 0;">
+              A <strong style="color:#1e3a5f;">MTSolar</strong> é uma empresa especializada em soluções de energia solar fotovoltaica, com atuação dedicada ao atendimento residencial, comercial e industrial. Nosso compromisso vai além da instalação de painéis: trabalhamos para transformar a relação dos nossos clientes com a energia, oferecendo independência, economia e sustentabilidade.
+            </p>
+
+            <!-- MISSÃO -->
+            <div style="display:flex;align-items:center;gap:3mm;margin-bottom:2mm;">
+              <div style="width:4px;height:18px;background:#f59e0b;border-radius:2px;"></div>
+              <span style="font-size:13pt;font-weight:900;color:#1e3a5f;">Nossa Missão</span>
+            </div>
+            <div style="background:linear-gradient(135deg,#f0f7ff,#e8f4fd);border-left:4px solid #1e3a5f;
+              border-radius:0 8px 8px 0;padding:5mm 6mm;margin-bottom:6mm;">
+              <p style="font-size:10pt;color:#374151;line-height:1.8;margin:0;text-align:justify;">
+                Democratizar o acesso à energia solar limpa e sustentável, oferecendo soluções fotovoltaicas de alta qualidade com atendimento próximo, técnico e transparente, transformando a conta de energia de nossos clientes em investimento com retorno garantido.
+              </p>
+            </div>
+
+            <!-- VISÃO -->
+            <div style="display:flex;align-items:center;gap:3mm;margin-bottom:2mm;">
+              <div style="width:4px;height:18px;background:#f59e0b;border-radius:2px;"></div>
+              <span style="font-size:13pt;font-weight:900;color:#1e3a5f;">Nossa Visão</span>
+            </div>
+            <div style="background:#fff8e7;border-left:4px solid #f59e0b;
+              border-radius:0 8px 8px 0;padding:5mm 6mm;margin-bottom:6mm;">
+              <p style="font-size:10pt;color:#374151;line-height:1.8;margin:0;text-align:justify;">
+                Ser referência regional em energia solar fotovoltaica, reconhecida pela excelência técnica, pela confiança dos clientes e pelo compromisso com um futuro mais sustentável e economicamente justo.
+              </p>
+            </div>
+
+            <!-- VALORES -->
+            <div style="display:flex;align-items:center;gap:3mm;margin-bottom:2mm;">
+              <div style="width:4px;height:18px;background:#f59e0b;border-radius:2px;"></div>
+              <span style="font-size:13pt;font-weight:900;color:#1e3a5f;">Nossos Valores</span>
+            </div>
+            <div style="background:#f0fdf4;border-left:4px solid #86efac;
+              border-radius:0 8px 8px 0;padding:5mm 6mm;margin-bottom:8mm;">
+              <div style="display:flex;flex-wrap:wrap;gap:3mm;">
+                ${['Transparência','Qualidade','Sustentabilidade','Compromisso com o cliente','Inovação','Responsabilidade técnica'].map(v => `
+                  <span style="background:#1e3a5f;color:#f59e0b;border-radius:20px;
+                    padding:1.5mm 4mm;font-size:9pt;font-weight:bold;white-space:nowrap;">${v}</span>
+                `).join('')}
+              </div>
+            </div>
+
+            <!-- DIFERENCIAIS -->
+            <div style="display:flex;align-items:center;gap:3mm;margin-bottom:3mm;">
+              <div style="width:4px;height:18px;background:#f59e0b;border-radius:2px;"></div>
+              <span style="font-size:13pt;font-weight:900;color:#1e3a5f;">Por que escolher a MTSolar?</span>
+            </div>
+            <table style="width:100%;border-collapse:separate;border-spacing:3mm;">
+              <tr>
+                ${[{icon:'🏆',title:'Excelência Técnica',desc:'Equipe qualificada e certificada para cada etapa do projeto.'},{icon:'🤝',title:'Atendimento Próximo',desc:'Suporte dedicado do planejamento à homologação junto à concessionária.'},{icon:'🌱',title:'Sustentabilidade',desc:'Energia limpa, redução de CO₂ e valorização do imóvel.'}].map(d => `
+                  <td style="width:33%;background:#f8fafc;border:2px solid #d6e4f0;
+                    border-radius:8px;padding:4mm;text-align:center;vertical-align:top;">
+                    <div style="font-size:20pt;margin-bottom:2mm;">${d.icon}</div>
+                    <div style="font-size:9.5pt;font-weight:900;color:#1e3a5f;margin-bottom:1mm;">${d.title}</div>
+                    <div style="font-size:8.5pt;color:#6b7280;line-height:1.5;">${d.desc}</div>
+                  </td>
+                `).join('')}
+              </tr>
+            </table>
+
+            <!-- RODAPÉ -->
+            <div style="border-top:2px solid #1e3a5f;padding-top:3mm;margin-top:8mm;
+              display:flex;justify-content:space-between;align-items:center;">
+              <div style="font-size:8pt;color:#1e3a5f;font-weight:bold;">MT SOLAR — ENERGIA RENOVÁVEL</div>
+              <div style="font-size:7.5pt;color:#6b7280;">mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99951-7110</div>
+            </div>
+
+          </div>
         </div>
 
         <!-- PÁGINA 3: ESPAÇO DA CARNE (CLIENTES) -->
         <div style="width:210mm;height:297mm;margin:0 auto;page-break-after:always;overflow:hidden;position:relative;">
-          <img src="/Pag__3.jpeg" style="width:100%;height:100%;object-fit:cover;display:block;" />
+          <img src="/Pag__2.jpeg" style="width:100%;height:100%;object-fit:cover;display:block;" />
         </div>
 
         <!-- PÁGINA 4: SIMPLA ENERGIA (CLIENTES) -->
+        <div style="width:210mm;height:297mm;margin:0 auto;page-break-after:always;overflow:hidden;position:relative;">
+          <img src="/Pag__3.jpeg" style="width:100%;height:100%;object-fit:cover;display:block;" />
+        </div>
+
+        <!-- PÁGINA 5: MAIS UMA INSTITUCIONAL -->
         <div style="width:210mm;height:297mm;margin:0 auto;page-break-after:always;overflow:hidden;position:relative;">
           <img src="/Pag__4.jpeg" style="width:100%;height:100%;object-fit:cover;display:block;" />
         </div>
@@ -1151,6 +1438,18 @@ export default function ProposalGenerator() {
                 </td>
               </tr>
             </table>
+
+            <!-- BLOCO: POR QUE INVESTIR EM ENERGIA SOLAR? -->
+            <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #86efac;
+              border-radius:10px;padding:5mm 7mm;margin-bottom:6mm;">
+              <div style="display:flex;align-items:center;gap:3mm;margin-bottom:3mm;">
+                <div style="width:4px;height:18px;background:#166534;border-radius:2px;"></div>
+                <span style="font-size:12pt;font-weight:900;color:#166534;">Por que investir em energia solar?</span>
+              </div>
+              <p style="font-size:9.5pt;color:#374151;line-height:1.8;margin:0;text-align:justify;">
+                A energia solar fotovoltaica é hoje um dos investimentos com melhor relação custo-benefício disponíveis no mercado. Com retorno médio entre <strong>3 e 5 anos</strong> e vida útil dos painéis superior a <strong>25 anos</strong>, o sistema gera economia na conta de energia desde o primeiro mês de operação. Além da economia financeira, o sistema valoriza o imóvel em até <strong>8%</strong>, reduz a emissão de CO₂ e oferece independência energética frente às constantes variações tarifárias das concessionárias. Cada sistema é dimensionado individualmente para o perfil de consumo do cliente, garantindo máxima eficiência e o menor tempo possível de payback.
+              </p>
+            </div>
 
             <!-- TÍTULO GRÁFICO -->
             <div style="display:flex;align-items:center;gap:3mm;margin-bottom:3mm;">
@@ -3178,8 +3477,8 @@ export default function ProposalGenerator() {
             </div>
 
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto overflow-y-auto max-h-96">
-                <table className="w-full text-left border-collapse">
+                <div className="overflow-x-auto overflow-y-auto max-h-[480px]">
+                  <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-gray-50 text-gray-600 uppercase text-[10px] font-bold tracking-wider">
                       <th className="px-6 py-4 border-b">Data</th>
@@ -3265,6 +3564,32 @@ export default function ProposalGenerator() {
                   </tbody>
                 </table>
               </div>
+              {historyTotalPages > 1 && (
+                <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 bg-gray-50">
+                  <span className="text-sm text-gray-500">
+                    {historyTotal} proposta{historyTotal !== 1 ? 's' : ''} no total
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => { const p = historyPage - 1; setHistoryPage(p); fetchHistory(p); }}
+                      disabled={historyPage === 1}
+                      className="px-3 py-1 text-sm rounded border border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100"
+                    >
+                      ← Anterior
+                    </button>
+                    <span className="text-sm text-gray-600">
+                      Página {historyPage} de {historyTotalPages}
+                    </span>
+                    <button
+                      onClick={() => { const p = historyPage + 1; setHistoryPage(p); fetchHistory(p); }}
+                      disabled={historyPage === historyTotalPages}
+                      className="px-3 py-1 text-sm rounded border border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100"
+                    >
+                      Próxima →
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             
             <div className="flex justify-start mt-8 pt-4 border-t border-gray-100">

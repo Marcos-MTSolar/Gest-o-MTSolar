@@ -927,6 +927,60 @@ Abaixo estão listadas todas as variáveis cruciais exigidas para o funcionament
   * *Data e hora da alteração:* 16/06/2026 às 14:37 (Horário Local)
   * *Arquivos modificados:* `src/pages/Commercial.tsx`, `RESUMO_MESTRE.md`
 
+* **Migração de Mídias: Supabase Storage → Cloudflare R2 (Parte 1 — Backend):**
+  * *O que foi feito:*
+    * Mapeamento completo de todos os pontos de upload/delete de arquivo em `api/index.ts`.
+    * **6 alterações aplicadas** em `api/index.ts`:
+      1. **Helper `uploadFile()`**: Substituído `supabase.storage.from(bucket).upload()` + `getPublicUrl()` por `uploadToR2(file.buffer, filePath, file.mimetype)`. O parâmetro `bucket` é mantido como prefixo de pasta no R2 para retrocompatibilidade com todos os chamadores.
+      2. **`POST /api/whatsapp/send-audio`**: Substituído `supabaseAdmin.storage...upload()` + `getPublicUrl()` por `uploadToR2(audioBuffer, audioFileName, 'audio/ogg')`. Caminho agora inclui prefixo `whatsapp-media/` no R2.
+      3. **`POST /api/whatsapp/upload-media`**: Substituído upload Supabase + `createSignedUrl` (600s) por `uploadToR2()`. Rota passa a retornar **URL pública permanente** do R2.
+      4. **`POST /api/whatsapp/send-media`**: Substituído `supabaseAdmin.storage...getPublicUrl(filePath)` por `${R2_PUBLIC_URL}/${filePath}` (construção direta com variável já importada).
+      5. **Webhook `downloadAndUploadMedia()`**: Substituído `supabaseAdmin.storage...upload()` + `getPublicUrl()` por `uploadToR2(buffer, storagePath, contentType)`. Mídias recebidas via webhook agora armazenadas no R2.
+      6. **`GET /api/cron/cleanup-whatsapp-media`**: Substituído `supabaseAdmin.storage...remove([path])` por `deleteFromR2(path)` com tratamento de erro por try-catch. Atualização do banco permanece inalterada.
+    * **Não alterados:** `POST /api/ponto/registrar` (já usava `uploadToR2`), `.remove()` dos buckets `obras-fotos`, `propostas`, `uploads` e `homologacao-docs`, autenticação, queries de banco e regras de negócio.
+    * **Import confirmado na linha 12:** `import { uploadToR2, deleteFromR2, R2_PUBLIC_URL } from './r2.js'` já existia antes desta tarefa.
+  * *Data e hora da alteração:* 18/06/2026 às 06:36 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `RESUMO_MESTRE.md`
+
+* **Correção da Sequência do Funil (Cadastro → Técnica → Kit Solar/Homologação → Cronograma):**
+  * *O que foi feito:*
+    * **Verificações Realizadas (Trechos Mantidos por Estarem Corretos):**
+      1. `POST /api/clients`: Confirmado que novos projetos são inseridos com `current_stage: 'registration'`.
+      2. `PUT /api/projects/:id/technical`: Confirmado que ao concluir vistoria, o projeto avança para `installation` (e não para homologation).
+      3. `PUT /api/projects/:id/kit`: Confirmado que o estágio permanece em `installation` ao preencher os dados do kit e entrega.
+      4. `Homologation.tsx` (frontend): Confirmado que a listagem de projetos já filtra corretamente `current_stage === 'homologation' || current_stage === 'installation'`, garantindo que o projeto apareça em ambas as telas simultaneamente (paralelismo) logo após a vistoria técnica.
+    * **Alteração Realizada (`GET /api/projects-schedule`):**
+      * Adicionado o filtro condicional `.or('kit_entregue.eq.true,kit_entregue.is.null')` ao final da query de seleção.
+      * O cronograma agora filtra ativamente projetos em estágio de `installation` que possuam o `kit_entregue = true`. Projetos em `installation` que estejam com kit explícito como `false` não aparecerão mais na tela.
+      * Adicionado o fallback seguro `.is.null` para garantir que, caso a tabela no banco não tenha a coluna de kit ou tenha registros antigos vazios, nenhum projeto desapareça acidentalmente.
+  * *Data e hora da alteração:* 18/06/2026 às 06:42 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `RESUMO_MESTRE.md`
+
+  * *Data e hora da alteração:* 18/06/2026 às 06:42 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `RESUMO_MESTRE.md`
+
+* **Parte 7 — Histórico de Propostas: Paginação e Prazo de 30 Dias:**
+  * *O que foi feito:*
+    * **Backend (`api/index.ts`):** Campo `data_expiracao` na rota `POST /api/proposal-history` alterado de `+7 dias` para `+30 dias`. Rota `GET /api/proposal-history` refatorada para aceitar `?page=N&limit=N`, usar `.range(from, to)` e `.select('*', { count: 'exact' })`, retornando `{ data, total, page, totalPages }`.
+    * **Frontend (`ProposalGenerator.tsx`):** Adicionados estados `historyPage`, `historyTotalPages` e `historyTotal`. Função `fetchHistory` atualizada para aceitar parâmetro de página. Tabela encapsulada em `max-h-[480px]` para scroll interno. Controles de paginação (Anterior / Próxima, indicador de página) adicionados abaixo da tabela. Corrigido bug de template literal malformado na URL da API.
+  * *Data e hora da alteração:* 18/06/2026 às 18:03 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/ProposalGenerator.tsx`
+
+* **Parte 8 — Ponto Eletrônico: Aba de Verificação de Fotos (ADM/CEO):**
+  * *O que foi feito:*
+    * **Backend (`api/index.ts`):** Criada a rota `GET /api/ponto/fotos-verificacao`, restrita a roles `CEO` e `ADMIN`. Recebe `?userId=X&data=YYYY-MM-DD`, monta intervalo do dia inteiro no fuso de Brasília (`T00:00:00-03:00` a `T23:59:59-03:00`), busca `time_records` filtrando por `company_id`, `user_id` e intervalo de data, retorna `id, type, timestamp, selfie_url, latitude, longitude, status`.
+    * **Frontend (`Ponto.tsx`):**
+      * Tipo do `activeTab` atualizado para incluir `'fotos'`.
+      * Adicionados estados: `fotoUserId`, `fotoData`, `fotoRecords`, `fotoLoading`, `fotoModalUrl`.
+      * Adicionada função `fetchFotosVerificacao`.
+      * Aba **"Verificar Fotos"** adicionada ao array de tabs, visível apenas para `isManager`.
+      * Painel da aba: filtros (dropdown de colaboradores + input de data + botão Buscar), linha do tempo vertical de registros com ícone de tipo, horário, badge de status, ícone de mapa (verde clicável para Google Maps, ou cinza sem localização) e thumbnail 112×112px da selfie clicável.
+      * Modal lightbox para visualização da foto em tamanho ampliado com botão de fechar (`×`) e click fora para dispensar.
+    * **Abas existentes preservadas:** `ponto`, `historico`, `gestor`, `ajustes` — nenhuma linha alterada.
+    * **Relatório PDF existente:** não tocado.
+  * *Data e hora da alteração:* 18/06/2026 às 18:21 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/Ponto.tsx`
+
 ---
 
 > [!WARNING]
