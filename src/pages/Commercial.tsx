@@ -135,22 +135,57 @@ export default function Commercial() {
       const clientId = createdClient.data.id;
       const projectId = createdClient.data.project_id;
 
-      // Upload de documentos de homologação (opcionais)
+      // NOVO — upload direto ao R2 via presigned URL (sem limite de tamanho)
       const docEntries = Object.entries(homologacaoDocs).filter(([_, file]) => file !== null);
       if (docEntries.length > 0) {
-        try {
-          for (const [docType, file] of docEntries) {
-            const fd = new FormData();
-            fd.append('file', file as File);
-            fd.append('document_type', docType);
-            fd.append('client_id', String(clientId));
-            fd.append('project_id', String(projectId));
-            await api.post('/api/homologation-documents/upload', fd);
+        const uploadErrors: string[] = [];
+
+        for (const [docType, file] of docEntries) {
+          try {
+            const f = file as File;
+
+            // 1. Solicita URL pré-assinada ao backend (payload < 1KB, sem limite Vercel)
+            const { data: presignData } = await api.get('/api/r2/presigned-url', {
+              params: {
+                fileName: f.name,
+                contentType: f.type || 'application/octet-stream',
+                clientId: String(clientId),
+                documentType: docType,
+              },
+            });
+
+            // 2. Faz upload DIRETO ao R2 (sem passar pelo Vercel)
+            const uploadRes = await fetch(presignData.presignedUrl, {
+              method: 'PUT',
+              headers: { 'Content-Type': f.type || 'application/octet-stream' },
+              body: f,
+            });
+
+            if (!uploadRes.ok) {
+              throw new Error(`Upload ao R2 falhou: ${uploadRes.status}`);
+            }
+
+            // 3. Registra no banco apenas a URL pública (payload < 1KB)
+            await api.post('/api/homologation-documents/register', {
+              document_type: docType,
+              client_id: String(clientId),
+              project_id: String(projectId),
+              file_name: f.name,
+              file_url: presignData.publicUrl,
+              file_path: presignData.filePath,
+            });
+
+          } catch (err: any) {
+            console.error(`Erro ao enviar documento ${docType}:`, err);
+            uploadErrors.push(docType);
           }
-        } catch (err) {
-          console.error('Erro ao enviar documentos de homologação:', err);
-          // Não reverter o cadastro — apenas avisar
-          alert('Cliente cadastrado com sucesso, mas houve um erro ao enviar os documentos de homologação. Você pode adicioná-los na página de Homologação.');
+        }
+
+        if (uploadErrors.length > 0) {
+          alert(
+            `Cliente cadastrado com sucesso, mas os seguintes documentos não foram enviados: ${uploadErrors.join(', ')}.\n` +
+            `Você pode adicioná-los na página de Homologação.`
+          );
         }
       }
       

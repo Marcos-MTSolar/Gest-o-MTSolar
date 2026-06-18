@@ -9,7 +9,7 @@ import multer from 'multer';
 import cors from 'cors';
 import * as dotenv from 'dotenv';
 import admin from 'firebase-admin';
-import { uploadToR2, deleteFromR2, R2_PUBLIC_URL } from './r2.js';
+import { uploadToR2, deleteFromR2, R2_PUBLIC_URL, generatePresignedUrl } from './r2.js';
 
 dotenv.config();
 
@@ -1355,6 +1355,62 @@ app.delete('/api/homologation-documents/:id', authenticateToken, async (req: any
     res.status(500).json({ error: error.message });
   }
 });
+
+// ── Presigned URL para upload direto ao R2 (bypassa limite 4.5MB do Vercel) ──
+app.get('/api/r2/presigned-url', authenticateToken, async (req: any, res) => {
+  try {
+    const { fileName, contentType, clientId, documentType } = req.query;
+
+    if (!fileName || !contentType || !clientId || !documentType) {
+      return res.status(400).json({ error: 'Parâmetros obrigatórios: fileName, contentType, clientId, documentType' });
+    }
+
+    const ext = (fileName as string).split('.').pop();
+    const filePath = `homologacao-docs/${req.user.company_id}/${clientId}/${documentType}-${Date.now()}.${ext}`;
+
+    const presignedUrl = await generatePresignedUrl(filePath, contentType as string);
+    const publicUrl = `${R2_PUBLIC_URL}/${filePath}`;
+
+    res.json({ presignedUrl, publicUrl, filePath });
+  } catch (error: any) {
+    console.error('Erro ao gerar presigned URL:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ── Registrar documento de homologação após upload direto ao R2 ──
+app.post('/api/homologation-documents/register', authenticateToken, async (req: any, res) => {
+  try {
+    const { document_type, client_id, project_id, file_name, file_url, file_path } = req.body;
+
+    if (!document_type || !client_id || !project_id || !file_url || !file_path) {
+      return res.status(400).json({ error: 'Campos obrigatórios: document_type, client_id, project_id, file_url, file_path' });
+    }
+
+    const expiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 dias
+
+    const { data, error } = await supabase
+      .from('homologation_documents')
+      .insert([{
+        company_id: req.user.company_id,
+        client_id: parseInt(client_id),
+        project_id: parseInt(project_id),
+        document_type,
+        file_name: file_name || document_type,
+        file_url,
+        file_path,
+        expires_at: expiresAt
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (error: any) {
+    console.error('Erro ao registrar documento de homologação:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 // Upload de fotos adicionais da Obra para R2
 app.post('/api/obra/upload-foto', authenticateToken, upload.single('file'), async (req: any, res) => {
   try {
@@ -2581,14 +2637,32 @@ app.put('/api/events/:id/complete', authenticateToken, async (req: any, res) => 
 
 // Proposal History
 app.get('/api/proposal-history', authenticateToken, async (req: any, res) => {
-  const { data: history, error } = await supabase
-    .from('proposal_history')
-    .select('*')
-    .eq('company_id', req.user.company_id)
-    .order('created_at', { ascending: false });
-  
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(history || []);
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    const { data: history, error, count } = await supabase
+      .from('proposal_history')
+      .select('*', { count: 'exact' })
+      .eq('company_id', req.user.company_id)
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    const totalPages = Math.ceil((count || 0) / limit);
+
+    res.json({
+      data: history || [],
+      total: count || 0,
+      page,
+      totalPages
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Propostas Ativas (7 dias)

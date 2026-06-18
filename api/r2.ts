@@ -1,4 +1,10 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  ListObjectsV2Command,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 export const r2Client = new S3Client({
   region: 'auto',
@@ -46,4 +52,17 @@ export async function listR2Files(prefix: string) {
     })
   );
   return response.Contents ?? [];
+}
+
+export async function generatePresignedUrl(
+  filePath: string,
+  contentType: string,
+  expiresInSeconds = 300
+): Promise<string> {
+  const command = new PutObjectCommand({
+    Bucket: R2_BUCKET,
+    Key: filePath,
+    ContentType: contentType,
+  });
+  return getSignedUrl(r2Client, command, { expiresIn: expiresInSeconds });
 }
