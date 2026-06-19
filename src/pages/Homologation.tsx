@@ -90,11 +90,8 @@ export default function Homologation() {
 
           if (docs && docs.length > 0) {
             for (const doc of docs) {
-              // Extrair o path relativo da URL pública
-              const path = doc.url.split('/homologacao-docs/')[1];
-              if (path) {
-                await supabase.storage.from('homologacao-docs').remove([path]);
-              }
+              // Deletar arquivo do Cloudflare R2 via backend
+              await api.delete(`/api/homologation-documents/${doc.id}`);
             }
 
             // Remover todos os registros da tabela documents relacionados ao projeto

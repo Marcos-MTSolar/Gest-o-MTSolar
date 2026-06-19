@@ -548,7 +548,7 @@ export default function Obra() {
                 
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
                   <h3 className="text-sm font-bold text-yellow-800 flex items-center gap-2 mb-2">
-                    âš¡ Medições Elétricas Adicionais
+                    ⚡ Medições Elétricas Adicionais
                   </h3>
                   <label className="flex items-center gap-2 mb-4 text-sm font-semibold text-gray-700 cursor-pointer">
                     <input type="checkbox" checked={isTrifasico} onChange={e => setIsTrifasico(e.target.checked)} className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4" />
@@ -571,7 +571,7 @@ export default function Obra() {
 
                 <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
                   <h3 className="text-sm font-bold text-purple-800 flex items-center gap-2 mb-4">
-                    ðŸ”Œ Medições CC (MPPTs)
+                    🔌 Medições CC (MPPTs)
                   </h3>
                   
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
@@ -607,7 +607,7 @@ export default function Obra() {
 
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-4">
-                    ðŸ“¦ Opcionais Adicionais
+                    📦 Opcionais Adicionais
                   </h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     <PhotoUploadExtra name="photo_stringbox_cc" label="String Box CC (Se houver)" />

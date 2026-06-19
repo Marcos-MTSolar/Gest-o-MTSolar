@@ -211,6 +211,8 @@ export default function ProposalGenerator() {
   const [historyPage, setHistoryPage] = useState(1);
   const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [historyTotal, setHistoryTotal] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {
     if (location.state) {
@@ -3383,121 +3385,130 @@ export default function ProposalGenerator() {
               </button>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                <div className="overflow-x-auto overflow-y-auto max-h-[480px]">
-                  <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-gray-50 text-gray-600 uppercase text-[10px] font-bold tracking-wider">
-                      <th className="px-6 py-4 border-b">Data</th>
-                      <th className="px-6 py-4 border-b">Cliente</th>
-                      <th className="px-6 py-4 border-b text-center">Margem</th>
-                      <th className="px-6 py-4 border-b text-right">Custo do Kit</th>
-                      <th className="px-6 py-4 border-b text-center">Nº Proposta</th>
-                      <th className="px-6 py-4 border-b text-center">Expira em</th>
-                      <th className="px-6 py-4 border-b text-center">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-sm divide-y divide-gray-100">
-                    {history.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="px-6 py-12 text-center text-gray-400 italic">
-                          Nenhuma proposta gerada no histórico ainda.
-                        </td>
-                      </tr>
-                    ) : (
-                      history.map((item) => {
-                        const expDate = new Date(item.data_expiracao);
-                        const today = new Date();
-                        const diffTime = expDate.getTime() - today.getTime();
-                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                        const isExpired = diffDays <= 0;
+            {/* Paginação e scroll do histórico de propostas */}
+            {(() => {
+              const totalPages = Math.ceil(history.length / ITEMS_PER_PAGE);
+              const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+              const currentItems = history.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
-                        return (
-                          <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-6 py-4 whitespace-nowrap text-gray-600">
-                              {new Date(item.created_at).toLocaleDateString('pt-BR')} 
-                              <span className="text-[10px] ml-2 opacity-50">{new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-                            </td>
-                            <td className="px-6 py-4 font-bold text-gray-800">{item.client_name}</td>
-                            <td className="px-6 py-4 text-center">
-                              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-md text-xs font-bold">
-                                {item.margin}%
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-right font-black text-blue-900">
-                              R$ {Number(item.kit_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="px-6 py-4 text-center font-mono text-xs">{item.proposal_number || '—'}</td>
-                            <td className="px-6 py-4 text-center">
-                              {isExpired ? (
-                                <span className="text-red-500 font-bold">Expirado</span>
-                              ) : (
-                                <span className="text-amber-600 font-bold">{diffDays} dias</span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-center flex justify-center gap-2">
-                              {item.url_arquivo && !isExpired ? (
-                                <a 
-                                  href={item.url_arquivo} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="bg-blue-600 text-white p-1.5 rounded-lg hover:bg-blue-700 transition-colors"
-                                  title="Baixar PDF"
-                                >
-                                  <FileDown size={16} />
-                                </a>
-                              ) : (
-                                <span className="text-[10px] text-gray-400 italic">PDF não disponível</span>
-                              )}
-                              <button
-                                onClick={() => loadForEdit(item.id)}
-                                className="text-amber-500 hover:text-amber-700 p-1.5 rounded-lg border border-amber-200 hover:bg-amber-50 transition-colors"
-                                title="Editar Proposta"
-                              >
-                                <Edit size={16} />
-                              </button>
-                              <button
-                                onClick={() => deleteHistory(item.id)}
-                                className="text-red-500 hover:text-red-700 p-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition-colors"
-                                title="Excluir registro"
-                              >
-                                <Plus size={16} className="rotate-45" />
-                              </button>
+              return (
+                <div>
+                  {/* Tabela com scroll vertical */}
+                  <div className="overflow-y-auto max-h-[500px] border border-gray-200 rounded-lg">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 sticky top-0 z-10">
+                        <tr className="text-gray-600 uppercase text-[10px] font-bold tracking-wider">
+                          <th className="px-6 py-4 border-b">Data</th>
+                          <th className="px-6 py-4 border-b">Cliente</th>
+                          <th className="px-6 py-4 border-b text-center">Margem</th>
+                          <th className="px-6 py-4 border-b text-right">Custo do Kit</th>
+                          <th className="px-6 py-4 border-b text-center">Nº Proposta</th>
+                          <th className="px-6 py-4 border-b text-center">Expira em</th>
+                          <th className="px-6 py-4 border-b text-center">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-sm divide-y divide-gray-100">
+                        {history.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-6 py-12 text-center text-gray-400 italic">
+                              Nenhuma proposta gerada no histórico ainda.
                             </td>
                           </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              {historyTotalPages > 1 && (
-                <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 bg-gray-50">
-                  <span className="text-sm text-gray-500">
-                    {historyTotal} proposta{historyTotal !== 1 ? 's' : ''} no total
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => { const p = historyPage - 1; setHistoryPage(p); fetchHistory(p); }}
-                      disabled={historyPage === 1}
-                      className="px-3 py-1 text-sm rounded border border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100"
-                    >
-                      ← Anterior
-                    </button>
-                    <span className="text-sm text-gray-600">
-                      Página {historyPage} de {historyTotalPages}
-                    </span>
-                    <button
-                      onClick={() => { const p = historyPage + 1; setHistoryPage(p); fetchHistory(p); }}
-                      disabled={historyPage === historyTotalPages}
-                      className="px-3 py-1 text-sm rounded border border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100"
-                    >
-                      Próxima →
-                    </button>
+                        ) : (
+                          currentItems.map((item) => {
+                            const expDate = new Date(item.data_expiracao);
+                            const today = new Date();
+                            const diffTime = expDate.getTime() - today.getTime();
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                            const isExpired = diffDays <= 0;
+
+                            return (
+                              <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                                <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                                  {new Date(item.created_at).toLocaleDateString('pt-BR')}
+                                  <span className="text-[10px] ml-2 opacity-50">{new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                </td>
+                                <td className="px-6 py-4 font-bold text-gray-800">{item.client_name}</td>
+                                <td className="px-6 py-4 text-center">
+                                  <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-md text-xs font-bold">
+                                    {item.margin}%
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-right font-black text-blue-900">
+                                  R$ {Number(item.kit_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td className="px-6 py-4 text-center font-mono text-xs">{item.proposal_number || '—'}</td>
+                                <td className="px-6 py-4 text-center">
+                                  {isExpired ? (
+                                    <span className="text-red-500 font-bold">Expirado</span>
+                                  ) : (
+                                    <span className="text-amber-600 font-bold">{diffDays} dias</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 text-center flex justify-center gap-2">
+                                  {item.url_arquivo && !isExpired ? (
+                                    <a
+                                      href={item.url_arquivo}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="bg-blue-600 text-white p-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+                                      title="Baixar PDF"
+                                    >
+                                      <FileDown size={16} />
+                                    </a>
+                                  ) : (
+                                    <span className="text-[10px] text-gray-400 italic">PDF não disponível</span>
+                                  )}
+                                  <button
+                                    onClick={() => loadForEdit(item.id)}
+                                    className="text-amber-500 hover:text-amber-700 p-1.5 rounded-lg border border-amber-200 hover:bg-amber-50 transition-colors"
+                                    title="Editar Proposta"
+                                  >
+                                    <Edit size={16} />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteHistory(item.id)}
+                                    className="text-red-500 hover:text-red-700 p-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition-colors"
+                                    title="Excluir registro"
+                                  >
+                                    <Plus size={16} className="rotate-45" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
                   </div>
+
+                  {/* Controles de paginação — só exibe se houver mais de 1 página */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between mt-3 px-1">
+                      <span className="text-xs text-gray-500">
+                        Página {currentPage} de {totalPages} — {history.length} proposta(s)
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                          className="px-3 py-1 text-xs rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100"
+                        >
+                          ← Anterior
+                        </button>
+                        <button
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                          className="px-3 py-1 text-xs rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100"
+                        >
+                          Próxima →
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              );
+            })()}
             
             <div className="flex justify-start mt-8 pt-4 border-t border-gray-100">
               <button
