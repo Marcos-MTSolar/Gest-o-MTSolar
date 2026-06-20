@@ -368,8 +368,18 @@ export default function Obra() {
     );
   };
 
-  const generatePDF = () => {
+  const generatePDF = async () => {
     if (!selectedProject) return;
+
+    const hasPendingPhotoFiles = Object.values(photoFiles).some(file => file !== null);
+    const hasPendingNewPhotoFiles = Object.values(newPhotoFiles).some(file => file !== null);
+    const hasPendingMppt = mpptList.some(mppt => mppt.file !== null);
+
+    if (hasPendingPhotoFiles || hasPendingNewPhotoFiles || hasPendingMppt) {
+      alert("Existem fotos pendentes de salvar. Clique em 'Salvar Obra' antes de gerar o relatório.");
+      return;
+    }
+
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -397,8 +407,8 @@ export default function Obra() {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
     doc.text('Dados do Sistema', 14, y); y += 6;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-    doc.text(`Inversor: ${selectedProject.inverter_model || 'N/A'} (${selectedProject.inverter_power || '-'})`, 14, y); y += 5;
-    doc.text(`Módulo: ${selectedProject.module_model || 'N/A'} (${selectedProject.module_power || '-'}) - Qtd: ${selectedProject.module_quantity || '-'}`, 14, y); y += 5;
+    doc.text(`Inversor: ${selectedProject.inversor_modelo || 'N/A'} (${selectedProject.inversor_potencia || '-'})`, 14, y); y += 5;
+    doc.text(`Módulo: ${selectedProject.modulo_modelo || 'N/A'} (${selectedProject.modulo_potencia || '-'}) - Qtd: ${selectedProject.module_quantity || '-'}`, 14, y); y += 5;
     doc.text(`Estrutura: ${selectedProject.structure_type || 'N/A'}`, 14, y); y += 5;
     doc.text(`Sistema: ${isTrifasico ? 'Trifásico' : 'Monofásico/Bifásico'}`, 14, y);
     y += 10;
@@ -441,15 +451,27 @@ export default function Obra() {
       y += 10;
     };
 
-    allPhotos.forEach(photo => {
+    for (const photo of allPhotos) {
       if (y + imgHeight + 15 > pageHeight - 25) { drawFooterAndNewPage(); col = 0; }
       const x = col === 0 ? 20 : 110;
-      try { doc.addImage(photo.url, 'JPEG', x, y, imgWidth, imgHeight); }
-      catch { doc.setDrawColor(150); doc.rect(x, y, imgWidth, imgHeight); doc.text('(Imagem não carregou)', x + 5, y + 30); }
+      try {
+        const response = await fetch(photo.url);
+        if (!response.ok) throw new Error('Fetch failed');
+        const blob = await response.blob();
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        doc.addImage(base64, 'JPEG', x, y, imgWidth, imgHeight);
+      } catch {
+        doc.setDrawColor(150); doc.rect(x, y, imgWidth, imgHeight); doc.text('(Imagem não carregou)', x + 5, y + 30);
+      }
       doc.setFontSize(9);
       doc.text(photo.label, x + (imgWidth / 2), y + imgHeight + 5, { align: 'center' });
       if (col === 1) { col = 0; y += imgHeight + 15; } else { col = 1; }
-    });
+    }
     if (col === 1) y += imgHeight + 15;
 
     if (pendencies) {

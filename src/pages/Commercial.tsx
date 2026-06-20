@@ -140,44 +140,50 @@ export default function Commercial() {
       if (docEntries.length > 0) {
         const uploadErrors: string[] = [];
 
-        for (const [docType, file] of docEntries) {
-          try {
-            const f = file as File;
+        if (!projectId || String(projectId).trim() === '' || String(projectId) === 'null' || String(projectId) === 'undefined') {
+          console.error("project_id ausente após criação do cliente — uploads de documentos abortados");
+          docEntries.forEach(([docType]) => uploadErrors.push(`${docType} (project_id ausente)`));
+        } else {
+          for (const [docType, file] of docEntries) {
+            try {
+              const f = file as File;
 
-            // 1. Solicita URL pré-assinada ao backend (payload < 1KB, sem limite Vercel)
-            const { data: presignData } = await api.get('/api/r2/presigned-url', {
-              params: {
-                fileName: f.name,
-                contentType: f.type || 'application/octet-stream',
-                clientId: String(clientId),
-                documentType: docType,
-              },
-            });
+              // 1. Solicita URL pré-assinada ao backend (payload < 1KB, sem limite Vercel)
+              const { data: presignData } = await api.get('/api/r2/presigned-url', {
+                params: {
+                  fileName: f.name,
+                  contentType: f.type || 'application/octet-stream',
+                  clientId: String(clientId),
+                  documentType: docType,
+                },
+              });
 
-            // 2. Faz upload DIRETO ao R2 (sem passar pelo Vercel)
-            const uploadRes = await fetch(presignData.presignedUrl, {
-              method: 'PUT',
-              headers: { 'Content-Type': f.type || 'application/octet-stream' },
-              body: f,
-            });
+              // 2. Faz upload DIRETO ao R2 (sem passar pelo Vercel)
+              const uploadRes = await fetch(presignData.presignedUrl, {
+                method: 'PUT',
+                headers: { 'Content-Type': f.type || 'application/octet-stream' },
+                body: f,
+              });
 
-            if (!uploadRes.ok) {
-              throw new Error(`Upload ao R2 falhou: ${uploadRes.status}`);
+              if (!uploadRes.ok) {
+                throw new Error(`Upload ao R2 falhou: ${uploadRes.status}`);
+              }
+
+              // 3. Registra no banco apenas a URL pública (payload < 1KB)
+              await api.post('/api/homologation-documents/register', {
+                document_type: docType,
+                client_id: String(clientId),
+                project_id: String(projectId),
+                file_name: f.name,
+                file_url: presignData.publicUrl,
+                file_path: presignData.filePath,
+              });
+
+            } catch (err: any) {
+              console.error(`Erro ao enviar documento ${docType}:`, err);
+              const reason = err?.message || err?.response?.data?.error || 'erro desconhecido';
+              uploadErrors.push(`${docType} (${reason})`);
             }
-
-            // 3. Registra no banco apenas a URL pública (payload < 1KB)
-            await api.post('/api/homologation-documents/register', {
-              document_type: docType,
-              client_id: String(clientId),
-              project_id: String(projectId),
-              file_name: f.name,
-              file_url: presignData.publicUrl,
-              file_path: presignData.filePath,
-            });
-
-          } catch (err: any) {
-            console.error(`Erro ao enviar documento ${docType}:`, err);
-            uploadErrors.push(docType);
           }
         }
 

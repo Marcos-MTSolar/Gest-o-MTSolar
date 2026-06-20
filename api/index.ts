@@ -1387,6 +1387,10 @@ app.post('/api/homologation-documents/register', authenticateToken, async (req: 
       return res.status(400).json({ error: 'Campos obrigatórios: document_type, client_id, project_id, file_url, file_path' });
     }
 
+    if (isNaN(parseInt(project_id))) {
+      return res.status(400).json({ error: 'project_id inválido ou ausente' });
+    }
+
     const expiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 dias
 
     const { data, error } = await supabase
