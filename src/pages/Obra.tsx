@@ -16,6 +16,7 @@ const PHOTO_FIELDS = [
   { name: 'photo_generation_plate', label: 'Placa Geração (Padrão Entrada)' },
   { name: 'photo_ac_stringbox', label: 'String Box CA' },
   { name: 'photo_connection_point', label: 'Ponto Conexão' },
+  { name: 'photo_aterramento_padrao', label: 'Aterramento Padrão Entrada' },
 ];
 
 type PhotoFieldName =
@@ -28,7 +29,8 @@ type PhotoFieldName =
   | 'photo_dc_voltage'
   | 'photo_generation_plate'
   | 'photo_ac_stringbox'
-  | 'photo_connection_point';
+  | 'photo_connection_point'
+  | 'photo_aterramento_padrao';
 
 export default function Obra() {
   const [projects, setProjects] = useState<any[]>([]);
@@ -49,8 +51,6 @@ export default function Obra() {
 
   const [isTrifasico, setIsTrifasico] = useState(false);
   const [newPhotoFiles, setNewPhotoFiles] = useState<Record<string, File | null>>({
-    photo_tensao_ca_neutro_terra: null,
-    photo_aterramento_padrao: null,
     photo_fase_a_b: null,
     photo_fase_a_c: null,
     photo_fase_b_c: null,
@@ -105,8 +105,6 @@ export default function Obra() {
     
     // Load existing URLs into state for previewing (we use the newPhotoUrls for existing URLs too)
     const existingNewUrls: Record<string, string | null> = {
-      photo_tensao_ca_neutro_terra: res.data.photo_tensao_ca_neutro_terra || null,
-      photo_aterramento_padrao: res.data.photo_aterramento_padrao || null,
       photo_fase_a_b: res.data.photo_fase_a_b || null,
       photo_fase_a_c: res.data.photo_fase_a_c || null,
       photo_fase_b_c: res.data.photo_fase_b_c || null,
@@ -115,8 +113,6 @@ export default function Obra() {
     setNewPhotoUrls(existingNewUrls);
     
     setNewPhotoFiles({
-      photo_tensao_ca_neutro_terra: null,
-      photo_aterramento_padrao: null,
       photo_fase_a_b: null,
       photo_fase_a_c: null,
       photo_fase_b_c: null,
@@ -233,8 +229,8 @@ export default function Obra() {
         is_trifasico: isTrifasico,
         mppt_photos: uploadedMppts,
         obra_photos_uploaded_at: newUploadsAt,
-        ...photoUrls,
-        ...extraUrls
+        ...extraUrls,
+        ...photoUrls
       };
 
       const response = await api.put(`/api/projects/${selectedProject.id}/installation`, payload);
@@ -421,8 +417,6 @@ export default function Obra() {
     const allPhotos: { label: string; url: string }[] = [];
     PHOTO_FIELDS.forEach(f => { const url = selectedProject[f.name]; if (url) allPhotos.push({ label: f.label, url }); });
     const extraLabels: Record<string, string> = {
-      photo_tensao_ca_neutro_terra: 'Tensão CA - Neutro/Terra',
-      photo_aterramento_padrao: 'Aterramento Padrão',
       photo_fase_a_b: 'Fase A x Fase B',
       photo_fase_a_c: 'Fase A x Fase C',
       photo_fase_b_c: 'Fase B x Fase C',
@@ -578,9 +572,6 @@ export default function Obra() {
                   </label>
 
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    <PhotoUploadExtra name="photo_tensao_ca_neutro_terra" label="Tensão CA - Neutro/Terra" isRequired />
-                    <PhotoUploadExtra name="photo_aterramento_padrao" label="Aterramento Padrão Entrada" isRequired />
-                    
                     {isTrifasico && (
                       <>
                         <PhotoUploadExtra name="photo_fase_a_b" label="Tensão CA - Fase A x B" />
@@ -678,7 +669,7 @@ export default function Obra() {
                     <button
                       type="button"
                       onClick={generatePDF}
-                      disabled={!(newPhotoUrls.photo_tensao_ca_neutro_terra || newPhotoFiles.photo_tensao_ca_neutro_terra) || !(newPhotoUrls.photo_aterramento_padrao || newPhotoFiles.photo_aterramento_padrao) || (isTrifasico && (!(newPhotoUrls.photo_fase_a_b || newPhotoFiles.photo_fase_a_b) || !(newPhotoUrls.photo_fase_a_c || newPhotoFiles.photo_fase_a_c) || !(newPhotoUrls.photo_fase_b_c || newPhotoFiles.photo_fase_b_c)))}
+                      disabled={isTrifasico && (!(newPhotoUrls.photo_fase_a_b || newPhotoFiles.photo_fase_a_b) || !(newPhotoUrls.photo_fase_a_c || newPhotoFiles.photo_fase_a_c) || !(newPhotoUrls.photo_fase_b_c || newPhotoFiles.photo_fase_b_c))}
                       className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
                       title="Preencha as fotos obrigatórias das Medições Elétricas para liberar o relatório."
                     >
