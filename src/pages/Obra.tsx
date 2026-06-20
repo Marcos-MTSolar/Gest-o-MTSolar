@@ -458,7 +458,25 @@ export default function Obra() {
           reader.onerror = reject;
           reader.readAsDataURL(blob);
         });
-        doc.addImage(base64, 'JPEG', x, y, imgWidth, imgHeight);
+
+        const img = new Image();
+        img.src = base64;
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+        });
+
+        let drawW = imgWidth;
+        let drawH = imgHeight;
+        let drawX = x;
+
+        if (img.height > img.width) {
+          drawH = imgHeight;
+          drawW = imgHeight * (img.width / img.height);
+          drawX = x + (imgWidth - drawW) / 2;
+        }
+
+        doc.addImage(base64, 'JPEG', drawX, y, drawW, drawH);
       } catch {
         doc.setDrawColor(150); doc.rect(x, y, imgWidth, imgHeight); doc.text('(Imagem não carregou)', x + 5, y + 30);
       }

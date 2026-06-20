@@ -636,9 +636,9 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
     cpf_cnpj: project.clients?.cpf_cnpj || null,
     zip_code: project.clients?.zip_code || null,
     inversor_marca: project.clients?.inversor_marca || null,
-    inversor_modelo: project.clients?.inversor_modelo || null,
+    inversor_modelo: techData?.inverter_model || project.clients?.inversor_modelo || null,
     inversor_potencia: project.clients?.inversor_potencia || null,
-    modulo_modelo: project.clients?.modulo_modelo || null,
+    modulo_modelo: techData?.module_model || project.clients?.modulo_modelo || null,
     modulo_potencia: project.clients?.modulo_potencia || null,
     estrutura_tipo: project.clients?.estrutura_tipo || null,
 
@@ -680,6 +680,7 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
     photo_generation_plate: techData.photo_generation_plate,
     photo_ac_stringbox: techData.photo_ac_stringbox,
     photo_connection_point: techData.photo_connection_point,
+    photo_aterramento_padrao: techData.photo_aterramento_padrao,
 
     documents
   };
