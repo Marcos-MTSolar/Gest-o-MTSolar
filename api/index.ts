@@ -3999,8 +3999,8 @@ app.get('/api/cron/cleanup-whatsapp-media', async (req, res) => {
 
 // --- SOLAR KITS (Apenas ADM e CEO) ---
 const requireAdminOrCEO = (req: any, res: any, next: any) => {
-  if (req.user?.role !== 'ADM' && req.user?.role !== 'CEO') {
-    return res.status(403).json({ error: 'Acesso negado. Apenas ADM ou CEO.' });
+  if (req.user?.role !== 'ADMIN' && req.user?.role !== 'CEO') {
+    return res.status(403).json({ error: 'Acesso negado. Apenas ADMIN ou CEO.' });
   }
   next();
 };

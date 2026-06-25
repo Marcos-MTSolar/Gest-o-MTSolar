@@ -55,27 +55,35 @@ ALTER TABLE public.solar_kits ENABLE ROW LEVEL SECURITY;
 -- Políticas RLS
 -- Observação: o backend usa a service_role key (bypassa RLS automaticamente).
 -- As policies abaixo protegem o acesso direto via anon/authenticated key.
+-- ISOLAMENTO MULTI-TENANT: todas as políticas filtram por role E company_id,
+-- impedindo que usuários de uma empresa acessem dados de outra empresa mesmo
+-- com a chave authenticated.
 -- =============================================================================
 
--- Política: CEO e ADM podem fazer qualquer operação
+-- Política: CEO e ADMIN podem fazer qualquer operação, mas apenas nos kits
+-- da própria empresa (company_id do JWT deve bater com o da linha).
 CREATE POLICY "solar_kits_ceo_adm_all"
   ON public.solar_kits
   FOR ALL
   TO authenticated
   USING (
-    (auth.jwt() ->> 'role') IN ('CEO', 'ADM', 'ADMIN')
+    (auth.jwt() ->> 'role') IN ('CEO', 'ADMIN')
+    AND company_id = (auth.jwt() ->> 'company_id')::INTEGER
   )
   WITH CHECK (
-    (auth.jwt() ->> 'role') IN ('CEO', 'ADM', 'ADMIN')
+    (auth.jwt() ->> 'role') IN ('CEO', 'ADMIN')
+    AND company_id = (auth.jwt() ->> 'company_id')::INTEGER
   );
 
--- Política: VENDEDOR (COMMERCIAL) pode apenas SELECT em kits ativos da sua empresa
+-- Política: VENDEDOR (COMMERCIAL) e TECHNICAL podem apenas ler kits ativos
+-- da própria empresa.
 CREATE POLICY "solar_kits_vendedor_select"
   ON public.solar_kits
   FOR SELECT
   TO authenticated
   USING (
     (auth.jwt() ->> 'role') IN ('COMMERCIAL', 'VENDEDOR', 'TECHNICAL')
+    AND company_id = (auth.jwt() ->> 'company_id')::INTEGER
     AND ativo = TRUE
   );
 

@@ -1169,3 +1169,24 @@ Abaixo estÃ£o listadas todas as variÃ¡veis cruciais exigidas para o funciona
 
 > [!IMPORTANT]
 
+---
+
+## 15. MIGRATIONS PENDENTES DE EXECUÇÃO MANUAL NO SUPABASE
+
+Esta seção rastreia os arquivos de migration que foram criados no repositório mas ainda precisam ser executados manualmente no **SQL Editor do Supabase** para ter efeito no banco de dados de produção.
+
+### ⏳ Pendentes
+
+| Arquivo | Descrição | Criado em |
+|---|---|---|
+| supabase/migrations/20260625_create_solar_kits.sql | Cria a tabela solar_kits com RLS, índices e trigger de updated_at. Sem isso, GET /api/solar-kits retorna erro 500. | 25/06/2026 |
+
+> [!CAUTION]
+> Enquanto esses arquivos não forem executados no Supabase, as funcionalidades correspondentes estarão **completamente indisponíveis** em produção, independentemente de qualquer deploy no Vercel.
+
+### ✅ Já Aplicadas
+
+| Arquivo | Descrição | Aplicado em |
+|---|---|---|
+| supabase/migrations/20260625_create_whatsapp_observations.sql | Cria a tabela whatsapp_observations com RLS e índices para o módulo de notas do Atendimento. | 25/06/2026 |
+
