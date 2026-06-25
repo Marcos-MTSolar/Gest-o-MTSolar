@@ -28,6 +28,7 @@
     { "path": "/api/cron/cleanup-r2", "schedule": "0 3 1 * *" },
     { "path": "/api/cron/cleanup-whatsapp-media", "schedule": "0 3 2 * *" },
     { "path": "/api/cron/cleanup-homologation-docs", "schedule": "0 4 * * *" },
-    { "path": "/api/cron/cleanup-obra-fotos", "schedule": "0 2 * * *" }
+    { "path": "/api/cron/cleanup-obra-fotos", "schedule": "0 2 * * *" },
+    { "path": "/api/cron/cleanup-vistoria-midia", "schedule": "0 3 * * *" }
   ]
 }

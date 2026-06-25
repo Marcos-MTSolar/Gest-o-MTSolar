@@ -21,13 +21,33 @@ import {
   History,
   Clock,
   Layers,
-  Edit
+  Edit,
+  Trash2,
+  X,
+  Database
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import api from '../lib/api';
 
-type TabType = 'dados' | 'kit' | 'calculo' | 'financiamento' | 'servicos' | 'historico';
+type TabType = 'dados' | 'kit' | 'calculo' | 'financiamento' | 'servicos' | 'historico' | 'kits';
+
+interface SolarKit {
+  id: string;
+  potencia_kwh: number;
+  valor_total: number;
+  margem_venda: number;
+  quantidade_modulos: number;
+  potencia_modulo_w: number;
+  marca_modulo: string;
+  quantidade_inversores: number;
+  potencia_inversor_kw: number;
+  marca_inversor: string;
+  inversor_ampliacao: boolean;
+  potencia_inversor_ampliacao_kw?: number | null;
+  marca_inversor_ampliacao?: string | null;
+  ativo: boolean;
+}
 
 interface StructureItem {
   id: string;
@@ -59,6 +79,9 @@ interface FormData {
   inverterBrand: string;
   inverterPower: string;
   inverterQty: string;
+  inversorAmpliacao: boolean;
+  inverterAmpBrand: string;
+  inverterAmpPower: string;
   garantiaModuloDefeito: string;
   garantiaModuloEficiencia: string;
   garantiaInversorDefeito: string;
@@ -146,11 +169,35 @@ const TABELA_BANCOS = [
 ];
 
 
+const EMPTY_KIT: Omit<SolarKit, 'id' | 'ativo'> = {
+  potencia_kwh: 0,
+  valor_total: 0,
+  margem_venda: 30,
+  quantidade_modulos: 0,
+  potencia_modulo_w: 0,
+  marca_modulo: '',
+  quantidade_inversores: 1,
+  potencia_inversor_kw: 0,
+  marca_inversor: '',
+  inversor_ampliacao: false,
+  potencia_inversor_ampliacao_kw: null,
+  marca_inversor_ampliacao: null,
+};
+
 export default function ProposalGenerator() {
   const { user } = useAuth();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<TabType>('dados');
   const [editingProposalId, setEditingProposalId] = useState<number | null>(null);
+
+  // --- Estados para Kits Solares ---
+  const [solarKits, setSolarKits] = useState<SolarKit[]>([]);
+  const [loadingKits, setLoadingKits] = useState(false);
+  const [showKitModal, setShowKitModal] = useState(false);
+  const [editingKit, setEditingKit] = useState<SolarKit | null>(null);
+  const [kitForm, setKitForm] = useState<Omit<SolarKit, 'id' | 'ativo'>>(EMPTY_KIT);
+  const [savingKit, setSavingKit] = useState(false);
+  const [selectedKitId, setSelectedKitId] = useState<string>('');
 
   const [formData, setFormData] = useState<FormData>({
     clientName: '',
@@ -175,6 +222,9 @@ export default function ProposalGenerator() {
     inverterBrand: '',
     inverterPower: '',
     inverterQty: '1',
+    inversorAmpliacao: false,
+    inverterAmpBrand: '',
+    inverterAmpPower: '',
     garantiaModuloDefeito: '10',
     garantiaModuloEficiencia: '25',
     garantiaInversorDefeito: '10',
@@ -211,8 +261,6 @@ export default function ProposalGenerator() {
   const [historyPage, setHistoryPage] = useState(1);
   const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [historyTotal, setHistoryTotal] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {
     if (location.state) {
@@ -252,10 +300,100 @@ export default function ProposalGenerator() {
   };
 
   useEffect(() => {
-    if (activeTab === 'historico') {
-      fetchHistory(1);
-    }
+    if (activeTab === 'historico') fetchHistory(1);
+    if (activeTab === 'kits') fetchSolarKits();
   }, [activeTab]);
+
+  // Carrega kits ao entrar na aba Kit Solar (para o dropdown do vendedor)
+  useEffect(() => { fetchSolarKits(); }, []);
+
+  const fetchSolarKits = async () => {
+    setLoadingKits(true);
+    try {
+      const res = await api.get('/api/solar-kits');
+      setSolarKits(res.data ?? []);
+    } catch (err) {
+      console.error('Erro ao carregar kits solares:', err);
+    } finally {
+      setLoadingKits(false);
+    }
+  };
+
+  const openNewKitModal = () => {
+    setEditingKit(null);
+    setKitForm(EMPTY_KIT);
+    setShowKitModal(true);
+  };
+
+  const openEditKitModal = (kit: SolarKit) => {
+    setEditingKit(kit);
+    setKitForm({
+      potencia_kwh: kit.potencia_kwh,
+      valor_total: kit.valor_total,
+      margem_venda: kit.margem_venda,
+      quantidade_modulos: kit.quantidade_modulos,
+      potencia_modulo_w: kit.potencia_modulo_w,
+      marca_modulo: kit.marca_modulo,
+      quantidade_inversores: kit.quantidade_inversores,
+      potencia_inversor_kw: kit.potencia_inversor_kw,
+      marca_inversor: kit.marca_inversor,
+      inversor_ampliacao: kit.inversor_ampliacao,
+      potencia_inversor_ampliacao_kw: kit.potencia_inversor_ampliacao_kw ?? null,
+      marca_inversor_ampliacao: kit.marca_inversor_ampliacao ?? null,
+    });
+    setShowKitModal(true);
+  };
+
+  const saveKit = async () => {
+    setSavingKit(true);
+    try {
+      if (editingKit) {
+        await api.put(`/api/solar-kits/${editingKit.id}`, kitForm);
+      } else {
+        await api.post('/api/solar-kits', kitForm);
+      }
+      setShowKitModal(false);
+      fetchSolarKits();
+    } catch (err: any) {
+      alert('Erro ao salvar kit: ' + (err?.response?.data?.error || err.message));
+    } finally {
+      setSavingKit(false);
+    }
+  };
+
+  const deactivateKit = async (id: string) => {
+    if (!window.confirm('Deseja desativar este kit? Ele não aparecerá mais para seleção.')) return;
+    try {
+      await api.delete(`/api/solar-kits/${id}`);
+      fetchSolarKits();
+    } catch (err: any) {
+      alert('Erro ao desativar kit: ' + (err?.response?.data?.error || err.message));
+    }
+  };
+
+  // Aplica kit selecionado ao formData do vendedor
+  const applySelectedKit = (kitId: string) => {
+    setSelectedKitId(kitId);
+    if (!kitId) return;
+    const kit = solarKits.find(k => k.id === kitId);
+    if (!kit) return;
+    const precoVenda = kit.valor_total * (1 + kit.margem_venda / 100);
+    setFormData(prev => ({
+      ...prev,
+      kitCost: precoVenda.toFixed(2),
+      marginPercent: '0', // margem já embutida no preço
+      kitPower: kit.potencia_kwh.toString(),
+      moduleModel: kit.marca_modulo,
+      modulePower: kit.potencia_modulo_w.toString(),
+      moduleQty: kit.quantidade_modulos.toString(),
+      inverterBrand: kit.marca_inversor,
+      inverterPower: kit.potencia_inversor_kw.toString(),
+      inverterQty: kit.quantidade_inversores.toString(),
+      inversorAmpliacao: kit.inversor_ampliacao,
+      inverterAmpBrand: kit.marca_inversor_ampliacao || '',
+      inverterAmpPower: kit.potencia_inversor_ampliacao_kw ? kit.potencia_inversor_ampliacao_kw.toString() : '',
+    }));
+  };
 
   const loadForEdit = async (id: number) => {
     try {
@@ -701,6 +839,11 @@ export default function ProposalGenerator() {
   };
 
   const generatePDF = async () => {
+    if (!isAdminOrCeo && !selectedKitId) {
+      alert('Selecione um kit solar para continuar.');
+      return;
+    }
+
     const structureTranslations: Record<string, string> = {
       'telhado_ceramico': 'Telhado Cerâmico',
       'telhado_metalico': 'Telhado Metálico',
@@ -2186,6 +2329,8 @@ export default function ProposalGenerator() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const isAdminOrCeo = user?.role === 'ADM' || user?.role === 'CEO';
+
   const tabs = [
     { id: 'dados' as TabType, label: 'Dados do Cliente', icon: User },
     { id: 'kit' as TabType, label: 'Kit Solar', icon: Package },
@@ -2193,10 +2338,12 @@ export default function ProposalGenerator() {
     { id: 'financiamento' as TabType, label: 'Financiamento', icon: CreditCard },
     { id: 'servicos' as TabType, label: 'Proposta de Serviços', icon: Wrench },
     { id: 'historico' as TabType, label: 'Histórico', icon: History },
+    ...(isAdminOrCeo ? [{ id: 'kits' as TabType, label: 'Kits Solares', icon: Database }] : []),
   ];
 
+
   const currentStepIndex = tabs.findIndex(t => t.id === activeTab);
-  const isReady = !!formData.clientName && !!formData.kitCost;
+  const isReady = !!formData.clientName && !!formData.kitCost && (isAdminOrCeo || !!selectedKitId);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -2600,77 +2747,89 @@ export default function ProposalGenerator() {
               <h2 className="text-xl font-bold text-gray-800">Dados do Kit Solar</h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1 md:col-span-2">
-                <label className="text-sm font-medium text-gray-700">Descrição do Kit *</label>
-                <input 
-                  type="text" 
-                  value={formData.kitName}
-                  onChange={(e) => updateForm('kitName', e.target.value)}
-                  className={inputStyle}
-                  placeholder="Ex: Kit 5kWp — 10 Módulos 550W + Inversor Growatt 5kW"
-                />
+            {/* Seletor de Kit Pré-cadastrado */}
+            {solarKits.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <label className="text-sm font-bold text-blue-900 block mb-2">⚡ Selecionar Kit Cadastrado</label>
+                <select
+                  value={selectedKitId}
+                  onChange={(e) => applySelectedKit(e.target.value)}
+                  className="border border-blue-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="">— Selecione um kit cadastrado —</option>
+                  {solarKits.map(kit => (
+                    <option key={kit.id} value={kit.id}>
+                      {isAdminOrCeo 
+                        ? `${kit.potencia_kwh} kWh · ${kit.marca_modulo} · ${kit.marca_inversor} · R$ ${(kit.valor_total * (1 + kit.margem_venda / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                        : `Kit ${kit.potencia_kwh} kWh`}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-blue-600 mt-1">Ao selecionar, os campos técnicos serão preenchidos automaticamente.</p>
               </div>
+            )}
 
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">Potência do Sistema (kWp) *</label>
-                <input 
-                  type="number" 
-                  min="0"
-                  step="0.1"
-                  value={formData.kitPower}
-                  onChange={(e) => updateForm('kitPower', e.target.value)}
-                  className={inputStyle}
-                  placeholder="Ex: 5.5"
-                />
-              </div>
 
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">Custo do Kit (R$) *</label>
-                <input 
-                  type="number" 
-                  min="0"
-                  value={formData.kitCost}
-                  onChange={(e) => updateForm('kitCost', e.target.value)}
-                  className={inputStyle}
-                  placeholder="Ex: 12000.00"
-                />
-              </div>
+            {isAdminOrCeo ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-sm font-medium text-gray-700">Descrição do Kit *</label>
+                  <input 
+                    type="text" 
+                    value={formData.kitName}
+                    onChange={(e) => updateForm('kitName', e.target.value)}
+                    className={inputStyle}
+                    placeholder="Ex: Kit 5kWp — 10 Módulos 550W + Inversor Growatt 5kW"
+                  />
+                </div>
 
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">Margem de Venda (%) *</label>
-                <input 
-                  type="number" 
-                  min="0"
-                  max="100"
-                  value={formData.marginPercent}
-                  onChange={(e) => updateForm('marginPercent', e.target.value)}
-                  className={inputStyle}
-                  placeholder="Ex: 25"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">Desconto</label>
-                <div className="flex gap-2">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-gray-700">Potência do Sistema (kWp) *</label>
                   <input 
                     type="number" 
                     min="0"
-                    value={formData.discountValue}
-                    onChange={(e) => updateForm('discountValue', e.target.value)}
+                    step="0.1"
+                    value={formData.kitPower}
+                    onChange={(e) => updateForm('kitPower', e.target.value)}
                     className={inputStyle}
-                    placeholder="Ex: 5"
+                    placeholder="Ex: 5.5"
                   />
-                  <select
-                    value={formData.discountType}
-                    onChange={(e) => updateForm('discountType', e.target.value as 'fixed' | 'percent')}
-                    className="border border-gray-300 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                  >
-                    <option value="percent">%</option>
-                    <option value="fixed">R$</option>
-                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-gray-700">Custo do Kit (R$) *</label>
+                  <input 
+                    type="number" 
+                    min="0"
+                    value={formData.kitCost}
+                    onChange={(e) => updateForm('kitCost', e.target.value)}
+                    className={inputStyle}
+                    placeholder="Ex: 12000.00"
+                  />
                 </div>
               </div>
+            ) : (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
+                <div className="flex justify-between items-center border-b pb-2">
+                  <span className="text-sm text-gray-500">Valor Final de Venda</span>
+                  <span className="text-lg font-bold text-blue-900">
+                    {formData.kitCost ? `R$ ${parseFloat(formData.kitCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-xs text-gray-500 block">Potência</span>
+                    <span className="text-sm font-bold text-gray-800">{formData.kitPower ? `${formData.kitPower} kWp` : '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-500 block">Descrição</span>
+                    <span className="text-sm font-bold text-gray-800 line-clamp-2">{formData.kitName || '—'}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
 
               <div className="space-y-1">
                 <label className="text-sm font-medium text-gray-700">Conta de Luz Média Mensal (R$) *</label>
@@ -2727,42 +2886,44 @@ export default function ProposalGenerator() {
             </div>
 
             {/* Preview Card */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mt-6 shadow-inner relative overflow-hidden">
-              {!formData.kitCost || !formData.marginPercent ? (
-                <div className="absolute inset-0 bg-blue-50/80 backdrop-blur-[1px] flex items-center justify-center">
-                  <p className="text-blue-900 font-bold text-sm italic">Preencha os valores acima para ver o preview</p>
-                </div>
-              ) : null}
-              
-              <h3 className="text-sm font-bold text-blue-900 mb-4 uppercase tracking-wider">Preview do Valor de Venda</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                <div>
-                  <p className="text-xs text-blue-700 uppercase font-medium">Custo do Kit</p>
-                  <p className="text-lg font-semibold text-blue-900">R$ {parseFloat(formData.kitCost || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-blue-700 uppercase font-medium">Margem ({formData.marginPercent || '0'}%)</p>
-                  <p className="text-lg font-semibold text-blue-900">R$ {(parseFloat(formData.kitCost || '0') * parseFloat(formData.marginPercent || '0') / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                </div>
-                {parseFloat(formData.discountValue || '0') > 0 && (
+            {isAdminOrCeo && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mt-6 shadow-inner relative overflow-hidden">
+                {!formData.kitCost || !formData.marginPercent ? (
+                  <div className="absolute inset-0 bg-blue-50/80 backdrop-blur-[1px] flex items-center justify-center">
+                    <p className="text-blue-900 font-bold text-sm italic">Preencha os valores acima para ver o preview</p>
+                  </div>
+                ) : null}
+                
+                <h3 className="text-sm font-bold text-blue-900 mb-4 uppercase tracking-wider">Preview do Valor de Venda</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
                   <div>
-                    <p className="text-xs text-red-600 uppercase font-bold">Desconto ({formData.discountType === 'percent' ? formData.discountValue + '%' : 'R$'})</p>
-                    <p className="text-lg font-semibold text-red-600">
-                      - R$ {(formData.discountType === 'percent' 
-                        ? (parseFloat(formData.kitCost || '0') * (1 + parseFloat(formData.marginPercent || '0') / 100)) * (parseFloat(formData.discountValue || '0') / 100)
-                        : parseFloat(formData.discountValue || '0')
-                      ).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    <p className="text-xs text-blue-700 uppercase font-medium">Custo do Kit</p>
+                    <p className="text-lg font-semibold text-blue-900">R$ {parseFloat(formData.kitCost || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-blue-700 uppercase font-medium">Margem ({formData.marginPercent || '0'}%)</p>
+                    <p className="text-lg font-semibold text-blue-900">R$ {(parseFloat(formData.kitCost || '0') * parseFloat(formData.marginPercent || '0') / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                  {parseFloat(formData.discountValue || '0') > 0 && (
+                    <div>
+                      <p className="text-xs text-red-600 uppercase font-bold">Desconto ({formData.discountType === 'percent' ? formData.discountValue + '%' : 'R$'})</p>
+                      <p className="text-lg font-semibold text-red-600">
+                        - R$ {(formData.discountType === 'percent' 
+                          ? (parseFloat(formData.kitCost || '0') * (1 + parseFloat(formData.marginPercent || '0') / 100)) * (parseFloat(formData.discountValue || '0') / 100)
+                          : parseFloat(formData.discountValue || '0')
+                        ).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  )}
+                  <div className="bg-white p-4 rounded-xl border-2 border-blue-200 shadow-sm transform hover:scale-105 transition-transform">
+                    <p className="text-xs text-blue-700 uppercase font-bold">Valor Final de Venda</p>
+                    <p className="text-3xl font-black text-blue-900">
+                      R$ {results.salePrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
                   </div>
-                )}
-                <div className="bg-white p-4 rounded-xl border-2 border-blue-200 shadow-sm transform hover:scale-105 transition-transform">
-                  <p className="text-xs text-blue-700 uppercase font-bold">Valor Final de Venda</p>
-                  <p className="text-3xl font-black text-blue-900">
-                    R$ {results.salePrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </p>
                 </div>
               </div>
-            </div>
+            )}
             
             <div className="mt-6 space-y-2">
               <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
@@ -2867,6 +3028,37 @@ export default function ProposalGenerator() {
                   />
                 </div>
               </div>
+
+              {/* Inversor Ampliação (Apenas se o kit tiver) */}
+              {formData.inversorAmpliacao && (
+                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                  <h4 className="text-sm font-bold text-amber-900 mb-3 uppercase tracking-wider flex items-center gap-2">
+                    <Plus className="w-4 h-4" /> Inversor para Ampliação
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-amber-900">Modelo/Marca do Inversor Ampliação</label>
+                      <input 
+                        type="text" 
+                        value={formData.inverterAmpBrand}
+                        onChange={(e) => updateForm('inverterAmpBrand', e.target.value)}
+                        className={`${inputStyle} bg-white border-amber-300 focus:ring-amber-500`}
+                        readOnly={!isAdminOrCeo}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-amber-900">Potência (W)</label>
+                      <input 
+                        type="number" 
+                        value={formData.inverterAmpPower}
+                        onChange={(e) => updateForm('inverterAmpPower', e.target.value)}
+                        className={`${inputStyle} bg-white border-amber-300 focus:ring-amber-500`}
+                        readOnly={!isAdminOrCeo}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Materiais da Estrutura de Fixação */}
               <div className="mt-8 pt-8 border-t border-gray-100">
@@ -3387,10 +3579,6 @@ export default function ProposalGenerator() {
 
             {/* Paginação e scroll do histórico de propostas */}
             {(() => {
-              const totalPages = Math.ceil(history.length / ITEMS_PER_PAGE);
-              const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-              const currentItems = history.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-
               return (
                 <div>
                   {/* Tabela com scroll vertical */}
@@ -3400,8 +3588,8 @@ export default function ProposalGenerator() {
                         <tr className="text-gray-600 uppercase text-[10px] font-bold tracking-wider">
                           <th className="px-6 py-4 border-b">Data</th>
                           <th className="px-6 py-4 border-b">Cliente</th>
-                          <th className="px-6 py-4 border-b text-center">Margem</th>
-                          <th className="px-6 py-4 border-b text-right">Custo do Kit</th>
+                          {isAdminOrCeo && <th className="px-6 py-4 border-b text-center">Margem</th>}
+                          {isAdminOrCeo && <th className="px-6 py-4 border-b text-right">Custo do Kit</th>}
                           <th className="px-6 py-4 border-b text-center">Nº Proposta</th>
                           <th className="px-6 py-4 border-b text-center">Expira em</th>
                           <th className="px-6 py-4 border-b text-center">Ações</th>
@@ -3410,12 +3598,12 @@ export default function ProposalGenerator() {
                       <tbody className="text-sm divide-y divide-gray-100">
                         {history.length === 0 ? (
                           <tr>
-                            <td colSpan={6} className="px-6 py-12 text-center text-gray-400 italic">
+                            <td colSpan={isAdminOrCeo ? 7 : 5} className="px-6 py-12 text-center text-gray-400 italic">
                               Nenhuma proposta gerada no histórico ainda.
                             </td>
                           </tr>
                         ) : (
-                          currentItems.map((item) => {
+                          history.map((item) => {
                             const expDate = new Date(item.data_expiracao);
                             const today = new Date();
                             const diffTime = expDate.getTime() - today.getTime();
@@ -3429,14 +3617,18 @@ export default function ProposalGenerator() {
                                   <span className="text-[10px] ml-2 opacity-50">{new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
                                 </td>
                                 <td className="px-6 py-4 font-bold text-gray-800">{item.client_name}</td>
-                                <td className="px-6 py-4 text-center">
-                                  <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-md text-xs font-bold">
-                                    {item.margin}%
-                                  </span>
-                                </td>
-                                <td className="px-6 py-4 text-right font-black text-blue-900">
-                                  R$ {Number(item.kit_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                </td>
+                                {isAdminOrCeo && (
+                                  <>
+                                    <td className="px-6 py-4 text-center">
+                                      <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-md text-xs font-bold">
+                                        {item.margin}%
+                                      </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-right font-black text-blue-900">
+                                      R$ {Number(item.kit_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </td>
+                                  </>
+                                )}
                                 <td className="px-6 py-4 text-center font-mono text-xs">{item.proposal_number || '—'}</td>
                                 <td className="px-6 py-4 text-center">
                                   {isExpired ? (
@@ -3483,22 +3675,22 @@ export default function ProposalGenerator() {
                   </div>
 
                   {/* Controles de paginação — só exibe se houver mais de 1 página */}
-                  {totalPages > 1 && (
+                  {historyTotalPages > 1 && (
                     <div className="flex items-center justify-between mt-3 px-1">
                       <span className="text-xs text-gray-500">
-                        Página {currentPage} de {totalPages} — {history.length} proposta(s)
+                        Página {historyPage} de {historyTotalPages} — {historyTotal} proposta(s) no total
                       </span>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                          disabled={currentPage === 1}
+                          onClick={() => fetchHistory(historyPage - 1)}
+                          disabled={historyPage === 1}
                           className="px-3 py-1 text-xs rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100"
                         >
                           ← Anterior
                         </button>
                         <button
-                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                          disabled={currentPage === totalPages}
+                          onClick={() => fetchHistory(historyPage + 1)}
+                          disabled={historyPage === historyTotalPages}
                           className="px-3 py-1 text-xs rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-100"
                         >
                           Próxima →
@@ -3521,11 +3713,151 @@ export default function ProposalGenerator() {
           </div>
         )}
 
+      {/* Aba: Kits Solares - Apenas ADM/CEO */}
+        {activeTab === 'kits' && isAdminOrCeo && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Database className="text-blue-900 w-6 h-6" />
+                <h2 className="text-xl font-bold text-gray-800">Kits Solares Cadastrados</h2>
+              </div>
+              <button onClick={openNewKitModal}
+                className="bg-blue-900 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors flex items-center gap-2 font-medium">
+                <Plus size={16} /> Adicionar Kit
+              </button>
+            </div>
+            {loadingKits ? (
+              <div className="flex justify-center py-20">
+                <div className="w-8 h-8 border-4 border-blue-900 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : solarKits.length === 0 ? (
+              <div className="text-center py-20 text-gray-400">
+                <Database size={48} className="mx-auto mb-3 opacity-30" />
+                <p className="font-medium">Nenhum kit cadastrado ainda.</p>
+                <p className="text-sm">Clique em "Adicionar Kit" para começar.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-gray-100 shadow-sm">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-blue-900 text-white">
+                      <th className="px-4 py-3 text-left">Potência</th>
+                      <th className="px-4 py-3 text-left">Módulos</th>
+                      <th className="px-4 py-3 text-left">Marca Módulo</th>
+                      <th className="px-4 py-3 text-left">Inversores</th>
+                      <th className="px-4 py-3 text-left">Marca Inversor</th>
+                      <th className="px-4 py-3 text-center">Margem</th>
+                      <th className="px-4 py-3 text-right">Custo</th>
+                      <th className="px-4 py-3 text-right">Venda</th>
+                      <th className="px-4 py-3 text-center">Ampliação</th>
+                      <th className="px-4 py-3 text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {solarKits.map(kit => (
+                      <tr key={kit.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 font-bold text-blue-900">{kit.potencia_kwh} kWh</td>
+                        <td className="px-4 py-3">{kit.quantidade_modulos}×{kit.potencia_modulo_w}W</td>
+                        <td className="px-4 py-3">{kit.marca_modulo}</td>
+                        <td className="px-4 py-3">{kit.quantidade_inversores}×{kit.potencia_inversor_kw}kW</td>
+                        <td className="px-4 py-3">{kit.marca_inversor}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold text-xs">{kit.margem_venda}%</span>
+                        </td>
+                        <td className="px-4 py-3 text-right text-gray-500 text-xs">R$ {kit.valor_total.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+                        <td className="px-4 py-3 text-right font-bold text-green-700">R$ {(kit.valor_total*(1+kit.margem_venda/100)).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+                        <td className="px-4 py-3 text-center">
+                          {kit.inversor_ampliacao ? <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded font-semibold">Sim</span> : <span className="text-gray-300 text-xs">—</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-center gap-1">
+                            <button onClick={() => openEditKitModal(kit)} className="p-1.5 rounded text-blue-600 hover:bg-blue-50" title="Editar"><Edit size={14} /></button>
+                            <button onClick={() => deactivateKit(kit.id)} className="p-1.5 rounded text-red-500 hover:bg-red-50" title="Desativar"><Trash2 size={14} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
 
+      {/* Modal de Cadastro/Edição de Kit Solar */}
+      {showKitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="bg-blue-900 rounded-t-2xl p-5 flex items-center justify-between">
+              <h3 className="text-white font-bold text-lg flex items-center gap-2">
+                <Database size={20} className="text-amber-400" />
+                {editingKit ? 'Editar Kit Solar' : 'Novo Kit Solar'}
+              </h3>
+              <button onClick={() => setShowKitModal(false)} className="text-white/70 hover:text-white"><X size={22} /></button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1"><label className="text-sm font-medium text-gray-700">Potência (kWh) *</label>
+                  <input type="number" min="0" step="0.1" value={kitForm.potencia_kwh} onChange={e => setKitForm(p => ({...p, potencia_kwh: parseFloat(e.target.value)||0}))} className={inputStyle} placeholder="Ex: 5.5" /></div>
+                <div className="space-y-1"><label className="text-sm font-medium text-gray-700">Custo Real (R$) *</label>
+                  <input type="number" min="0" value={kitForm.valor_total} onChange={e => setKitForm(p => ({...p, valor_total: parseFloat(e.target.value)||0}))} className={inputStyle} placeholder="Ex: 12000" /></div>
+                <div className="space-y-1"><label className="text-sm font-medium text-gray-700">Margem de Venda (%) *</label>
+                  <input type="number" min="0" max="100" value={kitForm.margem_venda} onChange={e => setKitForm(p => ({...p, margem_venda: parseFloat(e.target.value)||0}))} className={inputStyle} placeholder="Ex: 30" /></div>
+                <div className="space-y-1"><label className="text-sm font-medium text-gray-700">Preço de Venda (calculado)</label>
+                  <input type="text" readOnly value={`R$ ${(kitForm.valor_total*(1+kitForm.margem_venda/100)).toLocaleString('pt-BR',{minimumFractionDigits:2})}`} className={`${inputStyle} bg-green-50 text-green-800 font-bold cursor-default`} /></div>
+              </div>
+              <div className="border-t pt-4">
+                <p className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-3">Módulos Fotovoltaicos</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1"><label className="text-sm font-medium text-gray-700">Quantidade *</label>
+                    <input type="number" min="1" value={kitForm.quantidade_modulos} onChange={e => setKitForm(p => ({...p, quantidade_modulos: parseInt(e.target.value)||0}))} className={inputStyle} placeholder="10" /></div>
+                  <div className="space-y-1"><label className="text-sm font-medium text-gray-700">Potência (W) *</label>
+                    <input type="number" min="0" value={kitForm.potencia_modulo_w} onChange={e => setKitForm(p => ({...p, potencia_modulo_w: parseFloat(e.target.value)||0}))} className={inputStyle} placeholder="550" /></div>
+                  <div className="space-y-1"><label className="text-sm font-medium text-gray-700">Marca *</label>
+                    <input type="text" value={kitForm.marca_modulo} onChange={e => setKitForm(p => ({...p, marca_modulo: e.target.value}))} className={inputStyle} placeholder="Ex: Risen" /></div>
+                </div>
+              </div>
+              <div className="border-t pt-4">
+                <p className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-3">Inversores</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1"><label className="text-sm font-medium text-gray-700">Quantidade *</label>
+                    <input type="number" min="1" value={kitForm.quantidade_inversores} onChange={e => setKitForm(p => ({...p, quantidade_inversores: parseInt(e.target.value)||1}))} className={inputStyle} placeholder="1" /></div>
+                  <div className="space-y-1"><label className="text-sm font-medium text-gray-700">Potência (kW) *</label>
+                    <input type="number" min="0" step="0.1" value={kitForm.potencia_inversor_kw} onChange={e => setKitForm(p => ({...p, potencia_inversor_kw: parseFloat(e.target.value)||0}))} className={inputStyle} placeholder="5" /></div>
+                  <div className="space-y-1"><label className="text-sm font-medium text-gray-700">Marca *</label>
+                    <input type="text" value={kitForm.marca_inversor} onChange={e => setKitForm(p => ({...p, marca_inversor: e.target.value}))} className={inputStyle} placeholder="Ex: Growatt" /></div>
+                </div>
+              </div>
+              <div className="border-t pt-4">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" checked={kitForm.inversor_ampliacao} onChange={e => setKitForm(p => ({...p, inversor_ampliacao: e.target.checked}))} className="w-4 h-4 rounded border-gray-300 text-blue-600" />
+                  <span className="text-sm font-medium text-gray-700">Incluir inversor para ampliação futura?</span>
+                </label>
+                {kitForm.inversor_ampliacao && (
+                  <div className="grid grid-cols-2 gap-4 mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                    <div className="space-y-1"><label className="text-sm font-medium text-gray-700">Potência Ampliação (kW)</label>
+                      <input type="number" min="0" step="0.1" value={kitForm.potencia_inversor_ampliacao_kw ?? ''} onChange={e => setKitForm(p => ({...p, potencia_inversor_ampliacao_kw: parseFloat(e.target.value)||null}))} className={inputStyle} placeholder="Ex: 3" /></div>
+                    <div className="space-y-1"><label className="text-sm font-medium text-gray-700">Marca Ampliação</label>
+                      <input type="text" value={kitForm.marca_inversor_ampliacao ?? ''} onChange={e => setKitForm(p => ({...p, marca_inversor_ampliacao: e.target.value}))} className={inputStyle} placeholder="Ex: Growatt" /></div>
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button onClick={() => setShowKitModal(false)} className="px-5 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 font-medium">Cancelar</button>
+                <button onClick={saveKit} disabled={savingKit} className={`px-6 py-2 rounded-lg font-bold text-white shadow flex items-center gap-2 transition-all ${savingKit?'bg-gray-400 cursor-not-allowed':'bg-blue-900 hover:bg-blue-800 hover:scale-105'}`}>
+                  {savingKit ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Salvando...</> : <><Check size={16} />{editingKit ? 'Salvar Alterações' : 'Criar Kit'}</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer Action */}
-      {activeTab !== 'historico' && (
+      {activeTab !== 'historico' && activeTab !== 'kits' && (
+
         <div className="flex justify-end pt-4 gap-4">
           {editingProposalId ? (
             <>

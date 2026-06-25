@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import api from '../lib/api';
-import { CheckCircle, AlertTriangle, Camera, Video, X, Trash2 } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Camera, Video, X, Trash2, Download } from 'lucide-react';
 import { sendUpdateNotification } from '../lib/notifications';
 
 export default function Technical() {
@@ -135,6 +135,26 @@ export default function Technical() {
     }
   };
 
+  const handleDownload = async (e: React.MouseEvent, url: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const filename = url.split('/').pop() || 'media';
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      alert('Erro ao baixar o arquivo. Verifique a conexão e tente novamente.');
+    }
+  };
+
 
   return (
     <div className="p-6">
@@ -226,6 +246,7 @@ export default function Technical() {
                     <input
                       type="file"
                       multiple
+                      accept="image/*,video/*"
                       className="hidden"
                       id="inspection-media-upload"
                       onChange={handleFileSelect}
@@ -270,13 +291,23 @@ export default function Technical() {
                       <p className="text-sm font-medium text-gray-700 mb-2">Arquivos Já Enviados:</p>
                       <div className="flex flex-wrap gap-2">
                         {JSON.parse(selectedProject.inspection_media).map((url: string, idx: number) => (
-                          <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="block w-20 h-20 rounded overflow-hidden border hover:opacity-80">
-                            {url.match(/\.(mp4|webm)$/i) ? (
-                              <div className="w-full h-full bg-gray-800 flex items-center justify-center text-white"><Video size={24} /></div>
-                            ) : (
-                              <img src={url} alt="Media" className="w-full h-full object-cover" />
-                            )}
-                          </a>
+                          <div key={idx} className="relative w-20 h-20 rounded overflow-hidden border group block">
+                            <a href={url} target="_blank" rel="noopener noreferrer" className="block w-full h-full hover:opacity-80">
+                              {url.match(/\.(mp4|webm)$/i) ? (
+                                <div className="w-full h-full bg-gray-800 flex items-center justify-center text-white"><Video size={24} /></div>
+                              ) : (
+                                <img src={url} alt="Media" className="w-full h-full object-cover" />
+                              )}
+                            </a>
+                            <button
+                              type="button"
+                              onClick={(e) => handleDownload(e, url)}
+                              className="absolute top-0 right-0 bg-blue-500 text-white p-1 rounded-bl opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Baixar arquivo"
+                            >
+                              <Download size={14} />
+                            </button>
+                          </div>
                         ))}
                       </div>
                     </div>

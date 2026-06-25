@@ -132,11 +132,11 @@ const authenticateToken = (req: any, res: any, next: any) => {
 // Helper para upload de arquivo para o Cloudflare R2
 // O parâmetro 'bucket' é mantido para compatibilidade com chamadores existentes,
 // mas agora é usado apenas como prefixo de pasta no R2.
-async function uploadFile(file: Express.Multer.File, bucket: string = 'uploads'): Promise<string | null> {
+async function uploadFile(file: Express.Multer.File, bucket: string = 'uploads', customMetadata?: Record<string, string>): Promise<string | null> {
   try {
     const filename = `${Date.now()}-${file.originalname}`;
     const filePath = `${bucket}/${filename}`;
-    const url = await uploadToR2(file.buffer, filePath, file.mimetype);
+    const url = await uploadToR2(file.buffer, filePath, file.mimetype, customMetadata);
     return url;
   } catch (e) {
     console.error('[R2] Erro no upload:', e);
@@ -871,7 +871,7 @@ app.put('/api/projects/:id/technical', authenticateToken, upload.any(), async (r
 
   if (files && files.length > 0) {
     for (const file of files) {
-      const url = await uploadFile(file);
+      const url = await uploadFile(file, 'vistoria', { retention: '2-months' });
       if (url) mediaUrls.push(url);
     }
   }
@@ -3164,11 +3164,12 @@ app.get('/api/cron/agenda-reminders', async (req, res) => {
 // Cleanup expired proposals
 app.get('/api/cleanup-proposals', async (req, res) => {
   try {
-    console.log('Iniciando limpeza de propostas expiradas...');
+    console.log('Iniciando limpeza de propostas expiradas (arquivos)...');
     const { data: expired, error: fetchError } = await supabase
       .from('proposal_history')
       .select('id, url_arquivo')
-      .lt('data_expiracao', new Date().toISOString());
+      .lt('data_expiracao', new Date().toISOString())
+      .not('url_arquivo', 'is', null);
     
     if (fetchError) {
       console.error('Erro ao buscar propostas expiradas:', fetchError);
@@ -3186,14 +3187,18 @@ app.get('/api/cleanup-proposals', async (req, res) => {
         if (storageError) console.error('Erro ao deletar arquivos do storage:', storageError);
       }
 
-      const { error: deleteError } = await supabase.from('proposal_history').delete().in('id', expired.map(p => p.id));
-      if (deleteError) console.error('Erro ao deletar registros do banco:', deleteError);
+      const { error: updateError } = await supabase
+        .from('proposal_history')
+        .update({ url_arquivo: null })
+        .in('id', expired.map(p => p.id));
+        
+      if (updateError) console.error('Erro ao anular url_arquivo no banco:', updateError);
       
-      console.log(`Limpeza concluída. ${expired.length} propostas removidas.`);
-      res.json({ message: `Sucesso! ${expired.length} propostas expiradas foram removidas.` });
+      console.log(`Limpeza concluída. ${expired.length} arquivos de propostas removidos.`);
+      res.json({ message: `Sucesso! Arquivos de ${expired.length} propostas expiradas foram removidos.` });
     } else {
-      console.log('Nenhuma proposta expirada encontrada.');
-      res.json({ message: 'Nenhuma proposta expirada para remover.' });
+      console.log('Nenhuma proposta com arquivo expirado encontrada.');
+      res.json({ message: 'Nenhuma proposta com arquivo expirado para remover.' });
     }
   } catch (err) {
     console.error('Erro catastrófico na limpeza de propostas:', err);
@@ -3889,6 +3894,101 @@ app.get('/api/cron/cleanup-whatsapp-media', async (req, res) => {
 
     res.json({ deleted, errors });
   } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- SOLAR KITS (Apenas ADM e CEO) ---
+const requireAdminOrCEO = (req: any, res: any, next: any) => {
+  if (req.user?.role !== 'ADM' && req.user?.role !== 'CEO') {
+    return res.status(403).json({ error: 'Acesso negado. Apenas ADM ou CEO.' });
+  }
+  next();
+};
+
+app.get('/api/solar-kits', authenticateToken, async (req: any, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('solar_kits')
+      .select('*')
+      .eq('company_id', req.user.company_id)
+      .eq('ativo', true)
+      .order('potencia_kwh', { ascending: true });
+    
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/solar-kits', authenticateToken, requireAdminOrCEO, async (req: any, res) => {
+  try {
+    const payload = { ...req.body, company_id: req.user.company_id };
+    const { data, error } = await supabase.from('solar_kits').insert([payload]).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/solar-kits/:id', authenticateToken, requireAdminOrCEO, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    const { data, error } = await supabase
+      .from('solar_kits')
+      .update(req.body)
+      .eq('id', id)
+      .eq('company_id', req.user.company_id)
+      .select()
+      .single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/solar-kits/:id', authenticateToken, requireAdminOrCEO, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    const { error } = await supabase
+      .from('solar_kits')
+      .update({ ativo: false })
+      .eq('id', id)
+      .eq('company_id', req.user.company_id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Cron: limpeza de mídias de vistoria com mais de 60 dias no R2
+app.get('/api/cron/cleanup-vistoria-midia', async (req, res) => {
+  try {
+    const files = await listR2Files('vistoria/');
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 60);
+
+    const filesToDelete = files
+      .filter((f: any) => f.LastModified && new Date(f.LastModified) < cutoffDate && f.Key)
+      .map((f: any) => f.Key as string);
+
+    let deleted = 0;
+    for (const key of filesToDelete) {
+      try {
+        await deleteFromR2(key);
+        deleted++;
+      } catch (err) {
+        console.error(`Erro ao apagar arquivo de vistoria ${key}:`, err);
+      }
+    }
+
+    res.json({ deleted });
+  } catch (err: any) {
+    console.error('Erro no cleanup de vistoria:', err);
     res.status(500).json({ error: err.message });
   }
 });

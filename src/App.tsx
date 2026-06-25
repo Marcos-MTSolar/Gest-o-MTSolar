@@ -45,10 +45,10 @@ function PrivateRoute({ children, roles }: { children: React.ReactNode, roles?: 
   
   if (!user) return <Navigate to="/login" />;
 
-  // Se for VENDEDOR (COMMERCIAL), acesso restrito a Dashboard, WhatsApp, Agenda, Proposta e Ponto
+  // Se for VENDEDOR (COMMERCIAL), acesso restrito a Dashboard, WhatsApp, Agenda, Proposta, Ponto, Comercial e Técnica
   const isCommercial = user.role.toUpperCase() === 'COMMERCIAL';
   const currentPath = window.location.pathname;
-  const allowedCommercialPaths = ['/', '/whatsapp', '/agenda', '/proposal-generator', '/calculadora', '/ponto'];
+  const allowedCommercialPaths = ['/', '/whatsapp', '/agenda', '/proposal-generator', '/calculadora', '/ponto', '/commercial', '/technical'];
   
   if (isCommercial && !allowedCommercialPaths.includes(currentPath)) {
     return <Navigate to="/" />;
@@ -121,7 +121,7 @@ export default function App() {
 
               
               <Route path="/technical" element={
-                <PrivateRoute roles={['CEO', 'ADMIN', 'TECHNICAL']}>
+                <PrivateRoute roles={['CEO', 'ADMIN', 'TECHNICAL', 'COMMERCIAL']}>
                   <Technical />
                 </PrivateRoute>
               } />

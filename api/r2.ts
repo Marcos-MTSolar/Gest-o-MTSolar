@@ -21,7 +21,8 @@ export const R2_PUBLIC_URL = process.env.CLOUDFLARE_R2_PUBLIC_URL!;
 export async function uploadToR2(
   buffer: Buffer,
   filePath: string,
-  contentType: string
+  contentType: string,
+  customMetadata?: Record<string, string>
 ): Promise<string> {
   await r2Client.send(
     new PutObjectCommand({
@@ -29,7 +30,7 @@ export async function uploadToR2(
       Key: filePath,
       Body: buffer,
       ContentType: contentType,
-      Metadata: { uploadedAt: new Date().toISOString() },
+      Metadata: { uploadedAt: new Date().toISOString(), ...customMetadata },
     })
   );
   return `${R2_PUBLIC_URL}/${filePath}`;

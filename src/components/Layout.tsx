@@ -115,7 +115,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: 'Ponto Eletrônico', path: '/ponto', icon: Clock, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Kit Solar', path: '/kit-purchase', icon: ShoppingCart, roles: ['CEO', 'ADMIN'] },
     { name: 'Contratos', path: '/contracts', icon: FileSignature, roles: ['CEO', 'ADMIN'] },
-    { name: 'Técnica', path: '/technical', icon: Wrench, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
+    { name: 'Técnica', path: '/technical', icon: Wrench, roles: ['CEO', 'ADMIN', 'TECHNICAL', 'COMMERCIAL'] },
     { name: 'Homologação', path: '/homologation', icon: FileCheck, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Obra', path: '/obra', icon: Hammer, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
     { name: 'Estoque', path: '/estoque', icon: Package, roles: ['CEO', 'ADMIN'] },
@@ -130,8 +130,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const filteredItems = menuItems.filter(item => {
     const hasRole = !item.roles || item.roles.includes(user?.role || '');
     if (isCommercial) {
-      // Vendedor: Dashboard, Atendimento, Agenda, Gerador de Proposta, Calculadora e Ponto Eletrônico
-      const allowedPaths = ['/', '/whatsapp', '/agenda', '/proposal-generator', '/calculadora', '/ponto'];
+      // Vendedor: Dashboard, Comercial, Atendimento, Agenda, Gerador de Proposta, Calculadora, Ponto Eletrônico e Técnica
+      const allowedPaths = ['/', '/whatsapp', '/agenda', '/proposal-generator', '/calculadora', '/ponto', '/commercial', '/technical'];
       return allowedPaths.includes(item.path);
     }
     return hasRole;
