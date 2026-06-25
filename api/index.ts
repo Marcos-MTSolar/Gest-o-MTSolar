@@ -4007,6 +4007,10 @@ const requireAdminOrCEO = (req: any, res: any, next: any) => {
 
 app.get('/api/solar-kits', authenticateToken, async (req: any, res) => {
   try {
+    // Log para debug: confirma qual chave está sendo usada
+    const keyUsed = process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SERVICE_ROLE_KEY' : (process.env.VITE_SUPABASE_ANON_KEY ? 'ANON_KEY (FALLBACK - SEM BYPASS RLS)' : 'NENHUMA CHAVE');
+    console.log(`[solar-kits GET] company_id=${req.user?.company_id} role=${req.user?.role} chave_supabase=${keyUsed}`);
+
     const { data, error } = await supabase
       .from('solar_kits')
       .select('*')
@@ -4014,10 +4018,20 @@ app.get('/api/solar-kits', authenticateToken, async (req: any, res) => {
       .eq('ativo', true)
       .order('potencia_kwh', { ascending: true });
     
-    if (error) throw error;
+    if (error) {
+      console.error('[solar-kits GET] Erro detalhado Supabase:', JSON.stringify({
+        message: error.message,
+        details: (error as any).details,
+        hint: (error as any).hint,
+        code: (error as any).code
+      }, null, 2));
+      throw error;
+    }
+
+    console.log(`[solar-kits GET] Sucesso. Registros retornados: ${data?.length ?? 0}`);
     res.json(data);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, details: err.details, hint: err.hint, code: err.code });
   }
 });
 
