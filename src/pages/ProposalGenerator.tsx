@@ -2747,28 +2747,25 @@ export default function ProposalGenerator() {
               <h2 className="text-xl font-bold text-gray-800">Dados do Kit Solar</h2>
             </div>
 
-            {/* Seletor de Kit Pré-cadastrado */}
-            {solarKits.length > 0 && (
+            {/* Seletor de Kit Pré-cadastrado — ADM/CEO veem como atalho opcional no topo */}
+            {isAdminOrCeo && solarKits.length > 0 && (
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <label className="text-sm font-bold text-blue-900 block mb-2">⚡ Selecionar Kit Cadastrado</label>
+                <label className="text-sm font-bold text-blue-900 block mb-2">⚡ Preencher a partir de Kit Cadastrado (opcional)</label>
                 <select
                   value={selectedKitId}
                   onChange={(e) => applySelectedKit(e.target.value)}
                   className="border border-blue-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                 >
-                  <option value="">— Selecione um kit cadastrado —</option>
+                  <option value="">— Selecione um kit para preencher automaticamente —</option>
                   {solarKits.map(kit => (
                     <option key={kit.id} value={kit.id}>
-                      {isAdminOrCeo 
-                        ? `${kit.potencia_kwh} kWh · ${kit.marca_modulo} · ${kit.marca_inversor} · R$ ${(kit.valor_total * (1 + kit.margem_venda / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                        : `Kit ${kit.potencia_kwh} kWh`}
+                      {`${kit.potencia_kwh} kWh · ${kit.marca_modulo} · ${kit.marca_inversor} · R$ ${(kit.valor_total * (1 + kit.margem_venda / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-blue-600 mt-1">Ao selecionar, os campos técnicos serão preenchidos automaticamente.</p>
+                <p className="text-xs text-blue-600 mt-1">Ao selecionar, os campos abaixo serão preenchidos automaticamente. Você pode editar livremente depois.</p>
               </div>
             )}
-
 
             {isAdminOrCeo ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2809,23 +2806,60 @@ export default function ProposalGenerator() {
                 </div>
               </div>
             ) : (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
-                <div className="flex justify-between items-center border-b pb-2">
-                  <span className="text-sm text-gray-500">Valor Final de Venda</span>
-                  <span className="text-lg font-bold text-blue-900">
-                    {formData.kitCost ? `R$ ${parseFloat(formData.kitCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-xs text-gray-500 block">Potência</span>
-                    <span className="text-sm font-bold text-gray-800">{formData.kitPower ? `${formData.kitPower} kWp` : '—'}</span>
+              /* VENDEDOR: seleção obrigatória de kit cadastrado — sem exibir custos ou valores */
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <label className="text-sm font-bold text-blue-900 block mb-2">
+                  ⚡ Selecionar Kit Cadastrado *
+                </label>
+                {loadingKits ? (
+                  <p className="text-sm text-blue-600 italic">Carregando kits disponíveis...</p>
+                ) : solarKits.length === 0 ? (
+                  <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3">
+                    <p className="text-sm text-yellow-800 font-medium">Nenhum kit disponível no momento.</p>
+                    <p className="text-xs text-yellow-700 mt-1">Entre em contato com o ADM ou CEO para cadastrar os kits solares.</p>
                   </div>
-                  <div>
-                    <span className="text-xs text-gray-500 block">Descrição</span>
-                    <span className="text-sm font-bold text-gray-800 line-clamp-2">{formData.kitName || '—'}</span>
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <select
+                      value={selectedKitId}
+                      onChange={(e) => applySelectedKit(e.target.value)}
+                      className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white ${
+                        !selectedKitId ? 'border-red-400 ring-1 ring-red-300' : 'border-blue-300'
+                      }`}
+                    >
+                      <option value="">— Selecione um kit —</option>
+                      {solarKits.map(kit => (
+                        <option key={kit.id} value={kit.id}>
+                          Kit {kit.potencia_kwh} kWh
+                        </option>
+                      ))}
+                    </select>
+                    {!selectedKitId && (
+                      <p className="text-xs text-red-500 mt-1 font-medium">⚠️ Obrigatório. Selecione um kit para gerar a proposta.</p>
+                    )}
+                    {selectedKitId && (
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <div>
+                          <span className="text-xs text-blue-600 block">Potência</span>
+                          <span className="text-sm font-bold text-blue-900">{formData.kitPower ? `${formData.kitPower} kWp` : '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-xs text-blue-600 block">Módulo</span>
+                          <span className="text-sm font-bold text-blue-900">{formData.moduleModel || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-xs text-blue-600 block">Inversor</span>
+                          <span className="text-sm font-bold text-blue-900">{formData.inverterBrand || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-xs text-blue-600 block">Qtd. Módulos</span>
+                          <span className="text-sm font-bold text-blue-900">{formData.moduleQty || '—'}</span>
+                        </div>
+                      </div>
+                    )}
+                    <p className="text-xs text-blue-600 mt-2">Ao selecionar, os dados técnicos da proposta são preenchidos automaticamente.</p>
+                  </>
+                )}
               </div>
             )}
             

@@ -25,7 +25,8 @@ import {
   ClipboardList,
   Zap,
   FileCheck,
-  Clock
+  Clock,
+  Table
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
@@ -107,6 +108,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: 'Dashboard', path: '/', icon: LayoutDashboard, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Comercial', path: '/commercial', icon: Briefcase, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Atendimento', path: '/whatsapp', icon: MessageCircle, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
+    { name: 'Reg. Atendimentos', path: '/registro-atendimentos', icon: Table, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Agenda', path: '/agenda', icon: Calendar, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Cronograma', path: '/cronograma', icon: Calendar, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Protocolos Neoenergia', path: '/neoenergia', icon: ClipboardList, roles: ['CEO', 'ADMIN'] },
@@ -131,7 +133,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     const hasRole = !item.roles || item.roles.includes(user?.role || '');
     if (isCommercial) {
       // Vendedor: Dashboard, Comercial, Atendimento, Agenda, Gerador de Proposta, Calculadora, Ponto Eletrônico e Técnica
-      const allowedPaths = ['/', '/whatsapp', '/agenda', '/proposal-generator', '/calculadora', '/ponto', '/commercial', '/technical'];
+      const allowedPaths = ['/', '/whatsapp', '/registro-atendimentos', '/agenda', '/proposal-generator', '/calculadora', '/ponto', '/commercial', '/technical'];
       return allowedPaths.includes(item.path);
     }
     return hasRole;

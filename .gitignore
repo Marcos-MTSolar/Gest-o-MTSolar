@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Pasta de scripts temporários do Antigravity
+scratch/

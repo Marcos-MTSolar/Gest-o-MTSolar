@@ -29,7 +29,8 @@ import {
   FileText,
   Download,
   Trash2,
-  File as FileIcon
+  File as FileIcon,
+  Info
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
@@ -48,6 +49,13 @@ interface Message {
   media_url?: string | null;
   file_name?: string | null;
   file_size?: number | null;
+}
+
+interface WhatsAppObservation {
+  id: string;
+  user_name: string;
+  observation: string;
+  created_at: string;
 }
 
 interface Conversation {
@@ -115,6 +123,12 @@ export default function WhatsApp() {
   const isAgent = isAdmin || user?.role?.toUpperCase() === 'COMMERCIAL';
   const isCommercial = user?.role?.toUpperCase() === 'COMMERCIAL';
   const [activeInstance, setActiveInstance] = useState<'admin' | 'atendimento'>('atendimento');
+  
+  // Observações
+  const [observations, setObservations] = useState<WhatsAppObservation[]>([]);
+  const [newObservation, setNewObservation] = useState('');
+  const [loadingObservations, setLoadingObservations] = useState(false);
+  const [showObservationsModal, setShowObservationsModal] = useState(false);
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [isLocked, setIsLocked] = useState(false);
   const [lockedByName, setLockedByName] = useState('');
@@ -143,8 +157,10 @@ export default function WhatsApp() {
   useEffect(() => {
     if (selectedConversation) {
       setShowChat(true);
+      fetchObservations();
     } else {
       setShowChat(false);
+      setObservations([]);
     }
   }, [selectedConversation?.id]);
 
@@ -238,6 +254,33 @@ export default function WhatsApp() {
       // Tolerância de 50px do fim
       const isAtBottom = scrollHeight - scrollTop - clientHeight <= 50;
       shouldAutoScrollRef.current = isAtBottom;
+    }
+  };
+
+  const fetchObservations = async () => {
+    if (!selectedConversation) return;
+    setLoadingObservations(true);
+    try {
+      const { data } = await api.get(`/api/conversations/${selectedConversation.id}/observations`);
+      setObservations(data || []);
+    } catch (err) {
+      console.error("Erro ao carregar observações:", err);
+    } finally {
+      setLoadingObservations(false);
+    }
+  };
+
+  const handleAddObservation = async () => {
+    if (!selectedConversation || !newObservation.trim()) return;
+    try {
+      const { data } = await api.post(`/api/conversations/${selectedConversation.id}/observations`, {
+        observation: newObservation
+      });
+      setObservations([data, ...observations]);
+      setNewObservation('');
+    } catch (err) {
+      console.error("Erro ao salvar observação:", err);
+      alert("Falha ao salvar observação.");
     }
   };
 
@@ -728,6 +771,45 @@ export default function WhatsApp() {
     );
   };
 
+  const renderObservationsPanel = () => (
+    <div className="pt-6 border-t border-gray-100">
+      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Observações do Atendimento</label>
+      <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100 space-y-3 mb-4">
+        <textarea 
+          value={newObservation}
+          onChange={(e) => setNewObservation(e.target.value)}
+          placeholder="Adicione uma observação sobre este cliente..."
+          className="w-full text-xs border border-blue-200 rounded-lg p-2 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[60px] custom-scrollbar bg-white"
+        />
+        <button 
+          onClick={handleAddObservation}
+          disabled={!newObservation.trim() || loadingObservations}
+          className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50"
+        >
+          Adicionar Nota
+        </button>
+      </div>
+      
+      <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
+        {loadingObservations ? (
+          <p className="text-xs text-gray-500 text-center py-2">Carregando...</p>
+        ) : observations.length === 0 ? (
+          <p className="text-[10px] text-gray-400 text-center italic">Nenhuma observação registrada.</p>
+        ) : (
+          observations.map(obs => (
+            <div key={obs.id} className="p-3 bg-gray-50 border border-gray-100 rounded-lg relative group">
+              <div className="flex justify-between items-start mb-1 gap-2">
+                <span className="text-[10px] font-bold text-gray-700">{obs.user_name}</span>
+                <span className="text-[9px] text-gray-400 whitespace-nowrap">{format(new Date(obs.created_at), 'dd/MM HH:mm')}</span>
+              </div>
+              <p className="text-xs text-gray-600 whitespace-pre-wrap">{obs.observation}</p>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex h-[calc(100vh-140px)] lg:h-[calc(100vh-140px)] w-full max-w-full overflow-hidden bg-white lg:rounded-2xl lg:shadow-xl lg:border border-gray-200">
       <>
@@ -880,6 +962,16 @@ export default function WhatsApp() {
                       <Phone size={10} /> {selectedConversation.phone}
                     </p>
                   </div>
+                </div>
+
+                <div className="flex lg:hidden items-center ml-auto">
+                  <button 
+                    onClick={() => setShowObservationsModal(true)}
+                    className="p-2 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                    title="Ver Detalhes e Observações"
+                  >
+                    <Info size={18} />
+                  </button>
                 </div>
 
                 {/* Ações Desktop */}
@@ -1278,6 +1370,8 @@ export default function WhatsApp() {
               </div>
             )}
 
+            {renderObservationsPanel()}
+
             <div className="space-y-2 pt-4">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Ações</label>
               
@@ -1526,6 +1620,26 @@ export default function WhatsApp() {
         </div>
       )}
       </>
+
+      {/* Modal de Detalhes e Observações (Mobile) */}
+      {showObservationsModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end justify-center z-[60] lg:hidden">
+          <div className="bg-white w-full max-h-[85vh] rounded-t-2xl shadow-2xl flex flex-col animate-in slide-in-from-bottom duration-300">
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl sticky top-0 z-10">
+              <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
+                <Info size={20} className="text-blue-600" />
+                Detalhes do Atendimento
+              </h3>
+              <button onClick={() => setShowObservationsModal(false)} className="text-gray-400 hover:text-gray-600 bg-white p-1 rounded-full shadow-sm">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto custom-scrollbar flex-1 pb-8">
+              {renderObservationsPanel()}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

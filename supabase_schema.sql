@@ -149,6 +149,39 @@ CREATE TABLE IF NOT EXISTS events (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Solar Kits (Kits Solares pré-cadastrados por empresa)
+-- Gerenciados apenas por CEO e ADM; VENDEDOR só faz SELECT em kits ativos
+CREATE TABLE IF NOT EXISTS solar_kits (
+  id                             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_id                     INTEGER NOT NULL,
+  potencia_kwh                   NUMERIC(10,3) NOT NULL DEFAULT 0,
+  valor_total                    NUMERIC(12,2) NOT NULL DEFAULT 0,
+  margem_venda                   NUMERIC(5,2)  NOT NULL DEFAULT 30,
+  quantidade_modulos             INTEGER       NOT NULL DEFAULT 0,
+  potencia_modulo_w              NUMERIC(10,2) NOT NULL DEFAULT 0,
+  marca_modulo                   TEXT          NOT NULL DEFAULT '',
+  quantidade_inversores          INTEGER       NOT NULL DEFAULT 1,
+  potencia_inversor_kw           NUMERIC(10,3) NOT NULL DEFAULT 0,
+  marca_inversor                 TEXT          NOT NULL DEFAULT '',
+  inversor_ampliacao             BOOLEAN       NOT NULL DEFAULT FALSE,
+  potencia_inversor_ampliacao_kw NUMERIC(10,3) DEFAULT NULL,
+  marca_inversor_ampliacao       TEXT          DEFAULT NULL,
+  ativo                          BOOLEAN       NOT NULL DEFAULT TRUE,
+  created_at                     TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  updated_at                     TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+-- Observações de Atendimento do WhatsApp (Histórico)
+CREATE TABLE IF NOT EXISTS whatsapp_observations (
+  id                             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id                     INTEGER NOT NULL,
+  conversation_id                UUID NOT NULL REFERENCES public.whatsapp_conversations(id) ON DELETE CASCADE,
+  user_id                        INTEGER NOT NULL,
+  user_name                      TEXT NOT NULL,
+  observation                    TEXT NOT NULL,
+  created_at                     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Seed CEO User (password: admin123)
 INSERT INTO users (name, email, password_hash, role)
 SELECT 'CEO User', 'ceo@mtsolar.com', '$2a$10$X7V.j5t5v5.5.5.5.5.5.5', 'CEO'

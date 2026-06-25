@@ -33,6 +33,7 @@ const Stock = lazy(() => import('./pages/Stock'));
 const ProposalGenerator = lazy(() => import('./pages/ProposalGenerator'));
 const Contracts = lazy(() => import('./pages/Contracts'));
 const WhatsApp = lazy(() => import('./pages/WhatsApp'));
+const AttendanceRegistry = lazy(() => import('./pages/AttendanceRegistry'));
 const NeoenergiaProtocols = lazy(() => import('./pages/NeoenergiaProtocols'));
 const EnergyCalculator = lazy(() => import('./pages/EnergyCalculator'));
 const ObraSchedule = lazy(() => import('./pages/ObraSchedule'));
@@ -48,7 +49,7 @@ function PrivateRoute({ children, roles }: { children: React.ReactNode, roles?: 
   // Se for VENDEDOR (COMMERCIAL), acesso restrito a Dashboard, WhatsApp, Agenda, Proposta, Ponto, Comercial e Técnica
   const isCommercial = user.role.toUpperCase() === 'COMMERCIAL';
   const currentPath = window.location.pathname;
-  const allowedCommercialPaths = ['/', '/whatsapp', '/agenda', '/proposal-generator', '/calculadora', '/ponto', '/commercial', '/technical'];
+  const allowedCommercialPaths = ['/', '/whatsapp', '/registro-atendimentos', '/agenda', '/proposal-generator', '/calculadora', '/ponto', '/commercial', '/technical'];
   
   if (isCommercial && !allowedCommercialPaths.includes(currentPath)) {
     return <Navigate to="/" />;
@@ -171,6 +172,12 @@ export default function App() {
               <Route path="/whatsapp" element={
                 <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
                   <WhatsApp />
+                </PrivateRoute>
+              } />
+
+              <Route path="/registro-atendimentos" element={
+                <PrivateRoute roles={['CEO', 'ADMIN', 'COMMERCIAL']}>
+                  <AttendanceRegistry />
                 </PrivateRoute>
               } />
 

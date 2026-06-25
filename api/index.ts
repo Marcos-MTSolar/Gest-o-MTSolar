@@ -1483,6 +1483,49 @@ app.post('/api/messages', authenticateToken, async (req: any, res) => {
   res.json(payload);
 });
 
+app.get('/api/attendance-registry', authenticateToken, async (req: any, res) => {
+  try {
+    let query = supabase
+      .from('whatsapp_conversations')
+      .select(`
+        id,
+        contact_name,
+        phone,
+        tags,
+        last_message_at,
+        assigned_to,
+        assigned_name,
+        status,
+        whatsapp_observations (
+          user_name,
+          observation,
+          created_at
+        )
+      `)
+      .in('status', ['waiting', 'in_progress'])
+      .eq('company_id', req.user.company_id)
+      .order('created_at', { foreignTable: 'whatsapp_observations', ascending: false })
+      .limit(1, { foreignTable: 'whatsapp_observations' });
+
+    // Isolamento para o Vendedor
+    if (req.user.role === 'COMMERCIAL') {
+      query = query.eq('assigned_to', req.user.id);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Erro ao buscar registro de atendimentos:', error);
+      return res.status(500).json({ error: 'Erro ao buscar registro de atendimentos' });
+    }
+
+    return res.json(data);
+  } catch (err) {
+    console.error('Exceção ao buscar registro de atendimentos:', err);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
 // WhatsApp Conversations
 app.get('/api/conversations', authenticateToken, async (req: any, res) => {
   const { instance } = req.query;
@@ -1553,6 +1596,62 @@ app.put('/api/conversations/:id/tag', authenticateToken, async (req: any, res) =
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
+});
+
+// WhatsApp - Listar Observações
+app.get('/api/conversations/:id/observations', authenticateToken, async (req: any, res) => {
+  const conversationId = req.params.id;
+  const companyId = req.user.company_id;
+
+  const { data, error } = await supabase
+    .from('whatsapp_observations')
+    .select('*')
+    .eq('conversation_id', conversationId)
+    .eq('company_id', companyId)
+    .order('created_at', { ascending: false });
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// WhatsApp - Adicionar Observação
+app.post('/api/conversations/:id/observations', authenticateToken, async (req: any, res) => {
+  const conversationId = req.params.id;
+  const companyId = req.user.company_id;
+  const userId = req.user.id;
+  const userName = req.user.name || 'Usuário Desconhecido';
+  const { observation } = req.body;
+
+  if (!observation || observation.trim() === '') {
+    return res.status(400).json({ error: 'A observação não pode estar vazia.' });
+  }
+
+  // Verifica se a conversa pertence à empresa
+  const { data: conv, error: convError } = await supabase
+    .from('whatsapp_conversations')
+    .select('id')
+    .eq('id', conversationId)
+    .eq('company_id', companyId)
+    .single();
+
+  if (convError || !conv) {
+    return res.status(404).json({ error: 'Conversa não encontrada.' });
+  }
+
+  const { data, error } = await supabase
+    .from('whatsapp_observations')
+    .insert({
+      company_id: companyId,
+      conversation_id: conversationId,
+      user_id: userId,
+      user_name: userName,
+      observation: observation.trim()
+    })
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
 });
 
 // Helper para resolver a instância WhatsApp e as credenciais do tenant autenticado
