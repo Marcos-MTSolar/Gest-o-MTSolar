@@ -38,7 +38,8 @@ type TabType = 'dados' | 'kit' | 'calculo' | 'financiamento' | 'servicos' | 'his
 
 interface SolarKit {
   id: string;
-  potencia_kwh: number;
+  potencia_kwp: number;
+  consumo_referencia_kwh?: number | null;
   valor_total: number;
   margem_venda: number;
   quantidade_modulos: number;
@@ -174,7 +175,8 @@ const TABELA_BANCOS = [
 
 
 const EMPTY_KIT: Omit<SolarKit, 'id' | 'ativo'> = {
-  potencia_kwh: 0,
+  potencia_kwp: 0,
+  consumo_referencia_kwh: null,
   valor_total: 0,
   margem_venda: 30,
   quantidade_modulos: 0,
@@ -335,7 +337,8 @@ export default function ProposalGenerator() {
   const openEditKitModal = (kit: SolarKit) => {
     setEditingKit(kit);
     setKitForm({
-      potencia_kwh: kit.potencia_kwh,
+      potencia_kwp: kit.potencia_kwp,
+      consumo_referencia_kwh: kit.consumo_referencia_kwh ?? null,
       valor_total: kit.valor_total,
       margem_venda: kit.margem_venda,
       quantidade_modulos: kit.quantidade_modulos,
@@ -389,7 +392,7 @@ export default function ProposalGenerator() {
       ...prev,
       kitCost: precoVenda.toFixed(2),
       marginPercent: '0', // margem já embutida no preço
-      kitPower: kit.potencia_kwh.toString(),
+      kitPower: kit.potencia_kwp.toString(),
       moduleModel: kit.marca_modulo,
       modulePower: kit.potencia_modulo_w.toString(),
       moduleQty: kit.quantidade_modulos.toString(),
@@ -2922,7 +2925,10 @@ export default function ProposalGenerator() {
                   <option value="">— Selecione um kit para preencher automaticamente —</option>
                   {solarKits.map(kit => (
                     <option key={kit.id} value={kit.id}>
-                      {`${kit.potencia_kwh} kWh · ${kit.marca_modulo} · ${kit.marca_inversor} · R$ ${(kit.valor_total * (1 + kit.margem_venda / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                      {kit.consumo_referencia_kwh
+                        ? `${kit.potencia_kwp} kWp (≈${kit.consumo_referencia_kwh} kWh/mês) · ${kit.marca_modulo} · ${kit.marca_inversor} · R$ ${(kit.valor_total * (1 + kit.margem_venda / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                        : `${kit.potencia_kwp} kWp · ${kit.marca_modulo} · ${kit.marca_inversor} · R$ ${(kit.valor_total * (1 + kit.margem_venda / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                      }
                     </option>
                   ))}
                 </select>
@@ -2993,7 +2999,10 @@ export default function ProposalGenerator() {
                       <option value="">— Selecione um kit —</option>
                       {solarKits.map(kit => (
                         <option key={kit.id} value={kit.id}>
-                          Kit {kit.potencia_kwh} kWh
+                          {kit.consumo_referencia_kwh
+                            ? `Kit ${kit.potencia_kwp} kWp — ≈${kit.consumo_referencia_kwh} kWh/mês`
+                            : `Kit ${kit.potencia_kwp} kWp`
+                          }
                         </option>
                       ))}
                     </select>
@@ -3938,7 +3947,8 @@ export default function ProposalGenerator() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-blue-900 text-white">
-                      <th className="px-4 py-3 text-left">Potência</th>
+                      <th className="px-4 py-3 text-left">Potência (kWp)</th>
+                      <th className="px-4 py-3 text-left">Ref. Consumo</th>
                       <th className="px-4 py-3 text-left">Módulos</th>
                       <th className="px-4 py-3 text-left">Marca Módulo</th>
                       <th className="px-4 py-3 text-left">Inversores</th>
@@ -3953,7 +3963,8 @@ export default function ProposalGenerator() {
                   <tbody className="divide-y divide-gray-100">
                     {solarKits.map(kit => (
                       <tr key={kit.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3 font-bold text-blue-900">{kit.potencia_kwh} kWh</td>
+                        <td className="px-4 py-3 font-bold text-blue-900">{kit.potencia_kwp} kWp</td>
+                        <td className="px-4 py-3 text-gray-600 text-xs">{kit.consumo_referencia_kwh ? `${kit.consumo_referencia_kwh} kWh/mês` : '—'}</td>
                         <td className="px-4 py-3">{kit.quantidade_modulos}×{kit.potencia_modulo_w}W</td>
                         <td className="px-4 py-3">{kit.marca_modulo}</td>
                         <td className="px-4 py-3">{kit.quantidade_inversores}×{kit.potencia_inversor_kw}kW</td>
@@ -3996,8 +4007,13 @@ export default function ProposalGenerator() {
             </div>
             <div className="p-6 space-y-5">
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1"><label className="text-sm font-medium text-gray-700">Potência (kWh) *</label>
-                  <input type="number" min="0" step="0.1" value={kitForm.potencia_kwh} onChange={e => setKitForm(p => ({...p, potencia_kwh: parseFloat(e.target.value)||0}))} className={inputStyle} placeholder="Ex: 5.5" /></div>
+                <div className="space-y-1"><label className="text-sm font-medium text-gray-700">Potência do Sistema (kWp) *</label>
+                  <input type="number" min="0" step="0.1" value={kitForm.potencia_kwp} onChange={e => setKitForm(p => ({...p, potencia_kwp: parseFloat(e.target.value)||0}))} className={inputStyle} placeholder="Ex: 5.5" /></div>
+                <div className="space-y-1 col-span-2">
+                  <label className="text-sm font-medium text-gray-700">Consumo de Referência (kWh/mês)</label>
+                  <input type="number" min="0" step="1" value={kitForm.consumo_referencia_kwh ?? ''} onChange={e => setKitForm(p => ({...p, consumo_referencia_kwh: e.target.value !== '' ? parseFloat(e.target.value) : null}))} className={inputStyle} placeholder="Ex: 500 — consumo mensal que este kit atende" />
+                  <p className="text-xs text-gray-400 mt-1">Indica a faixa de consumo mensal para a qual este kit é dimensionado</p>
+                </div>
                 <div className="space-y-1"><label className="text-sm font-medium text-gray-700">Custo Real (R$) *</label>
                   <input type="number" min="0" value={kitForm.valor_total} onChange={e => setKitForm(p => ({...p, valor_total: parseFloat(e.target.value)||0}))} className={inputStyle} placeholder="Ex: 12000" /></div>
                 <div className="space-y-1"><label className="text-sm font-medium text-gray-700">Margem de Venda (%) *</label>

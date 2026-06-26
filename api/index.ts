@@ -4088,10 +4088,10 @@ app.get('/api/solar-kits', authenticateToken, async (req: any, res) => {
 
     const { data, error } = await supabase
       .from('solar_kits')
-      .select('*')
+      .select('id, potencia_kwp, consumo_referencia_kwh, valor_total, margem_venda, quantidade_modulos, potencia_modulo_w, marca_modulo, quantidade_inversores, potencia_inversor_kw, marca_inversor, inversor_ampliacao, potencia_inversor_ampliacao_kw, marca_inversor_ampliacao, ativo, created_at, updated_at, company_id')
       .eq('company_id', req.user.company_id)
       .eq('ativo', true)
-      .order('potencia_kwh', { ascending: true });
+      .order('potencia_kwp', { ascending: true });
     
     if (error) {
       console.error('[solar-kits GET] Erro detalhado Supabase:', JSON.stringify({
@@ -4112,7 +4112,37 @@ app.get('/api/solar-kits', authenticateToken, async (req: any, res) => {
 
 app.post('/api/solar-kits', authenticateToken, requireAdminOrCEO, async (req: any, res) => {
   try {
-    const payload = { ...req.body, company_id: req.user.company_id };
+    const {
+      potencia_kwp,
+      consumo_referencia_kwh = null,
+      valor_total,
+      margem_venda,
+      quantidade_modulos,
+      potencia_modulo_w,
+      marca_modulo,
+      quantidade_inversores,
+      potencia_inversor_kw,
+      marca_inversor,
+      inversor_ampliacao,
+      potencia_inversor_ampliacao_kw,
+      marca_inversor_ampliacao
+    } = req.body;
+    const payload = {
+      potencia_kwp,
+      consumo_referencia_kwh,
+      valor_total,
+      margem_venda,
+      quantidade_modulos,
+      potencia_modulo_w,
+      marca_modulo,
+      quantidade_inversores,
+      potencia_inversor_kw,
+      marca_inversor,
+      inversor_ampliacao,
+      potencia_inversor_ampliacao_kw,
+      marca_inversor_ampliacao,
+      company_id: req.user.company_id
+    };
     const { data, error } = await supabase.from('solar_kits').insert([payload]).select().single();
     if (error) throw error;
     res.json(data);
@@ -4124,9 +4154,39 @@ app.post('/api/solar-kits', authenticateToken, requireAdminOrCEO, async (req: an
 app.put('/api/solar-kits/:id', authenticateToken, requireAdminOrCEO, async (req: any, res) => {
   try {
     const { id } = req.params;
+    const {
+      potencia_kwp,
+      consumo_referencia_kwh = null,
+      valor_total,
+      margem_venda,
+      quantidade_modulos,
+      potencia_modulo_w,
+      marca_modulo,
+      quantidade_inversores,
+      potencia_inversor_kw,
+      marca_inversor,
+      inversor_ampliacao,
+      potencia_inversor_ampliacao_kw,
+      marca_inversor_ampliacao
+    } = req.body;
+    const updatePayload = {
+      potencia_kwp,
+      consumo_referencia_kwh,
+      valor_total,
+      margem_venda,
+      quantidade_modulos,
+      potencia_modulo_w,
+      marca_modulo,
+      quantidade_inversores,
+      potencia_inversor_kw,
+      marca_inversor,
+      inversor_ampliacao,
+      potencia_inversor_ampliacao_kw,
+      marca_inversor_ampliacao
+    };
     const { data, error } = await supabase
       .from('solar_kits')
-      .update(req.body)
+      .update(updatePayload)
       .eq('id', id)
       .eq('company_id', req.user.company_id)
       .select()

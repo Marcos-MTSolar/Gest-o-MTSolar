@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS public.solar_kits (
   company_id                     UUID NOT NULL,
 
   -- Dados gerais do kit
-  potencia_kwh                   NUMERIC(10, 3) NOT NULL DEFAULT 0,
+  potencia_kwp              NUMERIC(10, 3) NOT NULL DEFAULT 0,
+  consumo_referencia_kwh    NUMERIC(10,2)           DEFAULT NULL,
   valor_total                    NUMERIC(12, 2) NOT NULL DEFAULT 0,
   margem_venda                   NUMERIC(5, 2)  NOT NULL DEFAULT 30,
 
@@ -46,7 +47,7 @@ CREATE TABLE IF NOT EXISTS public.solar_kits (
 -- Índices para performance nas queries mais frequentes
 CREATE INDEX IF NOT EXISTS idx_solar_kits_company_id ON public.solar_kits (company_id);
 CREATE INDEX IF NOT EXISTS idx_solar_kits_company_ativo ON public.solar_kits (company_id, ativo);
-CREATE INDEX IF NOT EXISTS idx_solar_kits_potencia ON public.solar_kits (potencia_kwh);
+CREATE INDEX IF NOT EXISTS idx_solar_kits_potencia ON public.solar_kits (potencia_kwp);
 
 -- Habilita Row Level Security
 ALTER TABLE public.solar_kits ENABLE ROW LEVEL SECURITY;

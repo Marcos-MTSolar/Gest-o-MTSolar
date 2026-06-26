@@ -1,6 +1,14 @@
-﻿# RESUMO MESTRE Ã¢â‚¬â€ GESTÃƒÆ’O MTSOLAR
+# RESUMO MESTRE Ã¢â‚¬â€ GESTÃƒÆ’O MTSOLAR
 
 Este documento consolida a anÃƒÂ¡lise detalhada e atualizada da arquitetura, stack de tecnologias, estrutura do banco de dados, regras de negÃƒÂ³cio e integraÃƒÂ§ÃƒÂµes do sistema **GestÃƒÂ£o MTSolar**, servindo como a principal fonte de verdade tÃƒÂ©cnica do projeto.
+
+* **Atualização do Schema solar_kits — potencia_kwh → potencia_kwp + consumo_referencia_kwh:**
+  * *O que foi feito:* Refletidas no código as alterações já executadas no banco Supabase via `ALTER TABLE`. A coluna `potencia_kwh` foi renomeada para `potencia_kwp` (kWp é a unidade correta para painéis fotovoltaicos) e a nova coluna opcional `consumo_referencia_kwh` (NUMERIC 10,2) foi adicionada para indicar a faixa de consumo mensal que o kit dimensiona. As seguintes mudanças foram aplicadas:
+    * **`api/index.ts`:** GET `/api/solar-kits` — `order by` atualizado para `potencia_kwp` e `select` explícito com `consumo_referencia_kwh`; POST e PUT — desestruturação de `req.body` com `potencia_kwp` e `consumo_referencia_kwh = null`; payload de INSERT/UPDATE enviado ao Supabase atualizado.
+    * **`src/pages/ProposalGenerator.tsx`:** Interface `SolarKit` e constante `EMPTY_KIT` atualizadas; `openEditKitModal` e `applySelectedKit` usam `potencia_kwp`; dropdowns de CEO/ADM e VENDEDOR exibem `kWp` e, quando preenchido, o consumo de referência; tabela de kits tem coluna "Potência (kWp)" + nova coluna "Ref. Consumo"; modal de Adicionar/Editar Kit tem label e campo `potencia_kwp` + novo campo opcional `consumo_referencia_kwh`.
+    * **`supabase/migrations/20260625_create_solar_kits.sql`:** DDL atualizado para documentação — coluna renomeada e nova coluna adicionada; índice `idx_solar_kits_potencia` aponta para `potencia_kwp`.
+  * *Data e hora da alteração:* 26/06/2026 às 11:55 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/ProposalGenerator.tsx`, `supabase/migrations/20260625_create_solar_kits.sql`
 
 * **Correcao 6 - Orientacao EXIF e prioridade de leitura de equipamentos:**
   * *O que foi feito:*
