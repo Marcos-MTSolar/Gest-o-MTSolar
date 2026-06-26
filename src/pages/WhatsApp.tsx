@@ -1622,9 +1622,10 @@ export default function WhatsApp() {
       </>
 
       {/* Modal de Detalhes e Observações (Mobile) */}
-      {showObservationsModal && (
+      {showObservationsModal && selectedConversation && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end justify-center z-[60] lg:hidden">
-          <div className="bg-white w-full max-h-[85vh] rounded-t-2xl shadow-2xl flex flex-col animate-in slide-in-from-bottom duration-300">
+          <div className="bg-white w-full max-h-[90vh] rounded-t-2xl shadow-2xl flex flex-col animate-in slide-in-from-bottom duration-300">
+            {/* Cabeçalho fixo do modal */}
             <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl sticky top-0 z-10">
               <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
                 <Info size={20} className="text-blue-600" />
@@ -1634,8 +1635,116 @@ export default function WhatsApp() {
                 <X size={24} />
               </button>
             </div>
-            <div className="p-4 overflow-y-auto custom-scrollbar flex-1 pb-8">
-              {renderObservationsPanel()}
+
+            <div className="overflow-y-auto custom-scrollbar flex-1 pb-8">
+
+              {/* Bloco: Info do Contato */}
+              <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 flex-shrink-0">
+                  <User size={22} />
+                </div>
+                <div>
+                  <p className="font-bold text-gray-800">{selectedConversation.contact_name || selectedConversation.phone}</p>
+                  <p className="text-xs text-gray-400">{selectedConversation.phone}</p>
+                  <span className={cn(
+                    "inline-block mt-1 text-[9px] font-bold uppercase px-2 py-0.5 rounded",
+                    selectedConversation.status === 'waiting' ? "bg-amber-100 text-amber-700" :
+                    selectedConversation.status === 'in_progress' ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
+                  )}>
+                    {selectedConversation.status === 'waiting' ? "Aguardando" :
+                     selectedConversation.status === 'in_progress' ? "Em Atendimento" : "Encerrado"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Bloco: Etiquetas */}
+              <div className="p-4 border-b border-gray-100">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 block">Etiquetas</label>
+                <div className="flex flex-wrap gap-2">
+                  {WHATSAPP_TAGS.map(tag => {
+                    const isSelected = (selectedConversation.tags ?? []).includes(tag.id);
+                    return (
+                      <button
+                        key={tag.id}
+                        onClick={() => updateTag(tag.id)}
+                        className={cn(
+                          "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all",
+                          isSelected ? "text-white border-transparent" : "bg-white text-gray-500 border-gray-200"
+                        )}
+                        style={{ backgroundColor: isSelected ? tag.color : undefined, borderColor: isSelected ? 'transparent' : undefined }}
+                      >
+                        {isSelected && <Check size={10} />}
+                        {tag.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Bloco: Ações do Ticket */}
+              <div className="p-4 border-b border-gray-100 space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Ações</label>
+
+                {selectedConversation.status === 'waiting' && (
+                  <button
+                    onClick={() => { assumeConversation(selectedConversation); setShowObservationsModal(false); }}
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all"
+                  >
+                    <UserPlus size={16} /> Assumir Atendimento
+                  </button>
+                )}
+
+                {selectedConversation.status === 'in_progress' && (Number(selectedConversation.assigned_to) === Number(user?.id) || isAdmin) && (
+                  <>
+                    <button
+                      onClick={() => { setShowObservationsModal(false); setShowTransferModal(true); }}
+                      className="w-full flex items-center justify-center gap-2 py-3 bg-gray-100 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-200 transition-all"
+                    >
+                      <RefreshCcw size={16} /> Transferir para Agente
+                    </button>
+
+                    {selectedConversation.instance === 'atendimento-cliente' && isAdmin && (
+                      <button
+                        onClick={() => { setShowObservationsModal(false); setShowTransferInstanceModal(true); }}
+                        className="w-full flex items-center justify-center gap-2 py-3 bg-blue-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-all"
+                      >
+                        <RefreshCcw size={16} /> Transferir para Administrativo
+                      </button>
+                    )}
+
+                    {selectedConversation.instance !== 'atendimento-cliente' && isAdmin && (
+                      <button
+                        onClick={() => { setShowObservationsModal(false); setShowTransferToAtendimentoModal(true); }}
+                        className="w-full flex items-center justify-center gap-2 py-3 bg-green-700 text-white rounded-xl text-sm font-bold hover:bg-green-800 transition-all"
+                      >
+                        <RefreshCcw size={16} /> Transferir para Atendimento
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => { setShowObservationsModal(false); closeConversation(); }}
+                      className="w-full flex items-center justify-center gap-2 py-3 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-all"
+                    >
+                      <CheckCircle2 size={16} /> Encerrar Atendimento
+                    </button>
+                  </>
+                )}
+
+                {selectedConversation.status === 'closed' && (
+                  <button
+                    onClick={() => { setShowObservationsModal(false); reopenConversation(); }}
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-amber-500 text-white rounded-xl text-sm font-bold hover:bg-amber-600 transition-all"
+                  >
+                    <RefreshCcw size={16} /> Reabrir Atendimento
+                  </button>
+                )}
+              </div>
+
+              {/* Bloco: Observações */}
+              <div className="p-4">
+                {renderObservationsPanel()}
+              </div>
+
             </div>
           </div>
         </div>

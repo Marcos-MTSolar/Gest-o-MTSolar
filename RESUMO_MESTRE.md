@@ -555,6 +555,11 @@ O fluxo de processamento de mÃƒÂ­dias foi otimizado para evitar expiraÃƒÂ
 
 
 
+
+* **Etiquetas, Transferir e Encerrar no Mobile â€” Modal de Detalhes (WhatsApp.tsx):**
+  * *O que foi feito:* O modal `showObservationsModal` (aberto pelo botÃ£o Info no mobile) continha apenas o bloco de ObservaÃ§Ãµes. Expandido para funcionar como um painel completo de atendimento no mobile, incluindo: (1) Card de info do contato com status; (2) Bloco de **Etiquetas** com seleÃ§Ã£o mÃºltipla por toque; (3) Bloco de **AÃ§Ãµes** com todos os botÃµes contextuais (Assumir / Transferir para Agente / Transferir para Administrativo / Transferir para Atendimento / Encerrar / Reabrir) respeitando o status da conversa e o role do usuÃ¡rio; (4) Bloco de **ObservaÃ§Ãµes**. Cada aÃ§Ã£o do bloco AÃ§Ãµes fecha o modal antes de executar para evitar sobreposiÃ§Ã£o de camadas.
+  * *Data e hora da alteraÃ§Ã£o:* 26/06/2026 Ã s 10:56 (HorÃ¡rio Local)
+  * *Arquivos modificados:* `src/pages/WhatsApp.tsx`
 * **CorreÃ§Ã£o do Download de PDF em Dispositivos MÃ³veis (Capacitor):**
   * *O que foi feito:* Instalados os plugins `@capacitor/filesystem` e `@capacitor/share`. Refatorada a funÃ§Ã£o `generatePDF` em `ProposalGenerator.tsx` para detectar se o app estÃ¡ rodando como nativo (`Capacitor.isNativePlatform()`). No mobile, o PDF Ã© gerado via `jsPDF`, convertido para Base64, salvo no diretÃ³rio de Documentos do dispositivo com `Filesystem.writeFile` e entÃ£o compartilhado via `Share.share` (tela nativa de compartilhamento). No desktop/web, o comportamento anterior (`window.open` + `print()`) Ã© mantido sem alteraÃ§Ãµes. Adicionado estado visual `isGeneratingPDF` nos botÃµes de aÃ§Ã£o para feedback de carregamento. Corrigido tambÃ©m o erro de tipagem `setLineDash` no jsPDF via cast `(doc as any)`.
   * *Data e hora da alteraÃ§Ã£o:* 26/06/2026 Ã s 10:52 (HorÃ¡rio Local)
