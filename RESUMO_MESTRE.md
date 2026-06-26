@@ -1,7 +1,11 @@
 # RESUMO MESTRE Ã¢â‚¬â€ GESTÃƒÆ’O MTSOLAR
 
-Este documento consolida a anÃƒÂ¡lise detalhada e atualizada da arquitetura, stack de tecnologias, estrutura do banco de dados, regras de negÃƒÂ³cio e integraÃƒÂ§ÃƒÂµes do sistema **GestÃƒÂ£o MTSolar**, servindo como a principal fonte de verdade tÃƒÂ©cnica do projeto.
+Este documento consolida a análise detalhada e atualizada da arquitetura, stack de tecnologias, estrutura do banco de dados, regras de negócio e integrações do sistema **Gestão MTSolar**, servindo como a principal fonte de verdade técnica do projeto.
 
+* **Correção de Permissão na Aba Kits Solares:**
+  * *O que foi feito:* A variável `isAdminOrCeo` (que controla a visibilidade da aba "Kits Solares" e seu conteúdo no módulo de Propostas) estava validando erroneamente o papel `ADM`. Foi corrigida para verificar a role `ADMIN` corretamente. A condição foi atualizada para `user?.role === 'CEO' || user?.role === 'ADMIN'`, garantindo que a gerência administrativa também tenha acesso à aba. A role `COMMERCIAL` continua sem acesso (vê apenas o dropdown).
+  * *Data e hora da alteração:* 26/06/2026 às 13:33 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
 * **Atualização do Schema solar_kits — potencia_kwh → potencia_kwp + consumo_referencia_kwh:**
   * *O que foi feito:* Refletidas no código as alterações já executadas no banco Supabase via `ALTER TABLE`. A coluna `potencia_kwh` foi renomeada para `potencia_kwp` (kWp é a unidade correta para painéis fotovoltaicos) e a nova coluna opcional `consumo_referencia_kwh` (NUMERIC 10,2) foi adicionada para indicar a faixa de consumo mensal que o kit dimensiona. As seguintes mudanças foram aplicadas:
     * **`api/index.ts`:** GET `/api/solar-kits` — `order by` atualizado para `potencia_kwp` e `select` explícito com `consumo_referencia_kwh`; POST e PUT — desestruturação de `req.body` com `potencia_kwp` e `consumo_referencia_kwh = null`; payload de INSERT/UPDATE enviado ao Supabase atualizado.

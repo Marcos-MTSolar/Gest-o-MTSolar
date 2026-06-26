@@ -2472,7 +2472,7 @@ export default function ProposalGenerator() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const isAdminOrCeo = user?.role === 'ADM' || user?.role === 'CEO';
+  const isAdminOrCeo = user?.role === 'CEO' || user?.role === 'ADMIN';
 
   const tabs = [
     { id: 'dados' as TabType, label: 'Dados do Cliente', icon: User },
