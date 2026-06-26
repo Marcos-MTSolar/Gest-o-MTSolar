@@ -24,11 +24,15 @@ import {
   Edit,
   Trash2,
   X,
-  Database
+  Database,
+  FileCheck
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import api from '../lib/api';
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 type TabType = 'dados' | 'kit' | 'calculo' | 'financiamento' | 'servicos' | 'historico' | 'kits';
 
@@ -261,6 +265,7 @@ export default function ProposalGenerator() {
   const [historyPage, setHistoryPage] = useState(1);
   const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [historyTotal, setHistoryTotal] = useState(0);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   // Estado para avisos sobre salvamento no histórico (sucesso, warning ou erro crítico)
   const [historyNotice, setHistoryNotice] = useState<{ type: 'success' | 'warning' | 'error'; message: string } | null>(null);
 
@@ -694,9 +699,9 @@ export default function ProposalGenerator() {
 
       doc.setDrawColor(221, 221, 221);
       doc.setLineWidth(0.3);
-      doc.setLineDash([1, 1]);
+      (doc as any).setLineDash([1, 1]);
       doc.line(margemLateral, y, pageWidth - margemLateral, y);
-      doc.setLineDash([]);
+      (doc as any).setLineDash([]);
       y += 6;
     }
 
@@ -846,6 +851,17 @@ export default function ProposalGenerator() {
       return;
     }
 
+    let newWindow: Window | null = null;
+    if (!Capacitor.isNativePlatform()) {
+      newWindow = window.open('', '_blank');
+      if (!newWindow) {
+        alert('Por favor, permita pop-ups para visualizar a proposta.');
+        return;
+      }
+    } else {
+      setIsGeneratingPDF(true);
+    }
+
     const structureTranslations: Record<string, string> = {
       'telhado_ceramico': 'Telhado Cerâmico',
       'telhado_metalico': 'Telhado Metálico',
@@ -868,7 +884,6 @@ export default function ProposalGenerator() {
     const saleP = results.salePrice || (Number(formData.kitCost) * (1 + Number(formData.marginPercent)/100));
     const originalPrice = Number(formData.kitCost) * (1 + Number(formData.marginPercent)/100);
 
-    // Função interna para upload de PDF simplificado para o histórico
     // Cálculos para a Página 4
     const monthlyBillVal = Number(formData.monthlyBill) || 450;
     const energyRateVal = Number(formData.energyRate) || 0.85;
@@ -971,9 +986,6 @@ export default function ProposalGenerator() {
             .filter(n => n > 0)
             .sort((a, b) => a - b)[0]?.toString() || '5')
         : '5');
-
-    const newWindow = window.open('', '_blank');
-    if (!newWindow) return;
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -2087,9 +2099,11 @@ export default function ProposalGenerator() {
     // Para o print no navegador, juntamos tudo
     const htmlParaNavegador = htmlContent.replace('</body>', `${photosHtml}</body>`);
 
-    newWindow.document.write(htmlParaNavegador);
-    newWindow.document.close();
-    setTimeout(() => { newWindow.print(); }, 2000);
+    if (!Capacitor.isNativePlatform() && newWindow) {
+      newWindow.document.write(htmlParaNavegador);
+      newWindow.document.close();
+      setTimeout(() => { newWindow?.print(); }, 2000);
+    }
 
     // Função para upload de PDF completo em background
     const uploadFullPDF = async (html: string) => {
@@ -2338,6 +2352,41 @@ export default function ProposalGenerator() {
         const pdfBlob = doc.output('blob');
         const fileName = `${proposalNumber}-${Date.now()}.pdf`;
 
+        // Se for aplicativo mobile, converte para base64 e compartilha nativamente
+        if (Capacitor.isNativePlatform()) {
+          try {
+            const base64Data = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.readAsDataURL(pdfBlob);
+              reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+              reader.onerror = reject;
+            });
+            
+            await Filesystem.writeFile({
+              path: fileName,
+              data: base64Data,
+              directory: Directory.Documents
+            });
+            
+            const uriResult = await Filesystem.getUri({
+              directory: Directory.Documents,
+              path: fileName
+            });
+            
+            await Share.share({
+              title: `Proposta MT Solar - ${formData.clientName || 'Cliente'}`,
+              text: 'Confira a proposta comercial.',
+              url: uriResult.uri,
+              dialogTitle: 'Compartilhar Proposta'
+            });
+          } catch (mobileErr) {
+            console.error('Erro ao compartilhar PDF no mobile:', mobileErr);
+            alert('Erro ao gerar/compartilhar o PDF no dispositivo.');
+          } finally {
+            setIsGeneratingPDF(false);
+          }
+        }
+
         const { error: uploadError } = await supabase.storage
           .from('propostas')
           .upload(fileName, pdfBlob, { contentType: 'application/pdf', upsert: true });
@@ -2351,6 +2400,7 @@ export default function ProposalGenerator() {
         return publicUrl;
       } catch (err) {
         console.error('Erro no upload do PDF completo:', err);
+        if (Capacitor.isNativePlatform()) setIsGeneratingPDF(false);
         return null;
       }
     };
@@ -2409,6 +2459,8 @@ export default function ProposalGenerator() {
             `Erro: ${saveError?.response?.data?.error || saveError?.message || 'Falha de rede'}. ` +
             `Tente gerar a proposta novamente ou entre em contato com o suporte.`
         });
+      } finally {
+        if (Capacitor.isNativePlatform()) setIsGeneratingPDF(false);
       }
     })();
 
@@ -4013,11 +4065,7 @@ export default function ProposalGenerator() {
                   setTimeout(() => generatePDF(), 100);
                 }}
                 title={!isReady ? "Preencha os dados obrigatórios" : ""}
-                className={`flex items-center gap-2 px-6 py-4 font-bold rounded-lg transition-all ${
-                  isReady 
-                    ? 'bg-white border-2 border-amber-400 text-amber-600 hover:bg-amber-50' 
-                    : 'bg-gray-100 text-gray-400 opacity-50 cursor-not-allowed'
-                }`}
+                className="flex items-center gap-2 px-6 py-4 font-bold rounded-lg transition-all bg-white border-2 border-amber-400 text-amber-600 hover:bg-amber-50"
               >
                 Salvar como Nova
               </button>

@@ -554,6 +554,11 @@ O fluxo de processamento de mÃƒÂ­dias foi otimizado para evitar expiraÃƒÂ
   * *Arquivos modificados:* `api/index.ts`, `src/pages/AttendanceRegistry.tsx`, `src/components/Layout.tsx`, `src/App.tsx` e `RESUMO_MESTRE.md`.
 
 
+
+* **CorreÃ§Ã£o do Download de PDF em Dispositivos MÃ³veis (Capacitor):**
+  * *O que foi feito:* Instalados os plugins `@capacitor/filesystem` e `@capacitor/share`. Refatorada a funÃ§Ã£o `generatePDF` em `ProposalGenerator.tsx` para detectar se o app estÃ¡ rodando como nativo (`Capacitor.isNativePlatform()`). No mobile, o PDF Ã© gerado via `jsPDF`, convertido para Base64, salvo no diretÃ³rio de Documentos do dispositivo com `Filesystem.writeFile` e entÃ£o compartilhado via `Share.share` (tela nativa de compartilhamento). No desktop/web, o comportamento anterior (`window.open` + `print()`) Ã© mantido sem alteraÃ§Ãµes. Adicionado estado visual `isGeneratingPDF` nos botÃµes de aÃ§Ã£o para feedback de carregamento. Corrigido tambÃ©m o erro de tipagem `setLineDash` no jsPDF via cast `(doc as any)`.
+  * *Data e hora da alteraÃ§Ã£o:* 26/06/2026 Ã s 10:52 (HorÃ¡rio Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`, `package.json`
 * **CorreÃ§Ã£o de CÃ¡lculos Financeiros no Gerador de Propostas:**
   * *O que foi feito:* Refatorada a lÃ³gica financeira na geraÃ§Ã£o do PDF (`ProposalGenerator.tsx`). A **Economia Total** de 25 anos agora soma os valores anuais com reajuste de 10% a.a., e o erro de ordem de grandeza (que gerava 67 milhÃµes) foi evitado. O **ROI** foi alterado para mostrar o Retorno Simples de 1Âº ano em percentual (% a.a.). O cÃ¡lculo da **TIR (Taxa Interna de Retorno)** foi reescrito do zero implementando o mÃ©todo numÃ©rico iterativo de Newton-Raphson para descobrir a taxa real do fluxo de caixa, abandonando a fÃ³rmula simplificada errÃ´nea que causava discrepÃ¢ncias.
   * *Data e hora da alteraÃ§Ã£o:* 26/06/2026 Ã s 10:37 (HorÃ¡rio Local)
