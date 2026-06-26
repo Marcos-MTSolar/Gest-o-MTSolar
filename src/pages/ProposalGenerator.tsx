@@ -261,6 +261,8 @@ export default function ProposalGenerator() {
   const [historyPage, setHistoryPage] = useState(1);
   const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [historyTotal, setHistoryTotal] = useState(0);
+  // Estado para avisos sobre salvamento no histórico (sucesso, warning ou erro crítico)
+  const [historyNotice, setHistoryNotice] = useState<{ type: 'success' | 'warning' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
     if (location.state) {
@@ -2313,18 +2315,64 @@ export default function ProposalGenerator() {
       }
     };
 
-    uploadFullPDF(htmlContent).then(url => {
-      saveToHistory(proposalNumber, url || undefined).then(() => {
-        // Se estava editando, limpa o estado após gerar e salvar com sucesso
+    // O download do PDF (abertura da nova aba) já foi disparado via newWindow.open
+    // O salvamento no histórico é feito de forma assíncrona, mas agora com feedback visual ao usuário.
+    (async () => {
+      // Etapa 1: Tenta fazer o upload do PDF para o storage
+      let urlArquivo: string | undefined = undefined;
+      let uploadFalhou = false;
+
+      try {
+        const url = await uploadFullPDF(htmlContent);
+        if (url) {
+          urlArquivo = url;
+        } else {
+          uploadFalhou = true;
+        }
+      } catch {
+        uploadFalhou = true;
+      }
+
+      // Se o upload falhou, avisa o usuário mas continua para salvar o registro sem o PDF
+      if (uploadFalhou) {
+        setHistoryNotice({
+          type: 'warning',
+          message: 'Proposta gerada, mas houve um problema ao salvar o arquivo. O registro será salvo sem o PDF anexado.'
+        });
+      }
+
+      // Etapa 2: Tenta salvar o registro no histórico (com ou sem URL do arquivo)
+      try {
+        await saveToHistory(proposalNumber, urlArquivo);
+
+        // Se estava editando, limpa o estado após salvar com sucesso
         if (editingProposalId) {
           setEditingProposalId(null);
-          // Opcional: mostrar um alerta/toast de sucesso
-          // alert('Proposta atualizada com sucesso!');
         }
-      });
-    });
 
-    // Retornar para tela inicial da proposta
+        // Se o upload funcionou, exibe mensagem de sucesso (substitui o aviso de warning)
+        if (!uploadFalhou) {
+          setHistoryNotice({
+            type: 'success',
+            message: 'Proposta gerada e salva no histórico com sucesso!'
+          });
+          // Remove a mensagem de sucesso após 5 segundos
+          setTimeout(() => setHistoryNotice(null), 5000);
+        }
+      } catch (saveError: any) {
+        // Falha crítica: o registro NÃO foi salvo no histórico
+        console.error('[HISTÓRICO] Falha crítica ao salvar proposta no histórico:', saveError);
+        setHistoryNotice({
+          type: 'error',
+          message:
+            `⚠️ ATENÇÃO: A proposta NÃO foi salva no histórico. ` +
+            `Erro: ${saveError?.response?.data?.error || saveError?.message || 'Falha de rede'}. ` +
+            `Tente gerar a proposta novamente ou entre em contato com o suporte.`
+        });
+      }
+    })();
+
+    // Retornar para tela inicial da proposta imediatamente (não aguarda o salvamento)
     setActiveTab('dados');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -2390,7 +2438,30 @@ export default function ProposalGenerator() {
         </div>
       )}
 
+      {/* Banner de aviso de salvamento no histórico (sucesso / warning / erro crítico) */}
+      {historyNotice && (
+        <div
+          className={`p-4 rounded-xl shadow-sm border-l-4 flex items-start justify-between gap-4 ${
+            historyNotice.type === 'success'
+              ? 'bg-green-50 border-green-500 text-green-800'
+              : historyNotice.type === 'warning'
+              ? 'bg-amber-50 border-amber-500 text-amber-800'
+              : 'bg-red-50 border-red-600 text-red-800'
+          }`}
+        >
+          <p className="text-sm font-medium flex-1">{historyNotice.message}</p>
+          <button
+            onClick={() => setHistoryNotice(null)}
+            className="text-current opacity-60 hover:opacity-100 shrink-0 transition-opacity"
+            title="Fechar aviso"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* Stepper */}
+
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
         <div className="relative flex justify-between items-center max-w-3xl mx-auto">
           {/* Connector Line */}

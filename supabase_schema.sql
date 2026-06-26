@@ -153,7 +153,7 @@ CREATE TABLE IF NOT EXISTS events (
 -- Gerenciados apenas por CEO e ADM; VENDEDOR só faz SELECT em kits ativos
 CREATE TABLE IF NOT EXISTS solar_kits (
   id                             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  company_id                     INTEGER NOT NULL,
+  company_id                     UUID NOT NULL,  -- UUID: padrão da tabela companies
   potencia_kwh                   NUMERIC(10,3) NOT NULL DEFAULT 0,
   valor_total                    NUMERIC(12,2) NOT NULL DEFAULT 0,
   margem_venda                   NUMERIC(5,2)  NOT NULL DEFAULT 30,
@@ -174,7 +174,7 @@ CREATE TABLE IF NOT EXISTS solar_kits (
 -- Observações de Atendimento do WhatsApp (Histórico)
 CREATE TABLE IF NOT EXISTS whatsapp_observations (
   id                             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  company_id                     INTEGER NOT NULL,
+  company_id                     UUID NOT NULL,  -- UUID: padrão da tabela companies
   conversation_id                UUID NOT NULL REFERENCES public.whatsapp_conversations(id) ON DELETE CASCADE,
   user_id                        INTEGER NOT NULL,
   user_name                      TEXT NOT NULL,

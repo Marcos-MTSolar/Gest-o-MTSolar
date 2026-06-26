@@ -13,9 +13,9 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Cria a tabela whatsapp_observations
 CREATE TABLE IF NOT EXISTS public.whatsapp_observations (
   id                             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  company_id                     INTEGER NOT NULL,
+  company_id                     UUID NOT NULL,  -- UUID: padrão da tabela companies no Supabase
   conversation_id                UUID NOT NULL REFERENCES public.whatsapp_conversations(id) ON DELETE CASCADE,
-  user_id                        INTEGER NOT NULL, -- Supondo id numérico para usuários conforme padrão do projeto
+  user_id                        INTEGER NOT NULL, -- id numérico: tabela users usa SERIAL (legado)
   user_name                      TEXT NOT NULL,
   observation                    TEXT NOT NULL,
   created_at                     TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -40,7 +40,7 @@ CREATE POLICY "whatsapp_observations_select_all_company"
   FOR SELECT
   TO authenticated
   USING (
-    company_id = (auth.jwt() ->> 'company_id')::INTEGER
+    company_id = (auth.jwt() ->> 'company_id')::UUID
   );
 
 -- Política: Escrita (INSERT)
@@ -52,7 +52,7 @@ CREATE POLICY "whatsapp_observations_insert_company"
   FOR INSERT
   TO authenticated
   WITH CHECK (
-    company_id = (auth.jwt() ->> 'company_id')::INTEGER
+    company_id = (auth.jwt() ->> 'company_id')::UUID
   );
 
 -- Não criamos políticas de UPDATE nem DELETE, pois observações são registros 

@@ -1083,19 +1083,25 @@ app.put('/api/projects/:id/homologation', authenticateToken, async (req: any, re
         }
       }
 
-      // 2. Exclusão das propostas do storage
+      // 2. Exclusão dos arquivos PDF das propostas do storage (os registros em proposal_history são preservados
+      //    intencionalmente — o histórico não é deletado junto com o projeto)
       try {
         const { data: proposals } = await supabase.from('proposal_history').select('url_arquivo').eq('project_id', req.params.id).eq('company_id', req.user.company_id);
         if (proposals && proposals.length > 0) {
-          const proposalFiles = proposals.map(p => p.url_arquivo?.split('/').pop()).filter(Boolean) as string[];
+          const proposalFiles = proposals.map((p: any) => p.url_arquivo?.split('/').pop()).filter(Boolean) as string[];
           if (proposalFiles.length > 0) {
-            console.log(`Excluindo ${proposalFiles.length} propostas do storage para o projeto ${req.params.id}`);
+            console.log(`Excluindo ${proposalFiles.length} arquivos PDF de propostas do storage para o projeto ${req.params.id}`);
             await supabase.storage.from('propostas').remove(proposalFiles);
           }
-          await supabase.from('proposal_history').delete().eq('project_id', req.params.id).eq('company_id', req.user.company_id);
+          // Apenas zera o link do arquivo; o registro histórico permanece intacto
+          await supabase
+            .from('proposal_history')
+            .update({ url_arquivo: null })
+            .eq('project_id', req.params.id)
+            .eq('company_id', req.user.company_id);
         }
       } catch (e) {
-        console.error(`[DELETE ERROR] Erro ao excluir propostas:`, e);
+        console.error(`[DELETE ERROR] Erro ao remover arquivos PDF de propostas do storage:`, e);
       }
 
       // 3. Exclusão de arquivos extras (uploads: vistoria, contratos, etc.) e documentos de homologação
@@ -3262,45 +3268,114 @@ app.get('/api/cron/agenda-reminders', async (req, res) => {
 
 // Cleanup expired proposals
 app.get('/api/cleanup-proposals', async (req, res) => {
+  const execucaoInicio = new Date();
+  const prefixoLog = '[CLEANUP-PROPOSALS]';
+
   try {
-    console.log('Iniciando limpeza de propostas expiradas (arquivos)...');
+    console.log(`${prefixoLog} ========================================`);
+    console.log(`${prefixoLog} Execução iniciada em: ${execucaoInicio.toISOString()}`);
+
+    // Busca propostas com data_expiracao vencida que ainda têm arquivo no storage
     const { data: expired, error: fetchError } = await supabase
       .from('proposal_history')
       .select('id, url_arquivo')
-      .lt('data_expiracao', new Date().toISOString())
+      .lt('data_expiracao', execucaoInicio.toISOString())
       .not('url_arquivo', 'is', null);
-    
+
     if (fetchError) {
-      console.error('Erro ao buscar propostas expiradas:', fetchError);
+      console.error(`${prefixoLog} Erro ao buscar propostas expiradas:`, fetchError);
+      // Grava falha na tabela de logs do sistema (não usamos await/throw para não quebrar o fluxo se a tabela não existir)
+      supabase.from('cleanup_logs').insert({
+        tipo: 'cleanup-proposals',
+        executado_em: execucaoInicio.toISOString(),
+        expirados_encontrados: 0,
+        arquivos_removidos: 0,
+        registros_zerados: 0,
+        status: 'erro',
+        detalhes: `Erro ao buscar propostas: ${fetchError.message}`
+      }).then(({ error: logErr }) => {
+        if (logErr) console.warn(`${prefixoLog} Aviso: Falha ao logar erro em cleanup_logs:`, logErr.message);
+      });
       return res.status(500).json({ error: 'Erro ao buscar propostas' });
     }
 
+    const totalExpirados = expired?.length ?? 0;
+    console.log(`${prefixoLog} Propostas expiradas com arquivo encontradas: ${totalExpirados}`);
+
+    let arquivosRemovidosCount = 0;
+    let registrosZeradosCount = 0;
+
     if (expired && expired.length > 0) {
+      // Etapa 1: Remove os arquivos físicos do Storage
       const filesToDelete = expired
-        .map(p => p.url_arquivo?.split('/').pop())
+        .map((p: any) => p.url_arquivo?.split('/').pop())
         .filter(Boolean) as string[];
 
       if (filesToDelete.length > 0) {
-        console.log(`Deletando ${filesToDelete.length} arquivos do storage bucket 'propostas'`);
+        console.log(`${prefixoLog} Removendo ${filesToDelete.length} arquivo(s) do bucket 'propostas'...`);
         const { error: storageError } = await supabase.storage.from('propostas').remove(filesToDelete);
-        if (storageError) console.error('Erro ao deletar arquivos do storage:', storageError);
+        if (storageError) {
+          console.error(`${prefixoLog} Erro ao remover arquivos do storage:`, storageError);
+        } else {
+          arquivosRemovidosCount = filesToDelete.length;
+          console.log(`${prefixoLog} ${arquivosRemovidosCount} arquivo(s) removidos do storage com sucesso.`);
+        }
       }
 
+      // Etapa 2: Zera o campo url_arquivo nos registros (preserva o histórico)
       const { error: updateError } = await supabase
         .from('proposal_history')
         .update({ url_arquivo: null })
-        .in('id', expired.map(p => p.id));
-        
-      if (updateError) console.error('Erro ao anular url_arquivo no banco:', updateError);
-      
-      console.log(`Limpeza concluída. ${expired.length} arquivos de propostas removidos.`);
-      res.json({ message: `Sucesso! Arquivos de ${expired.length} propostas expiradas foram removidos.` });
-    } else {
-      console.log('Nenhuma proposta com arquivo expirado encontrada.');
-      res.json({ message: 'Nenhuma proposta com arquivo expirado para remover.' });
+        .in('id', expired.map((p: any) => p.id));
+
+      if (updateError) {
+        console.error(`${prefixoLog} Erro ao zerar url_arquivo no banco:`, updateError);
+      } else {
+        registrosZeradosCount = expired.length;
+        console.log(`${prefixoLog} ${registrosZeradosCount} registro(s) tiveram url_arquivo zerado no banco.`);
+      }
     }
-  } catch (err) {
-    console.error('Erro catastrófico na limpeza de propostas:', err);
+
+    // Log de resumo final
+    console.log(`${prefixoLog} ---- RESUMO DA EXECUÇÃO ----`);
+    console.log(`${prefixoLog} Data/Hora:               ${execucaoInicio.toISOString()}`);
+    console.log(`${prefixoLog} Expirados encontrados:   ${totalExpirados}`);
+    console.log(`${prefixoLog} Arquivos removidos:      ${arquivosRemovidosCount}`);
+    console.log(`${prefixoLog} Registros zerados:       ${registrosZeradosCount}`);
+    console.log(`${prefixoLog} ============================`);
+
+    // Grava resumo na tabela cleanup_logs (para consulta histórica sem depender dos logs Vercel)
+    supabase.from('cleanup_logs').insert({
+      tipo: 'cleanup-proposals',
+      executado_em: execucaoInicio.toISOString(),
+      expirados_encontrados: totalExpirados,
+      arquivos_removidos: arquivosRemovidosCount,
+      registros_zerados: registrosZeradosCount,
+      status: 'sucesso',
+      detalhes: `Execução automática concluída com sucesso.`
+    }).then(({ error: logErr }) => {
+      // Não quebra a execução caso a tabela cleanup_logs ainda não exista no banco
+      if (logErr) console.warn(`${prefixoLog} Aviso: Não foi possível gravar resumo em cleanup_logs (tabela pode não existir):`, logErr.message);
+    });
+
+    res.json({
+      status: 'sucesso',
+      executado_em: execucaoInicio.toISOString(),
+      expirados_encontrados: totalExpirados,
+      arquivos_removidos: arquivosRemovidosCount,
+      registros_zerados: registrosZeradosCount
+    });
+  } catch (err: any) {
+    console.error(`${prefixoLog} Erro catastrófico na limpeza de propostas:`, err);
+    supabase.from('cleanup_logs').insert({
+      tipo: 'cleanup-proposals',
+      executado_em: execucaoInicio.toISOString(),
+      expirados_encontrados: 0,
+      arquivos_removidos: 0,
+      registros_zerados: 0,
+      status: 'erro',
+      detalhes: `Erro catastrófico: ${err?.message ?? 'desconhecido'}`
+    }).then(() => {});
     res.status(500).json({ error: 'Falha interna na limpeza de propostas' });
   }
 });

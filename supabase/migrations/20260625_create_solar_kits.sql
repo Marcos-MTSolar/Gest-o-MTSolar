@@ -14,8 +14,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS public.solar_kits (
   id                             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
-  -- Multi-tenancy
-  company_id                     INTEGER NOT NULL,
+  -- Multi-tenancy (UUID: padrão da tabela companies no Supabase)
+  company_id                     UUID NOT NULL,
 
   -- Dados gerais do kit
   potencia_kwh                   NUMERIC(10, 3) NOT NULL DEFAULT 0,
@@ -68,11 +68,11 @@ CREATE POLICY "solar_kits_ceo_adm_all"
   TO authenticated
   USING (
     (auth.jwt() ->> 'role') IN ('CEO', 'ADMIN')
-    AND company_id = (auth.jwt() ->> 'company_id')::INTEGER
+    AND company_id = (auth.jwt() ->> 'company_id')::UUID
   )
   WITH CHECK (
     (auth.jwt() ->> 'role') IN ('CEO', 'ADMIN')
-    AND company_id = (auth.jwt() ->> 'company_id')::INTEGER
+    AND company_id = (auth.jwt() ->> 'company_id')::UUID
   );
 
 -- Política: VENDEDOR (COMMERCIAL) e TECHNICAL podem apenas ler kits ativos
@@ -83,7 +83,7 @@ CREATE POLICY "solar_kits_vendedor_select"
   TO authenticated
   USING (
     (auth.jwt() ->> 'role') IN ('COMMERCIAL', 'VENDEDOR', 'TECHNICAL')
-    AND company_id = (auth.jwt() ->> 'company_id')::INTEGER
+    AND company_id = (auth.jwt() ->> 'company_id')::UUID
     AND ativo = TRUE
   );
 
