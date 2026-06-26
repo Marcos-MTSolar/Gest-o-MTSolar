@@ -885,23 +885,53 @@ export default function ProposalGenerator() {
     const paybackMeses = results.paybackMonths;
     const paybackAnos = Math.floor(paybackMeses / 12);
     const paybackMesesRest = Math.round(paybackMeses % 12);
-    const roi = annualSav > 0 ? ((annualSav * (Math.pow(1 + reajusteAnual, 25) - 1) / reajusteAnual) / saleP).toFixed(2) : '0';
-    const tir = annualSav > 0 ? ((annualSav / saleP) * 100).toFixed(2) : '0';
+    
+    // ROI Simples (1º ano)
+    const roi = annualSav > 0 ? ((annualSav / saleP) * 100).toFixed(2) : '0';
     
     const economiaTotal25 = annualSav > 0 
       ? annualSav * (Math.pow(1 + reajusteAnual, 25) - 1) / reajusteAnual 
       : 0;
 
+    // Função auxiliar para calcular a TIR (Taxa Interna de Retorno) via Newton-Raphson
+    const calculateIRR = (cashFlows: number[], guess = 0.1) => {
+      const maxTries = 100;
+      const epsilon = 1e-5;
+      let irr = guess;
+      for (let i = 0; i < maxTries; i++) {
+        let npv = 0;
+        let npvDerivative = 0;
+        for (let t = 0; t < cashFlows.length; t++) {
+          npv += cashFlows[t] / Math.pow(1 + irr, t);
+          if (t > 0) {
+            npvDerivative -= (t * cashFlows[t]) / Math.pow(1 + irr, t + 1);
+          }
+        }
+        if (npvDerivative === 0) break;
+        const newIrr = irr - npv / npvDerivative;
+        if (Math.abs(newIrr - irr) < epsilon) return newIrr;
+        irr = newIrr;
+      }
+      return irr;
+    };
+
+    const fluxoCaixaPeriodo = [-saleP];
     let fluxoCaixa = [];
     let acumulado = -saleP;
     for (let ano = 1; ano <= 25; ano++) {
       const economiaAno = annualSav * Math.pow(1 + reajusteAnual, ano - 1);
+      fluxoCaixaPeriodo.push(economiaAno);
       acumulado += economiaAno;
-      fluxoCaixa.push(acumulado);
+      fluxoCaixa.push(acumulado); // Mantém o array acumulado para o gráfico SVG
     }
+    
+    // TIR real usando o fluxo de caixa
+    const tirValue = annualSav > 0 ? calculateIRR(fluxoCaixaPeriodo) : 0;
+    const tir = (tirValue * 100).toFixed(2);
     
     const geracaoAnual = kitPowerVal * 365 * 4.5;
     const custokWh = geracaoAnual > 0 ? (saleP / (geracaoAnual * 25)).toFixed(2) : '0';
+    const tarifaAtual = Number(formData.energyRate).toFixed(2);
     const economiakWh = (Number(formData.energyRate) - Number(custokWh)).toFixed(2);
     
     const maxFC = Math.max(...fluxoCaixa);
@@ -1681,8 +1711,8 @@ export default function ProposalGenerator() {
                   <div style="color:#166534;font-size:8pt;font-weight:bold;
                     text-transform:uppercase;letter-spacing:1px;">ROI</div>
                   <div style="color:#1e3a5f;font-size:15pt;font-weight:900;margin:1mm 0;">
-                    ${roi}x</div>
-                  <div style="color:#6b7280;font-size:8pt;">retorno sobre investimento</div>
+                    ${roi}% a.a.</div>
+                  <div style="color:#6b7280;font-size:8pt;">retorno no primeiro ano</div>
                 </td>
                 <td style="background:#fdf4ff;border:2px solid #e9d5ff;border-radius:8px;
                   padding:4mm;text-align:center;">
@@ -1706,12 +1736,22 @@ export default function ProposalGenerator() {
                   R$ ${economiaTotal25.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
                 </div>
               </div>
-              <div style="text-align:right;">
-                <div style="color:#6b7280;font-size:8pt;">kWh do sistema FV</div>
-                <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
-                  R$ ${custokWh}/kWh</div>
-                <div style="color:#166534;font-size:8.5pt;font-weight:bold;">
-                  R$ ${economiakWh} economia/kWh</div>
+              <div style="display:flex;gap:4mm;text-align:right;">
+                <div>
+                  <div style="color:#6b7280;font-size:8pt;">Tarifa Atual</div>
+                  <div style="color:#ef4444;font-size:10pt;font-weight:bold;text-decoration:line-through;">
+                    R$ ${tarifaAtual}/kWh</div>
+                </div>
+                <div>
+                  <div style="color:#6b7280;font-size:8pt;">Custo com Solar</div>
+                  <div style="color:#1e3a5f;font-size:10pt;font-weight:bold;">
+                    R$ ${custokWh}/kWh</div>
+                </div>
+                <div>
+                  <div style="color:#6b7280;font-size:8pt;">Economia Líquida</div>
+                  <div style="color:#166534;font-size:11pt;font-weight:bold;">
+                    R$ ${economiakWh}/kWh</div>
+                </div>
               </div>
             </div>
 

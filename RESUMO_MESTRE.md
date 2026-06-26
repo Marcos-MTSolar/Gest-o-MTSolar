@@ -553,6 +553,11 @@ O fluxo de processamento de mÃƒÂ­dias foi otimizado para evitar expiraÃƒÂ
   * *Data e hora da alteraÃ§Ã£o:* 25/06/2026 Ã s 16:16 (HorÃ¡rio Local)
   * *Arquivos modificados:* `api/index.ts`, `src/pages/AttendanceRegistry.tsx`, `src/components/Layout.tsx`, `src/App.tsx` e `RESUMO_MESTRE.md`.
 
+
+* **CorreÃ§Ã£o de CÃ¡lculos Financeiros no Gerador de Propostas:**
+  * *O que foi feito:* Refatorada a lÃ³gica financeira na geraÃ§Ã£o do PDF (`ProposalGenerator.tsx`). A **Economia Total** de 25 anos agora soma os valores anuais com reajuste de 10% a.a., e o erro de ordem de grandeza (que gerava 67 milhÃµes) foi evitado. O **ROI** foi alterado para mostrar o Retorno Simples de 1Âº ano em percentual (% a.a.). O cÃ¡lculo da **TIR (Taxa Interna de Retorno)** foi reescrito do zero implementando o mÃ©todo numÃ©rico iterativo de Newton-Raphson para descobrir a taxa real do fluxo de caixa, abandonando a fÃ³rmula simplificada errÃ´nea que causava discrepÃ¢ncias.
+  * *Data e hora da alteraÃ§Ã£o:* 26/06/2026 Ã s 10:37 (HorÃ¡rio Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
 * **RemoÃ§Ã£o da ExibiÃ§Ã£o do "Valor Final de Venda" para Vendedor na Aba Kit Solar:**
   * *O que foi feito:* Refatorada a aba "Kit Solar" (a aba de dimensionamento) no `ProposalGenerator.tsx` para nÃ£o exibir o card de "Valor Final de Venda" nem a seÃ§Ã£o "Preview do Valor de Venda" para usuÃ¡rios com o role `COMMERCIAL` (Vendedor). Em substituiÃ§Ã£o, o campo tornou-se exclusivamente o dropdown de "Selecionar Kit Cadastrado", obrigatÃ³rio, que exibe apenas a identificaÃ§Ã£o do kit (ex: "Kit 5 kWh") sem os preÃ§os, blindando informaÃ§Ãµes de custos, preÃ§os, marca de mÃ³dulos e marca de inversores nÃ£o desejadas nessa visualizaÃ§Ã£o.
   * *Data e hora da alteraÃ§Ã£o:* 25/06/2026 Ã s 15:11 (HorÃ¡rio Local)
