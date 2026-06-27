@@ -316,15 +316,16 @@ export default function WhatsApp() {
   };
 
   const fetchMessages = async (conversationId: string) => {
+    // Resetar estado de bloqueio antes de qualquer chamada
+    setIsLocked(false);
+    setLockedByName('');
     try {
       const { data } = await api.get(`/api/conversations/${conversationId}/messages`);
       setMessages(data || []);
-      setIsLocked(false);
-      setLockedByName('');
     } catch (error: any) {
       if (error?.response?.status === 403 && error?.response?.data?.error === 'CONVERSATION_LOCKED') {
         setIsLocked(true);
-        setLockedByName(error.response.data.assignedTo || 'Outro agente');
+        setLockedByName(error.response.data.assignedTo ?? 'outro atendente');
       }
     }
   };
@@ -1211,7 +1212,7 @@ export default function WhatsApp() {
               {isLocked && user?.role !== 'CEO' ? (
                 <div className="text-center p-3 bg-amber-50 text-amber-800 rounded-lg text-sm font-medium border border-amber-200 flex items-center justify-center gap-2">
                   <Lock size={16} />
-                  Esta conversa está sendo atendida por {lockedByName}. Aguarde a finalização.
+                  Esta conversa está sendo atendida por <strong className="ml-1">{lockedByName || 'outro atendente'}</strong>. Aguarde a finalização.
                 </div>
               ) : selectedConversation.status === 'in_progress' && (Number(selectedConversation.assigned_to) === Number(user?.id) || isAdmin) ? (
                 <div className="flex items-end gap-2">

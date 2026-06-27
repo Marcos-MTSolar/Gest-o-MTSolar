@@ -1554,26 +1554,11 @@ app.get('/api/conversations', authenticateToken, async (req: any, res) => {
 app.get('/api/conversations/:id/messages', authenticateToken, async (req: any, res) => {
   const conversationId = req.params.id;
 
-  // Buscar a conversa para verificar status e responsável
-  const { data: conv, error: convError } = await supabase
-    .from('whatsapp_conversations')
-    .select('id, status, assigned_to, assigned_name, company_id')
-    .eq('id', conversationId)
-    .eq('company_id', req.user.company_id)
-    .single();
-
-  if (convError || !conv) return res.status(404).json({ error: 'Conversa não encontrada' });
-
-  // Validação de bloqueio: conversa em atendimento por outro agente
-  if (
-    conv.status === 'in_progress' &&
-    conv.assigned_to !== null &&
-    Number(conv.assigned_to) !== Number(req.user.id) &&
-    req.user.role !== 'CEO'
-  ) {
+  const lockCheck = await checkConversationLock(conversationId, req.user.id, req.user.role);
+  if (lockCheck.locked) {
     return res.status(403).json({
       error: 'CONVERSATION_LOCKED',
-      assignedTo: conv.assigned_name || 'Outro agente'
+      assignedTo: lockCheck.assignedToName ?? 'outro atendente'
     });
   }
 
@@ -1848,26 +1833,44 @@ function resolveMediaType(mimetype: string, filename: string): string {
   return 'document'; // fallback seguro
 }
 
+function sanitizeConversationStatus(status: string, assignedTo: number | null): string {
+  if (assignedTo === null || assignedTo === undefined) return 'waiting';
+  return status;
+}
+
 // Helper: Validar se a conversa está bloqueada para o usuário
-async function checkConversationLock(conversationId: string, userId: number, userRole: string, companyId: string): Promise<{ locked: boolean; assignedTo?: string }> {
-  if (!conversationId) return { locked: false };
-  const { data: conv } = await supabase
+async function checkConversationLock(conversationId: string, userId: number, userRole: string, _companyId?: string) {
+  const { data: conv, error } = await supabaseAdmin
     .from('whatsapp_conversations')
-    .select('status, assigned_to, assigned_name')
+    .select(`
+      status,
+      assigned_to,
+      users!whatsapp_conversations_assigned_to_fkey(name)
+    `)
     .eq('id', conversationId)
-    .eq('company_id', companyId)
     .single();
 
-  if (!conv) return { locked: false };
+  if (error || !conv) return { locked: false };
 
-  // Só bloqueia se: in_progress + tem dono + dono é diferente do usuário atual + não é CEO
-  if (
-    conv.status === 'in_progress' &&
-    conv.assigned_to !== null &&
-    Number(conv.assigned_to) !== Number(userId) &&
-    userRole !== 'CEO'
-  ) {
-    return { locked: true, assignedTo: conv.assigned_name || 'Outro agente' };
+  // Se não tem dono, nunca bloqueia — independente do status
+  if (conv.assigned_to === null || conv.assigned_to === undefined) {
+    return { locked: false };
+  }
+
+  // Se tem dono mas é o próprio usuário, não bloqueia
+  if (Number(conv.assigned_to) === Number(userId)) {
+    return { locked: false };
+  }
+
+  // CEO nunca é bloqueado
+  if (userRole === 'CEO') {
+    return { locked: false };
+  }
+
+  // Só bloqueia se tem dono, é diferente do usuário atual e não é CEO
+  if (conv.status === 'in_progress') {
+    const assignedToName = (conv as any).users?.name ?? 'outro atendente';
+    return { locked: true, assignedToName };
   }
 
   return { locked: false };
@@ -1887,9 +1890,9 @@ app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) =>
 
     // Validação de bloqueio de conversa
     if (conversationId) {
-      const lockCheck = await checkConversationLock(conversationId, req.user.id, req.user.role, req.user.company_id);
+      const lockCheck = await checkConversationLock(conversationId, req.user.id, req.user.role);
       if (lockCheck.locked) {
-        return res.status(403).json({ error: 'CONVERSATION_LOCKED', assignedTo: lockCheck.assignedTo });
+        return res.status(403).json({ error: 'CONVERSATION_LOCKED', assignedTo: lockCheck.assignedToName ?? 'outro atendente' });
       }
     }
 
@@ -1990,9 +1993,9 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
 
     // Validação de bloqueio de conversa
     if (conversationId) {
-      const lockCheck = await checkConversationLock(conversationId, req.user.id, req.user.role, req.user.company_id);
+      const lockCheck = await checkConversationLock(conversationId, req.user.id, req.user.role);
       if (lockCheck.locked) {
-        return res.status(403).json({ error: 'CONVERSATION_LOCKED', assignedTo: lockCheck.assignedTo });
+        return res.status(403).json({ error: 'CONVERSATION_LOCKED', assignedTo: lockCheck.assignedToName ?? 'outro atendente' });
       }
     }
 
@@ -2080,9 +2083,9 @@ app.post('/api/whatsapp/send', authenticateToken, async (req: any, res) => {
 
     // Validação de bloqueio de conversa
     if (conversationId) {
-      const lockCheck = await checkConversationLock(conversationId, req.user.id, req.user.role, req.user.company_id);
+      const lockCheck = await checkConversationLock(conversationId, req.user.id, req.user.role);
       if (lockCheck.locked) {
-        return res.status(403).json({ error: 'CONVERSATION_LOCKED', assignedTo: lockCheck.assignedTo });
+        return res.status(403).json({ error: 'CONVERSATION_LOCKED', assignedTo: lockCheck.assignedToName ?? 'outro atendente' });
       }
     }
 
@@ -2544,6 +2547,8 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
           let newStatus = existingConv.status;
           if (!fromMe && newStatus !== 'in_progress') newStatus = 'waiting';
 
+          newStatus = sanitizeConversationStatus(newStatus, existingConv.assigned_to);
+
           const { data: updated } = await supabase
             .from('whatsapp_conversations')
             .update({
@@ -2569,7 +2574,7 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
               contact_name: pushName || null,
               last_message: text,
               last_message_at: new Date().toISOString(),
-              status: 'waiting',
+              status: sanitizeConversationStatus('waiting', null),
               instance: instanceName
             })
             .select()

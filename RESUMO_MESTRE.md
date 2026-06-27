@@ -572,6 +572,15 @@ O fluxo de processamento de mÃƒÂ­dias foi otimizado para evitar expiraÃƒÂ
   * *Data e hora da alteração:* 27/06/2026 às 09:48 (Horário Local)
   * *Arquivos modificados:* `api/index.ts`, `src/pages/AttendanceRegistry.tsx`
 
+* **Correção Crítica: Bug de Cadeado Universal (Sandra Feliciano) — checkConversationLock v2:**
+  * *O que foi feito:*
+    1. **Problema A (Travamento sem dono):** Reescrito o helper `checkConversationLock` em `api/index.ts` usando `supabaseAdmin` com join explícito `users!whatsapp_conversations_assigned_to_fkey(name)`. A lógica agora verifica em sequência: (a) se `assigned_to` é nulo → libera imediatamente; (b) se `assigned_to` é o próprio usuário → libera; (c) se o role é CEO → libera; (d) só então bloqueia se `status = 'in_progress'`. O campo retornado é `assignedToName` (vindo do join real com a tabela `users`), não mais `assigned_name` (campo de snapshot que podia estar desatualizado ou nulo).
+    2. **Problema B (Nome vazio no cadeado):** Todas as 4 rotas que chamam `checkConversationLock` (`GET /api/conversations/:id/messages`, `POST /api/whatsapp/send`, `POST /api/whatsapp/send-media`, `POST /api/whatsapp/send-audio`) foram ajustadas para retornar `assignedTo: lockCheck.assignedToName ?? 'outro atendente'` no corpo do HTTP 403.
+    3. **Frontend `WhatsApp.tsx`:** O reset de `isLocked` e `lockedByName` foi movido para o início de `fetchMessages` (antes do `try`), garantindo que a UI limpa o cadeado instantaneamente ao trocar de conversa. A barra amarela de bloqueio exibe agora o nome em `<strong>` com fallback `'outro atendente'`.
+    4. **Utilitário `sanitizeConversationStatus`:** Adicionada função que garante que qualquer inserção/atualização em `whatsapp_conversations` com `assigned_to = null` sempre usa `status = 'waiting'`. Aplicada no webhook ao atualizar conversas existentes e ao criar novas.
+  * *Data e hora da alteração:* 27/06/2026 às 10:11 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/WhatsApp.tsx`
+
 * **Etiquetas, Transferir e Encerrar no Mobile â€” Modal de Detalhes (WhatsApp.tsx):**
   * *O que foi feito:* O modal `showObservationsModal` (aberto pelo botÃ£o Info no mobile) continha apenas o bloco de ObservaÃ§Ãµes. Expandido para funcionar como um painel completo de atendimento no mobile, incluindo: (1) Card de info do contato com status; (2) Bloco de **Etiquetas** com seleÃ§Ã£o mÃºltipla por toque; (3) Bloco de **AÃ§Ãµes** com todos os botÃµes contextuais (Assumir / Transferir para Agente / Transferir para Administrativo / Transferir para Atendimento / Encerrar / Reabrir) respeitando o status da conversa e o role do usuÃ¡rio; (4) Bloco de **ObservaÃ§Ãµes**. Cada aÃ§Ã£o do bloco AÃ§Ãµes fecha o modal antes de executar para evitar sobreposiÃ§Ã£o de camadas.
   * *Data e hora da alteraÃ§Ã£o:* 26/06/2026 Ã s 10:56 (HorÃ¡rio Local)
