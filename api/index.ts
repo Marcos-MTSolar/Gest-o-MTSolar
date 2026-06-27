@@ -2549,10 +2549,25 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
 
           newStatus = sanitizeConversationStatus(newStatus, existingConv.assigned_to);
 
+          // Se pushName veio preenchido, usa ele.
+          // Se não veio (mensagem fromMe do Kommo), mantém o nome já salvo na conversa.
+          // Se não há nome salvo, tenta buscar na tabela clients pelo telefone.
+          let resolvedName = pushName || existingConv.contact_name || null;
+
+          if (!resolvedName) {
+            const { data: clientMatch } = await supabaseAdmin
+              .from('clients')
+              .select('name')
+              .eq('phone', phone)
+              .eq('company_id', companyId)
+              .maybeSingle();
+            if (clientMatch?.name) resolvedName = clientMatch.name;
+          }
+
           const { data: updated } = await supabase
             .from('whatsapp_conversations')
             .update({
-              contact_name: pushName || existingConv.contact_name,
+              contact_name: resolvedName,
               last_message: text,
               last_message_at: new Date().toISOString(),
               status: newStatus
@@ -2566,12 +2581,25 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
           console.log('[WEBHOOK] Conversa existente atualizada. ID:', conversationId, 'instance:', instanceName);
         } else {
           // Criar nova conversa
+          // Tenta resolver o nome mesmo quando pushName vem vazio (ex: mensagens fromMe do Kommo)
+          let newConvName = pushName || null;
+
+          if (!newConvName) {
+            const { data: clientMatch } = await supabaseAdmin
+              .from('clients')
+              .select('name')
+              .eq('phone', phone)
+              .eq('company_id', companyId)
+              .maybeSingle();
+            if (clientMatch?.name) newConvName = clientMatch.name;
+          }
+
           const { data: inserted, error: insertError } = await supabase
             .from('whatsapp_conversations')
             .insert({
               phone,
               company_id: companyId,
-              contact_name: pushName || null,
+              contact_name: newConvName,
               last_message: text,
               last_message_at: new Date().toISOString(),
               status: sanitizeConversationStatus('waiting', null),

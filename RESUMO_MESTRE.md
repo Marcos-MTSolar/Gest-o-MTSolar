@@ -565,6 +565,21 @@ O fluxo de processamento de mÃƒÂ­dias foi otimizado para evitar expiraÃƒÂ
   * *Data e hora da alteraÃ§Ã£o:* 25/06/2026 Ã s 16:16 (HorÃ¡rio Local)
   * *Arquivos modificados:* `api/index.ts`, `src/pages/AttendanceRegistry.tsx`, `src/components/Layout.tsx`, `src/App.tsx` e `RESUMO_MESTRE.md`.
 
+* **Correção: contact_name Nulo em Mensagens fromMe (Kommo CRM):**
+  * *O que foi feito:* Quando um vendedor respondia pelo Kommo CRM, a mensagem chegava via webhook da Evolution API com `fromMe: true` e `pushName` vazio/nulo. O sistema sobrescrevia `contact_name` com `null`, fazendo o frontend exibir "Você" como nome do contato.
+  * *Solução:* Nos dois pontos do webhook (`POST /api/webhooks/whatsapp`) onde `whatsapp_conversations` é gravada (atualização de conversa existente e inserção de nova), adicionada lógica de resolução de nome em cascata: (1) usa `pushName` se disponível; (2) mantém o nome já salvo (`existingConv.contact_name`); (3) se ainda nulo, faz consulta na tabela `clients` pelo telefone e `company_id` para recuperar o nome cadastrado.
+  * *Ação manual recomendada (Supabase SQL Editor):* Executar o SQL abaixo para corrigir conversas já existentes com nome vazio:
+    ```sql
+    UPDATE whatsapp_conversations wc
+    SET contact_name = c.name
+    FROM clients c
+    WHERE wc.phone = c.phone
+      AND wc.company_id = c.company_id
+      AND (wc.contact_name IS NULL OR wc.contact_name = 'Você' OR wc.contact_name = '');
+    ```
+  * *Data e hora da alteração:* 27/06/2026 às 10:50 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`
+
 * **Correção de Bugs: Conversa Travada e Observações no Registro de Atendimentos:**
   * *O que foi feito:*
     1. Ajustado o helper `checkConversationLock` em `api/index.ts` para não bloquear conversas quando `assigned_to` for nulo, garantindo que conversas não fiquem travadas sem dono. Além disso, o webhook de recebimento (`POST /api/webhooks/whatsapp`) foi ajustado para forçar o status `waiting` em novas conversas, impedindo a inicialização em `in_progress` sem `assigned_to`.
