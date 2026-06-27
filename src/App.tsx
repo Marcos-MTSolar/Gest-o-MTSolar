@@ -38,6 +38,7 @@ const NeoenergiaProtocols = lazy(() => import('./pages/NeoenergiaProtocols'));
 const EnergyCalculator = lazy(() => import('./pages/EnergyCalculator'));
 const ObraSchedule = lazy(() => import('./pages/ObraSchedule'));
 const Ponto = lazy(() => import('./pages/Ponto'));
+const SalesOrigin = lazy(() => import('./pages/SalesOrigin'));
 
 function PrivateRoute({ children, roles }: { children: React.ReactNode, roles?: string[] }) {
   const { user, loading } = useAuth();
@@ -214,6 +215,12 @@ export default function App() {
               <Route path="/settings" element={
                 <PrivateRoute roles={['CEO', 'ADMIN']}>
                   <Settings />
+                </PrivateRoute>
+              } />
+
+              <Route path="/origem-vendas" element={
+                <PrivateRoute roles={['CEO']}>
+                  <SalesOrigin />
                 </PrivateRoute>
               } />
 

@@ -428,14 +428,41 @@ app.get('/api/clients', authenticateToken, async (req: any, res) => {
 
 app.post('/api/clients', authenticateToken, async (req: any, res) => {
   const { 
-    name, phone, email, address, city, state, cpf_cnpj,
+    name, phone, email, address, city, state, cpf_cnpj, origem_venda = null,
     proposal_value, payment_method, kit_supplier, pendencies, notes, finance_grace_period,
     inversor_marca = null, inversor_modelo = null, inversor_potencia = null,
     modulo_modelo = null, modulo_potencia = null, estrutura_tipo = null
   } = req.body;
 
   try {
-    const insertPayload = {
+    // Verificar duplicidade por telefone ou CPF antes de inserir
+    if (phone || cpf_cnpj) {
+      let dupQuery = supabaseAdmin
+        .from('clients')
+        .select('id, name, phone, cpf_cnpj, created_by, users(name)')
+        .eq('company_id', req.user.company_id);
+
+      if (phone && cpf_cnpj) {
+        dupQuery = dupQuery.or(`phone.eq.${phone},cpf_cnpj.eq.${cpf_cnpj}`);
+      } else if (phone) {
+        dupQuery = dupQuery.eq('phone', phone);
+      } else {
+        dupQuery = dupQuery.eq('cpf_cnpj', cpf_cnpj);
+      }
+
+      const { data: existing } = await dupQuery.maybeSingle();
+
+      if (existing) {
+        const cadastradoPor = (existing as any).users?.name || 'outro usuário';
+        return res.status(409).json({
+          error: 'CLIENTE_DUPLICADO',
+          message: `Este cliente já está cadastrado por ${cadastradoPor}.`,
+          client_id: existing.id,
+          client_name: existing.name
+        });
+      }
+    }
+    const insertPayload: any = {
       name,
       phone,
       email,
@@ -443,6 +470,7 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
       city,
       state,
       cpf_cnpj,
+      origem_venda,
       inversor_marca,
       inversor_modelo,
       inversor_potencia: inversor_potencia !== null && inversor_potencia !== '' && !isNaN(parseFloat(inversor_potencia)) ? parseFloat(inversor_potencia) : null,
@@ -517,12 +545,12 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
 
 app.put('/api/clients/:id', authenticateToken, async (req: any, res) => {
   const { 
-    name, phone, email, address, city, state, cpf_cnpj,
+    name, phone, email, address, city, state, cpf_cnpj, origem_venda = null,
     inversor_marca = null, inversor_modelo = null, inversor_potencia = null,
     modulo_modelo = null, modulo_potencia = null, estrutura_tipo = null
   } = req.body;
 
-  const updatePayload = {
+  const updatePayload: any = {
     name,
     phone,
     email,
@@ -530,6 +558,7 @@ app.put('/api/clients/:id', authenticateToken, async (req: any, res) => {
     city,
     state,
     cpf_cnpj,
+    origem_venda,
     inversor_marca,
     inversor_modelo,
     inversor_potencia: inversor_potencia !== null && inversor_potencia !== '' && !isNaN(parseFloat(inversor_potencia)) ? parseFloat(inversor_potencia) : null,
@@ -557,6 +586,32 @@ app.put('/api/clients/:id', authenticateToken, async (req: any, res) => {
   }
 
   res.json({ success: true });
+});
+
+// Relatório de origem de vendas (apenas CEO)
+app.get('/api/relatorio/origem-vendas', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'CEO') return res.status(403).json({ error: 'Apenas CEO.' });
+
+  const { data: clientes, error } = await supabaseAdmin
+    .from('clients')
+    .select('origem_venda, created_at')
+    .eq('company_id', req.user.company_id)
+    .not('origem_venda', 'is', null);
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  // Agrupa por origem
+  const agrupado: Record<string, number> = {};
+  for (const c of clientes || []) {
+    const origem = c.origem_venda || 'Não informado';
+    agrupado[origem] = (agrupado[origem] || 0) + 1;
+  }
+
+  const resultado = Object.entries(agrupado)
+    .map(([origem, total]) => ({ origem, total }))
+    .sort((a, b) => b.total - a.total);
+
+  res.json({ data: resultado, total_clientes: clientes?.length || 0 });
 });
 
 // Projects
@@ -2990,13 +3045,19 @@ app.post('/api/service-proposals', authenticateToken, async (req: any, res) => {
 // Neoenergia Protocols
 app.get('/api/neoenergia', authenticateToken, async (req: any, res) => {
   try {
-    const { data: protocols, error } = await supabase
+    let query = supabase
       .from('neoenergia_protocols')
       .select('*')
       .eq('company_id', req.user.company_id)
       .or(`resolved_at.is.null,resolved_at.gt.${new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()}`)
       .order('created_at', { ascending: false });
 
+    // Vendedor vê apenas os seus protocolos
+    if (req.user.role === 'COMMERCIAL') {
+      query = query.eq('created_by', req.user.id);
+    }
+
+    const { data: protocols, error } = await query;
     if (error) throw error;
     res.json(protocols || []);
   } catch (err: any) {
@@ -3121,17 +3182,32 @@ app.delete('/api/neoenergia/:id', authenticateToken, async (req: any, res) => {
 
 // Stats
 app.get('/api/stats', authenticateToken, async (req: any, res) => {
-  // Count all projects that are not completed
-  const { count: totalProjects } = await supabase.from('projects').select('*', { count: 'exact', head: true }).eq('company_id', req.user.company_id);
-  const { count: completedProjects } = await supabase.from('projects').select('*', { count: 'exact', head: true })
-    .eq('company_id', req.user.company_id)
-    .or('status.eq.completed,current_stage.eq.completed');
-  const { count: pendingInspections } = await supabase.from('projects').select('*', { count: 'exact', head: true })
-    .eq('company_id', req.user.company_id)
-    .eq('current_stage', 'inspection');
-  const { count: pendingInstallations } = await supabase.from('projects').select('*', { count: 'exact', head: true })
-    .eq('company_id', req.user.company_id)
-    .eq('current_stage', 'installation');
+  const isCommercial = req.user.role === 'COMMERCIAL';
+  
+  // Base query com filtro por vendedor se necessário
+  const baseFilter = (query: any) => {
+    query = query.eq('company_id', req.user.company_id);
+    if (isCommercial) {
+      query = query.eq('created_by', req.user.id);
+    }
+    return query;
+  };
+
+  const { count: totalProjects } = await baseFilter(
+    supabase.from('projects').select('*', { count: 'exact', head: true })
+  );
+  
+  const { count: completedProjects } = await baseFilter(
+    supabase.from('projects').select('*', { count: 'exact', head: true })
+  ).or('status.eq.completed,current_stage.eq.completed');
+
+  const { count: pendingInspections } = await baseFilter(
+    supabase.from('projects').select('*', { count: 'exact', head: true })
+  ).eq('current_stage', 'inspection');
+
+  const { count: pendingInstallations } = await baseFilter(
+    supabase.from('projects').select('*', { count: 'exact', head: true })
+  ).eq('current_stage', 'installation');
 
   const activeProjects = (totalProjects || 0) - (completedProjects || 0);
 
@@ -4621,6 +4697,166 @@ app.post('/api/kommo/fix-names', authenticateToken, async (req: any, res) => {
 // ============================================================
 // FIM — INTEGRAÇÃO KOMMO CRM
 // ============================================================
+
+// Cron: verifica inatividade de conversas e notifica/encerra automaticamente
+app.get('/api/cron/check-inatividade', async (req, res) => {
+  try {
+    const agora = new Date();
+
+    // Data de corte para alerta (10 dias atrás)
+    const alertaCutoff = new Date(agora);
+    alertaCutoff.setDate(alertaCutoff.getDate() - 10);
+
+    // Data de corte para encerramento (30 dias atrás)
+    const encerramentoCutoff = new Date(agora);
+    encerramentoCutoff.setDate(encerramentoCutoff.getDate() - 30);
+
+    // Busca conversas in_progress com last_message_at preenchido
+    const { data: conversas, error } = await supabaseAdmin
+      .from('whatsapp_conversations')
+      .select('id, phone, contact_name, assigned_to, last_message_at, company_id')
+      .eq('status', 'in_progress')
+      .not('last_message_at', 'is', null)
+      .lte('last_message_at', alertaCutoff.toISOString());
+
+    if (error) throw error;
+    if (!conversas || conversas.length === 0) {
+      return res.json({ alertas: 0, encerradas: 0 });
+    }
+
+    let alertas = 0;
+    let encerradas = 0;
+
+    for (const conv of conversas) {
+      const ultimaMensagem = new Date(conv.last_message_at);
+      const diasSemInteracao = Math.floor(
+        (agora.getTime() - ultimaMensagem.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      if (diasSemInteracao >= 30) {
+        // ENCERRAR automaticamente
+        await supabaseAdmin
+          .from('whatsapp_conversations')
+          .update({
+            status: 'closed',
+            assigned_to: null,
+            assigned_name: null,
+            assigned_at: null
+          })
+          .eq('id', conv.id);
+
+        // Inserir mensagem interna de encerramento
+        await supabaseAdmin
+          .from('whatsapp_messages')
+          .insert({
+            conversation_id: conv.id,
+            phone: conv.phone,
+            message: `⚠️ Atendimento encerrado automaticamente por inatividade de ${diasSemInteracao} dias sem interação.`,
+            from_me: true,
+            is_internal: true,
+            message_id: `auto-close-${conv.id}-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            status: 'sent',
+            company_id: conv.company_id
+          });
+
+        encerradas++;
+        console.log(`[INATIVIDADE] Conversa ${conv.id} encerrada após ${diasSemInteracao} dias.`);
+
+      } else if (diasSemInteracao >= 10 && conv.assigned_to) {
+        // ALERTAR o vendedor via push
+        const nomeContato = conv.contact_name || conv.phone;
+        await sendPushNotification(
+          conv.assigned_to,
+          '⚠️ Cliente sem resposta',
+          `${nomeContato} está há ${diasSemInteracao} dias sem interação.`,
+          { type: 'whatsapp_message', conversationId: conv.id }
+        );
+
+        alertas++;
+        console.log(`[INATIVIDADE] Alerta enviado para vendedor ${conv.assigned_to} — conversa ${conv.id} inativa há ${diasSemInteracao} dias.`);
+      }
+    }
+
+    res.json({ alertas, encerradas });
+  } catch (err: any) {
+    console.error('[INATIVIDADE CRON] Erro:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Transferir conversa para vendedor específico (apenas CEO)
+app.post('/api/whatsapp/transfer-to-agent', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'CEO') return res.status(403).json({ error: 'Apenas CEO pode transferir para agente específico.' });
+
+  const { conversationId, targetUserId } = req.body;
+
+  if (!conversationId || !targetUserId) {
+    return res.status(400).json({ error: 'conversationId e targetUserId são obrigatórios.' });
+  }
+
+  try {
+    // Busca dados do vendedor destino
+    const { data: targetUser, error: userError } = await supabaseAdmin
+      .from('users')
+      .select('id, name, push_token')
+      .eq('id', targetUserId)
+      .eq('company_id', req.user.company_id)
+      .single();
+
+    if (userError || !targetUser) {
+      return res.status(404).json({ error: 'Vendedor não encontrado.' });
+    }
+
+    // Atualiza a conversa com o novo responsável
+    const { error: updateError } = await supabaseAdmin
+      .from('whatsapp_conversations')
+      .update({
+        assigned_to: targetUser.id,
+        assigned_name: targetUser.name,
+        assigned_at: new Date().toISOString(),
+        status: 'in_progress'
+      })
+      .eq('id', conversationId)
+      .eq('company_id', req.user.company_id);
+
+    if (updateError) throw updateError;
+
+    // Busca dados da conversa para nota e notificação
+    const { data: conv } = await supabaseAdmin
+      .from('whatsapp_conversations')
+      .select('phone, contact_name')
+      .eq('id', conversationId)
+      .single();
+
+    // Inserir nota interna informando a transferência
+    await supabaseAdmin
+      .from('whatsapp_messages')
+      .insert({
+        conversation_id: conversationId,
+        phone: conv?.phone || '',
+        message: `🔄 Atendimento transferido pelo CEO para ${targetUser.name}.`,
+        from_me: true,
+        is_internal: true,
+        message_id: `transfer-agent-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        status: 'sent',
+        company_id: req.user.company_id
+      });
+
+    // Push notification para o vendedor que recebeu
+    await sendPushNotification(
+      targetUser.id,
+      '📩 Atendimento transferido',
+      `O CEO transferiu o atendimento de ${conv?.contact_name || conv?.phone} para você.`,
+      { type: 'whatsapp_message', conversationId }
+    );
+
+    res.json({ success: true, assignedTo: targetUser.name });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Catch-all for API routes to prevent falling through to SPA HTML
 app.all('/api/*', (req, res) => {

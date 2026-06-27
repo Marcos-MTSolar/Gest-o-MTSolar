@@ -138,6 +138,10 @@ export default function WhatsApp() {
   const [showTransferToAtendimentoModal, setShowTransferToAtendimentoModal] = useState(false);
   const [transferObservation, setTransferObservation] = useState('');
   const [isTransferring, setIsTransferring] = useState(false);
+  // Estados da transferência para vendedor específico (CEO)
+  const [showCeoTransferModal, setShowCeoTransferModal] = useState(false);
+  const [ceoTransferTarget, setCeoTransferTarget] = useState<string | null>(null);
+  const [isTransferringToAgent, setIsTransferringToAgent] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   
   // Media State
@@ -306,7 +310,7 @@ export default function WhatsApp() {
   const fetchAgents = async () => {
     const { data, error } = await supabase
       .from('users')
-      .select('id, name')
+      .select('id, name, role')
       .eq('company_id', user?.company_id)
       .neq('id', user?.id);
     
@@ -654,6 +658,26 @@ export default function WhatsApp() {
     }
   };
 
+  // Transferência para vendedor específico (apenas CEO)
+  const transferToSpecificAgent = async () => {
+    if (!selectedConversation || !ceoTransferTarget) return;
+    setIsTransferringToAgent(true);
+    try {
+      const { data } = await api.post('/api/whatsapp/transfer-to-agent', {
+        conversationId: selectedConversation.id,
+        targetUserId: ceoTransferTarget
+      });
+      alert(`\u2705 Atendimento transferido com sucesso para ${data.assignedTo}.`);
+      setShowCeoTransferModal(false);
+      setCeoTransferTarget(null);
+      fetchConversations();
+      setSelectedConversation(null);
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Erro ao transferir atendimento.');
+    } finally {
+      setIsTransferringToAgent(false);
+    }
+  };
 
   const allFiltered = conversations.filter(conv => {
     const matchesSearch = (conv.contact_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1429,6 +1453,15 @@ export default function WhatsApp() {
                       <RefreshCcw size={16} /> Transferir para Atendimento
                     </button>
                   )}
+
+                  {user?.role === 'CEO' && (
+                    <button
+                      onClick={() => setShowCeoTransferModal(true)}
+                      className="w-full flex items-center justify-center gap-2 py-3 bg-purple-600 text-white rounded-xl text-xs font-bold hover:bg-purple-700 transition-all shadow-md"
+                    >
+                      <UserPlus size={16} /> Transferir para Vendedor
+                    </button>
+                  )}
                 </>
               ) : selectedConversation.status === 'closed' ? (
                 <button 
@@ -1760,6 +1793,64 @@ export default function WhatsApp() {
                 {renderObservationsPanel()}
               </div>
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Transferência para Vendedor Específico — apenas CEO */}
+      {showCeoTransferModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-purple-700 text-white">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <UserPlus size={20} /> Transferir para Vendedor
+              </h3>
+              <button onClick={() => { setShowCeoTransferModal(false); setCeoTransferTarget(null); }}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-gray-500 mb-4">Selecione o vendedor que vai assumir este atendimento:</p>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {availableAgents
+                  .filter((a: any) => a.role === 'COMMERCIAL' || !a.role)
+                  .map((agent: any) => (
+                    <button
+                      key={agent.id}
+                      onClick={() => setCeoTransferTarget(agent.id)}
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
+                        ceoTransferTarget === agent.id
+                          ? 'border-purple-500 bg-purple-50'
+                          : 'border-gray-100 hover:border-purple-200 hover:bg-purple-50'
+                      }`}
+                    >
+                      <div className="w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-bold text-sm">
+                        {agent.name?.charAt(0)}
+                      </div>
+                      <span className="font-bold text-gray-800 text-sm">{agent.name}</span>
+                      {ceoTransferTarget === agent.id && <Check size={16} className="ml-auto text-purple-600" />}
+                    </button>
+                  ))}
+                {availableAgents.filter((a: any) => a.role === 'COMMERCIAL' || !a.role).length === 0 && (
+                  <div className="text-center py-6 text-gray-400 text-sm">Nenhum vendedor disponível.</div>
+                )}
+              </div>
+            </div>
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+              <button
+                onClick={() => { setShowCeoTransferModal(false); setCeoTransferTarget(null); }}
+                className="px-5 py-2 text-sm font-bold text-gray-500 hover:text-gray-700"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={transferToSpecificAgent}
+                disabled={!ceoTransferTarget || isTransferringToAgent}
+                className="px-5 py-2 bg-purple-600 text-white rounded-xl text-sm font-bold hover:bg-purple-700 disabled:opacity-50 transition-all"
+              >
+                {isTransferringToAgent ? 'Transferindo...' : 'Confirmar'}
+              </button>
             </div>
           </div>
         </div>

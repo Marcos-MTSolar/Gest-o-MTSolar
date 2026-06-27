@@ -560,6 +560,30 @@ O fluxo de processamento de mÃƒÂ­dias foi otimizado para evitar expiraÃƒÂ
 ---
 
 
+* **Deduplicação de Clientes e Filtro de Vendedor no Dashboard:**
+  * *O que foi feito:* 
+    1. Implementada verificação de duplicidade de cliente no backend (`POST /api/clients`) por telefone ou CPF/CNPJ. Retorna HTTP 409 caso exista, exibindo o nome do usuário que o cadastrou.
+    2. Adicionado tratamento de erro HTTP 409 no frontend (`Commercial.tsx`), exibindo um alerta amigável ao vendedor e mantendo o modal aberto para correção.
+    3. Atualizadas as rotas `GET /api/stats` e `GET /api/neoenergia` para filtrar os projetos pelo vendedor (`created_by`) logado caso ele tenha a role `COMMERCIAL`.
+    4. Implementado filtro de projetos no lado do cliente em `Dashboard.tsx` (na listagem de Homologações) para que usuários com role `COMMERCIAL` vejam apenas seus próprios projetos.
+  * *Data e hora da alteração:* 27/06/2026 às 14:45 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/Commercial.tsx`, `src/pages/Dashboard.tsx`.
+
+* **Alerta de Inatividade e Auto-encerramento de Conversas:**
+  * *O que foi feito:* Criada a rota de cronjob `GET /api/cron/check-inatividade` em `api/index.ts` e registrada em `vercel.json` para rodar diariamente às 08:00 UTC. Conversas sem interação há mais de 10 dias alertam o vendedor via Push Notification; conversas há mais de 30 dias são encerradas automaticamente com mensagem interna.
+  * *Data e hora da alteração:* 27/06/2026 às 15:00 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `vercel.json`.
+
+* **Transferência para Vendedor Específico (Somente CEO):**
+  * *O que foi feito:* Adicionada nova rota `POST /api/whatsapp/transfer-to-agent` no backend, protegida pela role `CEO`. A rota reatribui a conversa ao vendedor escolhido, insere uma nota interna de registro e dispara push notification para o vendedor de destino. No frontend (`WhatsApp.tsx`): adicionados 3 novos estados (`showCeoTransferModal`, `ceoTransferTarget`, `isTransferringToAgent`), a função `transferToSpecificAgent`, um botão roxo "Transferir para Vendedor" no painel de ações desktop (visível apenas para CEO) e o modal completo com lista de vendedores filtrados por role `COMMERCIAL`. O `fetchAgents` foi atualizado para buscar também o campo `role`, necessário para o filtro do modal.
+  * *Data e hora da alteração:* 27/06/2026 às 15:07 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/WhatsApp.tsx`.
+
+* **Relatório de Origem de Vendas (CEO) e Campo Origem:**
+  * *O que foi feito:* Adicionado o campo `origem_venda` no payload de `POST /api/clients` e `PUT /api/clients/:id` no backend. No frontend (`Commercial.tsx`), foi adicionado o select para o campo "Origem da Venda" com opções predefinidas logo após o Endereço. Criada a página `SalesOrigin.tsx` com gráficos de barra para o CEO analisar os canais de aquisição. A rota protegida e o item no menu lateral foram adicionados apenas para role `CEO`. Requer execução manual do SQL no Supabase: `ALTER TABLE clients ADD COLUMN IF NOT EXISTS origem_venda TEXT;`.
+  * *Data e hora da alteração:* 27/06/2026 às 15:00 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/Commercial.tsx`, `src/App.tsx`, `src/components/Layout.tsx`. Arquivo criado: `src/pages/SalesOrigin.tsx`.
+
 * **ImplementaÃ§Ã£o da Nova PÃ¡gina de Registro de Atendimentos:**
   * *O que foi feito:* Criada a pÃ¡gina "Registro de Atendimentos" (`AttendanceRegistry.tsx`) funcionando como uma planilha gerencial de clientes em andamento no WhatsApp. Adicionada a rota `GET /api/attendance-registry` com suporte a multi-tenancy e filtro de role (Vendedores veem apenas as prÃ³prias conversas, ADM/CEO veem todas). A tabela exibe o Cliente, Vendedor ResponsÃ¡vel, Etiquetas, Tempo sem InteraÃ§Ã£o (calculado a partir de `last_message_at`) e a Ãºltima nota da tabela `whatsapp_observations`. Inclui funcionalidade de destacar em vermelho conversas sem interaÃ§Ã£o hÃ¡ mais de 5 dias e filtro por vendedor/etiquetas.
   * *Data e hora da alteraÃ§Ã£o:* 25/06/2026 Ã s 16:16 (HorÃ¡rio Local)

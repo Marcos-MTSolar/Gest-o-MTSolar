@@ -26,7 +26,8 @@ import {
   Zap,
   FileCheck,
   Clock,
-  Table
+  Table,
+  TrendingUp
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
@@ -109,6 +110,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: 'Comercial', path: '/commercial', icon: Briefcase, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Atendimento', path: '/whatsapp', icon: MessageCircle, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Reg. Atendimentos', path: '/registro-atendimentos', icon: Table, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
+    { name: 'Origem de Vendas', path: '/origem-vendas', icon: TrendingUp, roles: ['CEO'] },
     { name: 'Agenda', path: '/agenda', icon: Calendar, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
     { name: 'Cronograma', path: '/cronograma', icon: Calendar, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
     { name: 'Protocolos Neoenergia', path: '/neoenergia', icon: ClipboardList, roles: ['CEO', 'ADMIN'] },

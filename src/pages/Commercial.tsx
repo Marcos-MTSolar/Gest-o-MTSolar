@@ -5,12 +5,24 @@ import { sendUpdateNotification } from '../lib/notifications';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 
+const ORIGENS_VENDA = [
+  'Lead (Tráfego Pago)',
+  'Prospecção Porta a Porta',
+  'Ação Comercial (Rua)',
+  'Indicação de Cliente',
+  'Parceiro/Franquia',
+  'Redes Sociais (Orgânico)',
+  'Site/Google',
+  'Evento/Feira',
+  'Outro'
+];
+
 export default function Commercial() {
   const [projectsPendentes, setProjectsPendentes] = useState<any[]>([]);
   const [showNewClient, setShowNewClient] = useState(false);
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [newClient, setNewClient] = useState({ 
-    name: '', phone: '', email: '', address: '', city: '', state: '', zip_code: '', cpf_cnpj: '',
+    name: '', phone: '', email: '', address: '', city: '', state: '', zip_code: '', cpf_cnpj: '', origem_venda: '',
     proposal_value: '', payment_method: 'cash', kit_supplier: '', pendencies: '', notes: '', finance_grace_period: 0,
     inversor_marca: '', inversor_modelo: '', inversor_potencia: '', 
     modulo_potencia: '', modulo_modelo: '', estrutura_tipo: ''
@@ -213,7 +225,11 @@ export default function Commercial() {
       alert('Cliente cadastrado com sucesso!');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error: any) {
-      alert('Erro ao cadastrar cliente: ' + error.message);
+      if (error?.response?.status === 409 && error?.response?.data?.error === 'CLIENTE_DUPLICADO') {
+        alert(`⚠️ ${error.response.data.message}\n\nCliente: ${error.response.data.client_name}`);
+        return; // não fecha o modal, deixa o vendedor corrigir
+      }
+      alert('Erro ao cadastrar cliente: ' + (error?.response?.data?.error || error.message));
     } finally {
       setIsSavingProject(false);
     }
@@ -368,6 +384,21 @@ export default function Commercial() {
                     <label className="block text-xs font-bold text-gray-500 mb-1">ENDEREÇO (RUA, Nº, BAIRRO) *</label>
                     <input placeholder="Rua, Número, Bairro" className={`w-full border p-2 rounded ${formErrors.address ? 'border-red-500' : ''}`} value={newClient.address} onChange={e => setNewClient({ ...newClient, address: e.target.value })} />
                     {formErrors.address && <p className="text-red-500 text-[10px] mt-1">{formErrors.address}</p>}
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      Origem da Venda
+                    </label>
+                    <select
+                      value={newClient.origem_venda || ''}
+                      onChange={(e) => setNewClient({ ...newClient, origem_venda: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Selecione a origem...</option>
+                      {ORIGENS_VENDA.map(o => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">CIDADE *</label>
@@ -983,6 +1014,21 @@ export default function Commercial() {
                 <label className="block text-xs font-bold text-gray-500 mb-1">ENDEREÇO (RUA, Nº, BAIRRO) *</label>
                 <input placeholder="Rua, Número, Bairro" className={`w-full border p-2 rounded ${formErrors.address ? 'border-red-500' : ''}`} value={editClientData.address} onChange={e => setEditClientData({ ...editClientData, address: e.target.value })} />
                 {formErrors.address && <p className="text-red-500 text-[10px] mt-1">{formErrors.address}</p>}
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  Origem da Venda
+                </label>
+                <select
+                  value={editClientData.origem_venda || ''}
+                  onChange={(e) => setEditClientData({ ...editClientData, origem_venda: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Selecione a origem...</option>
+                  {ORIGENS_VENDA.map(o => (
+                    <option key={o} value={o}>{o}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1">CIDADE *</label>

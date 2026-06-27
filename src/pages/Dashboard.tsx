@@ -44,7 +44,11 @@ export default function Dashboard() {
     // Fetch homologações
     api.get('/api/projects').then(res => {
       if (Array.isArray(res.data)) {
-        setHomologacoes(res.data.filter((p: any) =>
+        const projetosVisiveis = user?.role === 'COMMERCIAL'
+          ? res.data.filter((p: any) => p.created_by === user.id || p.assigned_to === user.id)
+          : res.data;
+
+        setHomologacoes(projetosVisiveis.filter((p: any) =>
           ['homologation', 'conclusion', 'completed'].includes(p.current_stage) &&
           p.current_stage !== 'conclusion' &&
           p.status !== 'completed'
