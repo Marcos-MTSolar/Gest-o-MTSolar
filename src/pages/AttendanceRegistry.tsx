@@ -27,6 +27,7 @@ const WHATSAPP_TAGS = [
 ];
 
 interface Observation {
+  id: string;
   user_name: string;
   observation: string;
   created_at: string;
@@ -209,7 +210,6 @@ export default function AttendanceRegistry() {
               ) : (
                 filteredRecords.map((record) => {
                   const isWarning = isIdleWarning(record.last_message_at);
-                  const lastObs = record.whatsapp_observations?.[0];
 
                   return (
                     <tr 
@@ -281,19 +281,49 @@ export default function AttendanceRegistry() {
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        {lastObs ? (
-                          <div className="max-w-xs">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
-                                {lastObs.user_name}
-                              </span>
-                              <span className="text-[10px] text-gray-400">
-                                {format(new Date(lastObs.created_at), 'dd/MM HH:mm')}
-                              </span>
-                            </div>
-                            <p className="text-xs text-gray-600 line-clamp-2" title={lastObs.observation}>
-                              {lastObs.observation}
-                            </p>
+                        {record.whatsapp_observations?.length > 0 ? (
+                          <div className="space-y-3 max-w-xs">
+                            {record.whatsapp_observations.slice(0, 2).map((obs) => (
+                              <div key={obs.id} className="border-b border-gray-100 last:border-0 pb-2 last:pb-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                                    {obs.user_name}
+                                  </span>
+                                  <span className="text-[10px] text-gray-400">
+                                    {format(new Date(obs.created_at), 'dd/MM HH:mm')}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-gray-600" title={obs.observation}>
+                                  {obs.observation}
+                                </p>
+                              </div>
+                            ))}
+                            {record.whatsapp_observations.length > 2 && (
+                              <div className="pt-1">
+                                <details className="group">
+                                  <summary className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer list-none">
+                                    Ver todas ({record.whatsapp_observations.length})
+                                  </summary>
+                                  <div className="mt-3 space-y-3">
+                                    {record.whatsapp_observations.slice(2).map((obs) => (
+                                      <div key={obs.id} className="border-b border-gray-100 last:border-0 pb-2 last:pb-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                                            {obs.user_name}
+                                          </span>
+                                          <span className="text-[10px] text-gray-400">
+                                            {format(new Date(obs.created_at), 'dd/MM HH:mm')}
+                                          </span>
+                                        </div>
+                                        <p className="text-xs text-gray-600" title={obs.observation}>
+                                          {obs.observation}
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </details>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="flex items-center gap-2 text-gray-400 text-xs italic">

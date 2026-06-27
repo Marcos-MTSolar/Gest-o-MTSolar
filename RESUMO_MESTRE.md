@@ -565,8 +565,12 @@ O fluxo de processamento de mÃƒÂ­dias foi otimizado para evitar expiraÃƒÂ
   * *Data e hora da alteraÃ§Ã£o:* 25/06/2026 Ã s 16:16 (HorÃ¡rio Local)
   * *Arquivos modificados:* `api/index.ts`, `src/pages/AttendanceRegistry.tsx`, `src/components/Layout.tsx`, `src/App.tsx` e `RESUMO_MESTRE.md`.
 
-
-
+* **Correção de Bugs: Conversa Travada e Observações no Registro de Atendimentos:**
+  * *O que foi feito:*
+    1. Ajustado o helper `checkConversationLock` em `api/index.ts` para não bloquear conversas quando `assigned_to` for nulo, garantindo que conversas não fiquem travadas sem dono. Além disso, o webhook de recebimento (`POST /api/webhooks/whatsapp`) foi ajustado para forçar o status `waiting` em novas conversas, impedindo a inicialização em `in_progress` sem `assigned_to`.
+    2. Na rota `GET /api/attendance-registry`, foi removido o `.limit(1)` das observações, retornando o histórico completo de notas da conversa. No frontend (`AttendanceRegistry.tsx`), a interface `Observation` e a renderização da coluna foram atualizadas para exibir o histórico de observações empilhado verticalmente (as 2 mais recentes, com botão "Ver todas (X)" abrindo inline) em vez de apenas a última observação, garantindo que notas antigas não sejam sobrescritas.
+  * *Data e hora da alteração:* 27/06/2026 às 09:48 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/AttendanceRegistry.tsx`
 
 * **Etiquetas, Transferir e Encerrar no Mobile â€” Modal de Detalhes (WhatsApp.tsx):**
   * *O que foi feito:* O modal `showObservationsModal` (aberto pelo botÃ£o Info no mobile) continha apenas o bloco de ObservaÃ§Ãµes. Expandido para funcionar como um painel completo de atendimento no mobile, incluindo: (1) Card de info do contato com status; (2) Bloco de **Etiquetas** com seleÃ§Ã£o mÃºltipla por toque; (3) Bloco de **AÃ§Ãµes** com todos os botÃµes contextuais (Assumir / Transferir para Agente / Transferir para Administrativo / Transferir para Atendimento / Encerrar / Reabrir) respeitando o status da conversa e o role do usuÃ¡rio; (4) Bloco de **ObservaÃ§Ãµes**. Cada aÃ§Ã£o do bloco AÃ§Ãµes fecha o modal antes de executar para evitar sobreposiÃ§Ã£o de camadas.

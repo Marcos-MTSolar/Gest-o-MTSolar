@@ -1503,15 +1503,15 @@ app.get('/api/attendance-registry', authenticateToken, async (req: any, res) => 
         assigned_name,
         status,
         whatsapp_observations (
-          user_name,
+          id,
           observation,
+          user_name,
           created_at
         )
       `)
       .in('status', ['waiting', 'in_progress'])
       .eq('company_id', req.user.company_id)
-      .order('created_at', { foreignTable: 'whatsapp_observations', ascending: false })
-      .limit(1, { foreignTable: 'whatsapp_observations' });
+      .order('created_at', { foreignTable: 'whatsapp_observations', ascending: false });
 
     // Isolamento para o Vendedor
     if (req.user.role === 'COMMERCIAL') {
@@ -1857,14 +1857,19 @@ async function checkConversationLock(conversationId: string, userId: number, use
     .eq('id', conversationId)
     .eq('company_id', companyId)
     .single();
+
+  if (!conv) return { locked: false };
+
+  // Só bloqueia se: in_progress + tem dono + dono é diferente do usuário atual + não é CEO
   if (
-    conv?.status === 'in_progress' &&
-    conv?.assigned_to !== null &&
-    Number(conv?.assigned_to) !== Number(userId) &&
+    conv.status === 'in_progress' &&
+    conv.assigned_to !== null &&
+    Number(conv.assigned_to) !== Number(userId) &&
     userRole !== 'CEO'
   ) {
-    return { locked: true, assignedTo: conv?.assigned_name || 'Outro agente' };
+    return { locked: true, assignedTo: conv.assigned_name || 'Outro agente' };
   }
+
   return { locked: false };
 }
 
@@ -2564,7 +2569,7 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
               contact_name: pushName || null,
               last_message: text,
               last_message_at: new Date().toISOString(),
-              status: fromMe ? 'in_progress' : 'waiting',
+              status: 'waiting',
               instance: instanceName
             })
             .select()
