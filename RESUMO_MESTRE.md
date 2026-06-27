@@ -565,6 +565,21 @@ O fluxo de processamento de mÃƒÂ­dias foi otimizado para evitar expiraÃƒÂ
   * *Data e hora da alteraÃ§Ã£o:* 25/06/2026 Ã s 16:16 (HorÃ¡rio Local)
   * *Arquivos modificados:* `api/index.ts`, `src/pages/AttendanceRegistry.tsx`, `src/components/Layout.tsx`, `src/App.tsx` e `RESUMO_MESTRE.md`.
 
+* **Implementação: Integração Kommo CRM → MTSolar (Round-Robin + Webhook):**
+  * *O que foi feito:* Adicionados 6 blocos em `api/index.ts` implementando a integração completa entre o Kommo CRM e o sistema de atendimento WhatsApp do MTSolar:
+    1. **`kommoApi()`** — Helper centralizado para chamadas REST ao Kommo usando `KOMMO_LONG_LIVED_TOKEN` e `KOMMO_SUBDOMAIN` (variáveis de ambiente).
+    2. **`getRoundRobinVendedor()`** — Distribui leads automaticamente para o vendedor `COMMERCIAL` ativo com menos atendimentos `in_progress` no momento.
+    3. **`getKommoLeadContact()`** — Busca no Kommo o nome e telefone do contato vinculado ao lead (normaliza telefone para formato `55XXXXXXXXXXX`).
+    4. **`getKommoLeadNotes()`** — Busca as últimas 5 notas do lead no Kommo e monta um resumo em texto para a nota interna.
+    5. **`POST /api/kommo/webhook`** — Webhook principal: recebe leads, cria conversa no CRM, aplica Round-Robin, cria nota interna automática visível apenas para o vendedor e dispara push notification. Responde `200` imediatamente para evitar retries. Se a conversa já existe, apenas atualiza o nome se estava como "Você"/null.
+    6. **`POST /api/kommo/fix-names`** *(CEO apenas)* — Rota de correção retroativa: busca conversas sem nome no banco, consulta o Kommo pelo telefone e atualiza o `contact_name`. Limita 200ms entre requisições para não sobrecarregar a API.
+  * *Variáveis de ambiente necessárias (adicionar na Vercel):*
+    - `KOMMO_LONG_LIVED_TOKEN` — JWT de acesso longo (Long-Lived Token da conta MTSolar)
+    - `KOMMO_SUBDOMAIN` — Subdomínio da conta Kommo (`mtsolarenergia`)
+  * *URL do webhook para configurar no Kommo:* `https://gest-o-mt-solar.vercel.app/api/kommo/webhook`
+  * *Data e hora da alteração:* 27/06/2026 às 11:20 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`
+
 * **Correção: contact_name Nulo em Mensagens fromMe (Kommo CRM):**
   * *O que foi feito:* Quando um vendedor respondia pelo Kommo CRM, a mensagem chegava via webhook da Evolution API com `fromMe: true` e `pushName` vazio/nulo. O sistema sobrescrevia `contact_name` com `null`, fazendo o frontend exibir "Você" como nome do contato.
   * *Solução:* Nos dois pontos do webhook (`POST /api/webhooks/whatsapp`) onde `whatsapp_conversations` é gravada (atualização de conversa existente e inserção de nova), adicionada lógica de resolução de nome em cascata: (1) usa `pushName` se disponível; (2) mantém o nome já salvo (`existingConv.contact_name`); (3) se ainda nulo, faz consulta na tabela `clients` pelo telefone e `company_id` para recuperar o nome cadastrado.
