@@ -15,6 +15,7 @@ type UserProfile = {
   cpf?: string;
   cargo?: string;
   data_admissao?: string;
+  recebe_leads?: boolean;
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -246,6 +247,9 @@ export default function Funcionarios() {
                   <th className="p-4">E-mail</th>
                   <th className="p-4">Cargo</th>
                   <th className="p-4">Status</th>
+                  {currentUser?.role === 'CEO' && (
+                    <th className="p-4 text-center">Recebe Leads</th>
+                  )}
                   <th className="p-4 text-center">Ações</th>
                 </tr>
               </thead>
@@ -286,6 +290,35 @@ export default function Funcionarios() {
                           </span>
                         </div>
                       </td>
+                      {currentUser?.role === 'CEO' && (
+                        <td className="p-4 text-center">
+                          <button
+                            onClick={async () => {
+                              try {
+                                await api.put(`/api/users/${u.id}`, {
+                                  ...u,
+                                  recebe_leads: !u.recebe_leads
+                                });
+                                // Atualiza o estado local
+                                setUsers(prev => prev.map((f: any) => 
+                                  f.id === u.id 
+                                    ? { ...f, recebe_leads: !f.recebe_leads }
+                                    : f
+                                ));
+                              } catch (err) {
+                                toast.error('Erro ao atualizar recebe_leads.');
+                              }
+                            }}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                              u.recebe_leads ? 'bg-green-500' : 'bg-gray-300'
+                            }`}
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                              u.recebe_leads ? 'translate-x-6' : 'translate-x-1'
+                            }`} />
+                          </button>
+                        </td>
+                      )}
                       <td className="p-4">
                         <div className="flex items-center justify-center gap-2.5">
                           <button

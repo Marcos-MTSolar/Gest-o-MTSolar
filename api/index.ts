@@ -254,7 +254,7 @@ app.get('/api/users', authenticateToken, async (req: any, res) => {
   // Tenta buscar com campos opcionais (cpf, cargo, data_admissao)
   let { data: users, error } = await supabase
     .from('users')
-    .select('id, name, email, role, active, created_at, cpf, cargo, data_admissao')
+    .select('id, name, email, role, active, created_at, cpf, cargo, data_admissao, recebe_leads')
     .eq('company_id', req.user.company_id);
 
   // Se falhar por colunas inexistentes no banco (PGRST204 ou 42703), retenta sem os campos opcionais
@@ -262,7 +262,7 @@ app.get('/api/users', authenticateToken, async (req: any, res) => {
     console.warn('[users GET] Colunas opcionais ausentes no schema — retentando sem cpf/cargo/data_admissao');
     const fallback = await supabase
       .from('users')
-      .select('id, name, email, role, active, created_at')
+      .select('id, name, email, role, active, created_at, recebe_leads')
       .eq('company_id', req.user.company_id);
     users = fallback.data as any[];
     error = fallback.error;
@@ -307,7 +307,7 @@ app.post('/api/users', authenticateToken, async (req: any, res) => {
 app.put('/api/users/:id', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CEO' && req.user.role !== 'ADMIN') return res.sendStatus(403);
 
-  const { name, email, role, active, password, cpf, cargo, data_admissao } = req.body;
+  const { name, email, role, active, password, cpf, cargo, data_admissao, recebe_leads } = req.body;
 
   // Payload base — campos obrigatórios
   const baseUpdate: any = {
@@ -315,6 +315,7 @@ app.put('/api/users/:id', authenticateToken, async (req: any, res) => {
     email,
     role,
     active: active ? true : false,
+    recebe_leads: recebe_leads === true || recebe_leads === 'true'
   };
 
   // Payload completo — inclui campos opcionais se preenchidos
@@ -4401,17 +4402,19 @@ async function kommoApi(endpoint: string, method: string = 'GET', body?: any) {
   return response.json();
 }
 
-// Helper: retorna o vendedor COMMERCIAL com menos atendimentos ativos (Round-Robin)
+// Helper: retorna o vendedor com menos atendimentos ativos entre os que recebem leads (Round-Robin)
 async function getRoundRobinVendedor(companyId: string): Promise<{ id: number; name: string } | null> {
+  // Busca apenas vendedores COMMERCIAL ativos E marcados para receber leads
   const { data: vendedores, error } = await supabaseAdmin
     .from('users')
     .select('id, name')
     .eq('company_id', companyId)
     .eq('role', 'COMMERCIAL')
-    .eq('active', true);
+    .eq('active', true)
+    .eq('recebe_leads', true); // ← único filtro adicional
 
   if (error || !vendedores || vendedores.length === 0) {
-    console.warn('[ROUND-ROBIN] Nenhum vendedor COMMERCIAL ativo encontrado.');
+    console.warn('[ROUND-ROBIN] Nenhum vendedor com recebe_leads=true encontrado.');
     return null;
   }
 
@@ -4428,9 +4431,13 @@ async function getRoundRobinVendedor(companyId: string): Promise<{ id: number; n
     })
   );
 
-  // Retorna o vendedor com menos atendimentos
+  // Retorna o vendedor com menos atendimentos ativos
   counts.sort((a: any, b: any) => a.total - b.total);
-  console.log(`[ROUND-ROBIN] Vendedor escolhido: ${counts[0].name} (${counts[0].total} atendimentos ativos)`);
+  
+  console.log(`[ROUND-ROBIN] Distribuição atual:`);
+  counts.forEach((v: any) => console.log(`  ${v.name}: ${v.total} atendimentos`));
+  console.log(`[ROUND-ROBIN] Escolhido: ${counts[0].name} (${counts[0].total} atendimentos ativos)`);
+  
   return counts[0];
 }
 
