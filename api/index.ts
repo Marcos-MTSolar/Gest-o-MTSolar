@@ -4251,6 +4251,24 @@ app.get('/api/cron/cleanup-vistoria-midia', async (req, res) => {
   }
 });
 
+// Manutenção: corrige conversas in_progress sem dono (estado corrompido — assigned_to = NULL)
+app.post('/api/admin/fix-orphan-conversations', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'CEO') return res.status(403).json({ error: 'Apenas CEO.' });
+
+  const { data, error } = await supabaseAdmin
+    .from('whatsapp_conversations')
+    .update({ status: 'waiting' })
+    .eq('company_id', req.user.company_id)
+    .eq('status', 'in_progress')
+    .is('assigned_to', null)
+    .select('id');
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  console.log(`[FIX-ORPHAN] ${data?.length ?? 0} conversas corrigidas para status=waiting`);
+  res.json({ fixed: data?.length ?? 0 });
+});
+
 // Catch-all for API routes to prevent falling through to SPA HTML
 app.all('/api/*', (req, res) => {
   res.status(404).json({ 

@@ -581,6 +581,16 @@ O fluxo de processamento de mÃƒÂ­dias foi otimizado para evitar expiraÃƒÂ
   * *Data e hora da alteração:* 27/06/2026 às 10:11 (Horário Local)
   * *Arquivos modificados:* `api/index.ts`, `src/pages/WhatsApp.tsx`
 
+* **Correção Crítica: Bug de Cadeado Universal — Number(null) = 0 no Frontend:**
+  * *O que foi feito:*
+    1. **Causa raiz identificada:** `Number(null) === 0` fazia com que a comparação `Number(conv.assigned_to) !== Number(user?.id)` retornasse `true` para conversas sem dono (`assigned_to = NULL`), bloqueando-as com cadeado para todos os vendedores.
+    2. **Correção 1 — `isAssignedToOther`:** Adicionadas as guardas `conv.assigned_to !== null && conv.assigned_to !== undefined` antes da comparação numérica em `renderConversationItem`.
+    3. **Correção 2 — Badge de status:** Conversas `in_progress` sem dono agora exibem badge âmbar com ícone `Timer` e texto "Aguardando atendente" em vez de cadeado cinza sem nome.
+    4. **Correção 3 — onClick:** Conversas `in_progress` sem `assigned_to` agora acionam `assumeConversation` ao clicar (igual às `waiting`), em vez de bloquear o clique.
+    5. **Correção 4 — Rota de manutenção:** Adicionada rota `POST /api/admin/fix-orphan-conversations` (restrita a CEO) que converte todas as conversas `in_progress` sem dono para `status = 'waiting'`, corrigindo o estado corrompido já existente no banco.
+  * *Data e hora da alteração:* 27/06/2026 às 10:30 (Horário Local)
+  * *Arquivos modificados:* `src/pages/WhatsApp.tsx`, `api/index.ts`
+
 * **Etiquetas, Transferir e Encerrar no Mobile â€” Modal de Detalhes (WhatsApp.tsx):**
   * *O que foi feito:* O modal `showObservationsModal` (aberto pelo botÃ£o Info no mobile) continha apenas o bloco de ObservaÃ§Ãµes. Expandido para funcionar como um painel completo de atendimento no mobile, incluindo: (1) Card de info do contato com status; (2) Bloco de **Etiquetas** com seleÃ§Ã£o mÃºltipla por toque; (3) Bloco de **AÃ§Ãµes** com todos os botÃµes contextuais (Assumir / Transferir para Agente / Transferir para Administrativo / Transferir para Atendimento / Encerrar / Reabrir) respeitando o status da conversa e o role do usuÃ¡rio; (4) Bloco de **ObservaÃ§Ãµes**. Cada aÃ§Ã£o do bloco AÃ§Ãµes fecha o modal antes de executar para evitar sobreposiÃ§Ã£o de camadas.
   * *Data e hora da alteraÃ§Ã£o:* 26/06/2026 Ã s 10:56 (HorÃ¡rio Local)

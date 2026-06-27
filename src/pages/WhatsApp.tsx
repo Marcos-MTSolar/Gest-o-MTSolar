@@ -679,7 +679,12 @@ export default function WhatsApp() {
   const closedConversations = allFiltered.filter(c => c.status === 'closed');
 
   const renderConversationItem = (conv: Conversation) => {
-    const isAssignedToOther = conv.status === 'in_progress' && Number(conv.assigned_to) !== Number(user?.id);
+    // Só considera "atribuído a outro" se assigned_to estiver de fato preenchido
+    // Number(null) = 0 causava bloqueio indevido de conversas sem dono
+    const isAssignedToOther = conv.status === 'in_progress' &&
+      conv.assigned_to !== null &&
+      conv.assigned_to !== undefined &&
+      Number(conv.assigned_to) !== Number(user?.id);
     const isBlocked = isAssignedToOther && !isAdmin;
     // Resolve os objetos visuais para todas as tags da conversa
     const convTags = (conv.tags ?? []).map(tid => WHATSAPP_TAGS.find(t => t.id === tid)).filter(Boolean);
@@ -689,6 +694,9 @@ export default function WhatsApp() {
         key={conv.id}
         onClick={() => {
           if (conv.status === 'waiting') {
+            assumeConversation(conv);
+          } else if (conv.status === 'in_progress' && !conv.assigned_to) {
+            // Conversa in_progress sem dono — permitir assumir
             assumeConversation(conv);
           } else if (isBlocked) {
             return;
@@ -756,10 +764,16 @@ export default function WhatsApp() {
           {conv.status === 'in_progress' && (
             <span className={cn(
               "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1",
-              Number(conv.assigned_to) === Number(user?.id) ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-600"
+              Number(conv.assigned_to) === Number(user?.id)
+                ? "bg-blue-100 text-blue-700"
+                : (!conv.assigned_to ? "bg-amber-100 text-amber-700" : "bg-gray-200 text-gray-600")
             )}>
-              {Number(conv.assigned_to) === Number(user?.id) ? <Check size={10} /> : <Lock size={10} />}
-              {Number(conv.assigned_to) === Number(user?.id) ? "Em atendimento" : conv.assigned_name}
+              {Number(conv.assigned_to) === Number(user?.id)
+                ? <Check size={10} />
+                : (!conv.assigned_to ? <Timer size={10} /> : <Lock size={10} />)}
+              {Number(conv.assigned_to) === Number(user?.id)
+                ? "Em atendimento"
+                : (!conv.assigned_to ? "Aguardando atendente" : (conv.assigned_name || 'outro atendente'))}
             </span>
           )}
           {conv.status === 'closed' && (
