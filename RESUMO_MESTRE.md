@@ -2,6 +2,32 @@
 
 Este documento consolida a análise detalhada e atualizada da arquitetura, stack de tecnologias, estrutura do banco de dados, regras de negócio e integrações do sistema **Gestão MTSolar**, servindo como a principal fonte de verdade técnica do projeto.
 
+* **Correção Definitiva do Recálculo de Margem de Venda (calculateResults):**
+  * *O que foi feito:* Identificado e corrigido o bug central que fazia o "Valor Final de Venda" não persistir ao alterar a margem. O `useEffect([formData])` chamava `calculateResults()` que recalculava `salePrice = kitCost * (1 + marginPercent / 100)` — como `marginPercent` é sempre `'0'` quando o kit é selecionado pelo dropdown, o valor correto era imediatamente sobrescrito. Três pontos foram corrigidos:
+    1. **`calculateResults`**: agora usa `formData.margemVenda` como fonte primária da margem (quando disponível), e prioriza `formData.valorFinalVenda` como `salePrice` se ele já foi calculado corretamente — só recalcula do zero caso nenhum esteja definido.
+    2. **`saleP` no `generatePDF`**: o fallback de cálculo do valor de venda no PDF foi corrigido para usar `margemVenda` em vez de `marginPercent`, garantindo que o PDF imprima o valor real praticado.
+    3. **`saveToHistory`**: a margem salva no histórico agora usa `formData.margemVenda` como fonte primária.
+  * *Data e hora da alteração:* 29/06/2026 às 17:45 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
+
+* **Proteção do Histórico de Propostas (PROMPT 2 — confirmação e logs):**
+  * *O que foi feito:* Auditado o cronjob `GET /api/cleanup-proposals` em `api/index.ts`. Confirmado que **não existe nenhum `.delete()` referenciando `proposal_history`** — o código usa corretamente `.update({ url_arquivo: null })` para preservar os registros. Adicionado log de auditoria no `POST /api/proposal-history` para rastrear criação de propostas com data de expiração exata nos logs da Vercel: `[PROPOSAL-HISTORY] Nova proposta salva para "...". Expira em: ...`.
+  * *Data e hora da alteração:* 29/06/2026 às 17:48 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`
+
+* **Correção do Recálculo de Margem de Venda no Gerador de Propostas:**
+  * *O que foi feito:* Corrigido o comportamento do campo "Margem de Venda (%)" para CEO/ADMIN em `ProposalGenerator.tsx`. Anteriormente, ao alterar o valor da margem, o "Valor Final de Venda" não era atualizado. Três pontos foram corrigidos:
+    1. **`applySelectedKit`**: ao selecionar um kit, passa a atualizar simultaneamente `formData.margemVenda`, `formData.valorFinalVenda`, `formData.kitCost` e `results.salePrice` via `setResults`.
+    2. **`onChange` da Margem de Venda**: recalcula `novoValorFinal = kit.valor_total * (1 + novaMargemm / 100)` e atualiza `formData.valorFinalVenda`, `formData.kitCost` e `results.salePrice` ao mesmo tempo, garantindo que o card de preview reflita a mudança imediatamente.
+    3. **`saveToHistory`**: agora usa `formData.margemVenda` como fonte primária da margem ao salvar o histórico (antes usava apenas `formData.marginPercent`, que era sempre `'0'` quando o kit era selecionado pelo dropdown).
+  * *Data e hora da alteração:* 29/06/2026 às 17:40 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
+
+* **Alteração do Banco Padrão na Proposta Comercial:**
+  * *O que foi feito:* O banco padrão selecionado na geração de propostas (`ProposalGenerator.tsx`) foi alterado de "MT Solar" para "BV" para refletir a necessidade correta de apresentação financeira no PDF gerado.
+  * *Data e hora da alteração:* 29/06/2026 às 17:30 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
+
 * **Filtro de Webhooks WhatsApp e Correção de Duplicidade:**
   * *O que foi feito:* Realizadas 3 melhorias críticas no handler do webhook (`POST /api/webhooks/whatsapp`) e no salvamento de mensagens em todo o arquivo `api/index.ts`. (1) Implementado filtro inicial ignorando mensagens de grupo (`remoteJid.endsWith('@g.us')`). (2) Implementado filtro que ignora eventos puramente de confirmação (`DELIVERY_ACK`, `READ`, `PLAYED`, `SERVER_ACK`) sem sobrecarregar o DB. (3) Convertidas *todas as 6 operações* de `.insert()` na tabela `whatsapp_messages` espalhadas no arquivo para `.upsert(..., { onConflict: 'message_id', ignoreDuplicates: true })`, prevenindo que retentativas da Evolution API gerem logs de erro `duplicate key value violates unique constraint`.
   * *Data e hora da alteração:* 29/06/2026 às 17:15 (Horário Local)
@@ -10,6 +36,17 @@ Este documento consolida a análise detalhada e atualizada da arquitetura, stack
   * *O que foi feito:* Adicionada configuração `maxDuration: 30` no `vercel.json` para a função `api/index.ts` com o intuito de prevenir Timeouts no Vercel (Erro 403/504) durante o upload de mídia de arquivos maiores (~2MB) pelo WhatsApp. Adicionado também log detalhado `try/catch` na rota `GET /api/neoenergia` para diagnosticar falhas de join (Possível erro em `created_by`).
   * *Data e hora da alteração:* 29/06/2026 às 17:11 (Horário Local)
   * *Arquivos modificados:* `vercel.json`, `api/index.ts`
+* **Auditoria de Perda Recente no Histórico de Propostas:**
+  * *O que foi feito:* Realizada uma varredura direta via SQL na tabela `proposal_history` para investigar propostas ausentes.
+  * *Resultados encontrados (Queries SQL):* 
+    * **Quantidade de registros:** Existem apenas 6 registros no banco de dados na tabela `proposal_history` atualmente (todos com `created_at` de hoje, 29/06/2026).
+    * **Company ID:** Todos os 6 registros têm o `company_id` correto (`e4bf6f22-6182-414d-afa4-c5449c014323`), correspondente à MT Solar.
+    * **Datas de Expiração:** Estão corretas. Todas as 6 propostas têm `data_expiracao` definida exatamente para 30 dias após o `created_at`.
+    * **Filtros na rota (API):** Verificada a rota `GET /api/proposal-history`. A query já está correta e NÃO possui filtros indevidos que ocultariam registros (não há `.not('url_arquivo', 'is', null)` nem filtro de `data_expiracao`).
+  * *Conclusão:* As propostas não estão ocultas por erro na API. Os registros físicos anteriores a hoje simplesmente não existem na tabela (possivelmente afetados pelo delete em cascata ou por outra rotina de exclusão).
+  * *Data e hora da alteração:* 29/06/2026 às 17:35 (Horário Local)
+  * *Arquivos modificados:* Apenas auditoria (via script de banco)
+
 * **Margem de Venda para CEO/ADMIN no Kit Solar:**
   * *O que foi feito:* Adicionado o campo `margemVenda` no `formData` para permitir que CEO e ADMIN visualizem e alterem a margem de venda na aba Kit Solar. O componente `ProposalGenerator.tsx` foi modificado para exibir o input e recalcular dinamicamente o `valorFinalVenda` no card de "Preview do Valor de Venda" sempre que a margem é alterada.
   * *Data e hora da alteração:* 29/06/2026 às 17:05 (Horário Local)

@@ -234,7 +234,7 @@ export default function ProposalGenerator() {
     kitSupplier: '',
     financeGracePeriod: '3',
     financeDownPayment: '',
-    financeBanco: 'MT Solar',
+    financeBanco: 'BV',
     structureItems: [
       { id: '1', name: '', quantity: 1, warranty: '' },
       { id: '2', name: '', quantity: 1, warranty: '' },
@@ -382,13 +382,15 @@ export default function ProposalGenerator() {
     if (!kitId) return;
     const kit = solarKits.find(k => k.id === kitId);
     if (!kit) return;
-    const precoVenda = kit.valor_total * (1 + kit.margem_venda / 100);
+    const margem = kit.margem_venda ?? 30;
+    const valorFinal = kit.valor_total * (1 + margem / 100);
+
     setFormData(prev => ({
       ...prev,
-      kitCost: precoVenda.toFixed(2),
+      kitCost: valorFinal.toFixed(2),
       marginPercent: '0', // margem já embutida no preço
-      margemVenda: kit.margem_venda,
-      valorFinalVenda: kit.valor_total * (1 + kit.margem_venda / 100),
+      margemVenda: margem,
+      valorFinalVenda: valorFinal,
       kitPower: kit.potencia_kwp.toString(),
       moduleModel: kit.marca_modulo,
       modulePower: kit.potencia_modulo_w.toString(),
@@ -399,6 +401,11 @@ export default function ProposalGenerator() {
       inversorAmpliacao: kit.inversor_ampliacao,
       inverterAmpBrand: kit.marca_inversor_ampliacao || '',
       inverterAmpPower: kit.potencia_inversor_ampliacao_kw ? kit.potencia_inversor_ampliacao_kw.toString() : '',
+    }));
+
+    setResults(prev => ({
+      ...prev,
+      salePrice: valorFinal,
     }));
   };
 
@@ -422,7 +429,7 @@ export default function ProposalGenerator() {
   const saveToHistory = async (proposalNumber: string, url_arquivo?: string) => {
     try {
       const kitCostNum = Number(formData.kitCost) || 0;
-      const marginNum = parseFloat(formData.marginPercent) || 0;
+      const marginNum = formData.margemVenda ?? parseFloat(formData.marginPercent || '0') ?? 0;
 
       if (!formData.clientName || kitCostNum === 0) {
         console.warn('saveToHistory: dados insuficientes para salvar no histórico.');
@@ -800,13 +807,20 @@ export default function ProposalGenerator() {
 
   const calculateResults = () => {
     const kitCost = parseFloat(formData.kitCost || '0');
-    const marginPercent = parseFloat(formData.marginPercent || '0');
     const monthlyBill = parseFloat(formData.monthlyBill || '0');
     const energyRate = parseFloat(formData.energyRate || '0.85');
     const kitPower = parseFloat(formData.kitPower || '0');
 
-    let salePrice = kitCost * (1 + marginPercent / 100);
-    
+    // Usa margemVenda (definida pelo dropdown/input CEO) como fonte primária.
+    // Só cai no marginPercent se margemVenda não estiver definida (modo manual).
+    const margem = formData.margemVenda != null ? formData.margemVenda : parseFloat(formData.marginPercent || '0');
+
+    // Se valorFinalVenda já foi calculado com a margem correta, use-o diretamente.
+    // Caso contrário, recalcula a partir do custo + margem.
+    let salePrice = formData.valorFinalVenda && formData.valorFinalVenda > 0
+      ? formData.valorFinalVenda
+      : kitCost * (1 + margem / 100);
+
     const discountVal = parseFloat(formData.discountValue || '0');
     let totalDiscount = 0;
     if (formData.discountType === 'percent') {
@@ -814,7 +828,7 @@ export default function ProposalGenerator() {
     } else {
       totalDiscount = discountVal;
     }
-    
+
     salePrice = Math.max(0, salePrice - totalDiscount);
 
     const monthlyGeneration = kitPower * 30 * 4.5;
@@ -822,7 +836,7 @@ export default function ProposalGenerator() {
     const annualSavings = monthlySavings * 12;
     const fiveYearSavings = annualSavings * 5;
     const paybackMonths = monthlySavings > 0 ? salePrice / monthlySavings : 0;
-    
+
     const downPayment = parseFloat(formData.financeDownPayment || '0');
     const financeValue = parseFloat(formData.financeValue || (salePrice - downPayment).toString());
     const financeTerm = parseFloat(formData.financeTerm || '60');
@@ -881,8 +895,14 @@ export default function ProposalGenerator() {
     validade.setDate(validade.getDate() + 7);
     const dataValidade = validade.toLocaleDateString('pt-BR');
 
-    const saleP = results.salePrice || (Number(formData.kitCost) * (1 + Number(formData.marginPercent)/100));
-    const originalPrice = Number(formData.kitCost) * (1 + Number(formData.marginPercent)/100);
+    // Usa salePrice do estado (já considera margemVenda), com fallback robusto
+    const margem = formData.margemVenda != null ? formData.margemVenda : Number(formData.marginPercent || 0);
+    const saleP = results.salePrice > 0
+      ? results.salePrice
+      : (formData.valorFinalVenda || 0) > 0
+        ? formData.valorFinalVenda!
+        : Number(formData.kitCost) * (1 + margem / 100);
+    const originalPrice = Number(formData.kitCost) * (1 + margem / 100);
 
     // Cálculos para a Página 4
     const monthlyBillVal = Number(formData.monthlyBill) || 450;
@@ -2986,12 +3006,20 @@ export default function ProposalGenerator() {
                     onChange={(e) => {
                       const novaMargemm = parseFloat(e.target.value) || 0;
                       const selectedKit = solarKits.find(k => k.id === selectedKitId);
+                      const novoValorFinal = selectedKit
+                        ? selectedKit.valor_total * (1 + novaMargemm / 100)
+                        : formData.valorFinalVenda || 0;
+
                       setFormData(prev => ({
                         ...prev,
                         margemVenda: novaMargemm,
-                        valorFinalVenda: selectedKit
-                          ? selectedKit.valor_total * (1 + novaMargemm / 100)
-                          : prev.valorFinalVenda
+                        valorFinalVenda: novoValorFinal,
+                        kitCost: novoValorFinal.toFixed(2)
+                      }));
+
+                      setResults(prev => ({
+                        ...prev,
+                        salePrice: novoValorFinal,
                       }));
                     }}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -3608,7 +3636,7 @@ export default function ProposalGenerator() {
                       updateForm('financeRate', item.taxa.toString());
                       updateForm('financeTerm', item.prazo.toString());
                       updateForm('financeGracePeriod', item.carencia.toString());
-                      updateForm('financeBanco', 'MT Solar');
+                      updateForm('financeBanco', 'BV');
                     }}
                     className={`border rounded-lg p-4 text-center cursor-pointer hover:shadow-md transition-all ${
                       formData.financeTerm === item.prazo.toString()

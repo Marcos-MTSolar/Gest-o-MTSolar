@@ -2947,6 +2947,7 @@ app.post('/api/proposal-history', authenticateToken, async (req: any, res) => {
   const data_geracao = new Date();
   const data_expiracao = new Date();
   data_expiracao.setDate(data_geracao.getDate() + 30);
+  console.log(`[PROPOSAL-HISTORY] Nova proposta salva para "${client_name}". Expira em: ${data_expiracao.toISOString()}`);
 
   const { data, error } = await supabase
     .from('proposal_history')
