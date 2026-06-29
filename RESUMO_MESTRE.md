@@ -1,5 +1,28 @@
 # RESUMO MESTRE — GESTÃO MTSOLAR
 
+* **Automação Kommo: Mover Lead para CONVERSANDO ao Criar Conversa:**
+  * *O que foi feito:* Implementada automação que move o card do lead no Kommo para a coluna "CONVERSANDO" (status_id: 107282595) automaticamente sempre que o MTSolar criar ou atualizar uma conversa originada do webhook. O movimento ocorre tanto na criação de nova conversa quanto no anti-duplicata (conversa já existente). Qualquer lead que passar pela coluna LEAD (status_id: 107282587) no Kommo terá seu card movido automaticamente para CONVERSANDO após ser processado pelo MTSolar.
+  * *Data e hora da alteração:* 29/06/2026 às 23:10 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`
+
+* **Integração Kommo CRM — Correção Definitiva do Webhook:**
+  * *O que foi feito:* Resolvido o problema onde o webhook `/api/kommo/webhook` travava indefinidamente na query do Supabase. A causa raiz era que a busca da empresa estava dentro de um `setImmediate()` — após o `res.200`, a Vercel Serverless encerra conexões de rede, impedindo qualquer query ao Supabase. A solução foi mover a busca da empresa para ANTES do `res.200`, dentro do ciclo de vida normal da requisição, e mover o `res.200` para o final do handler após todo o processamento. Adicionalmente, corrigido o `SyntaxError: Unexpected end of JSON input` na função `getKommoLeadNotes` usando `.text()` com guard antes do `.json()`.
+  * *Fluxo completo funcionando:*
+    1. Lead entra na coluna LEAD do Kommo (status_id: 107282587)
+    2. Webhook dispara → MTSolar filtra por KOMMO_STATUS_ID_LEAD
+    3. Empresa buscada no Supabase (dentro do ciclo normal da requisição)
+    4. Telefone extraído e normalizado para 55XXXXXXXXXXX
+    5. Round-robin atribui para Soraia Castro ou Manoel Jordão
+    6. Conversa criada no MTSolar + push notification enviado
+    7. Card do lead movido para CONVERSANDO no Kommo
+    8. `res.200` enviado após tudo concluído
+  * *IDs do Pipeline Kommo (Funil de vendas — id: 13903135):*
+    * LEAD: 107282587
+    * CONVERSANDO: 107282595
+  * *Causa raiz do travamento:* `setImmediate()` após `res.200` bloqueia conexões de rede na Vercel Serverless
+  * *Data e hora da alteração:* 29/06/2026 às 22:50 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`
+
 * **Otimização de Timeout para Serverless (Kommo):**
   * *O que foi feito:* A função Vercel responsável pelo webhook (`api/index.ts`) estava sofrendo aborto (timeout sem status code) devido ao limite de 30s.
     1. A função `kommoApi` foi ajustada para aceitar um `timeoutMs` com padrão de 8000ms.
