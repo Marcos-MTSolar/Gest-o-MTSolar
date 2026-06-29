@@ -4597,9 +4597,30 @@ app.post('/api/kommo/webhook', async (req, res) => {
     console.log('[KOMMO WEBHOOK] Payload recebido:', JSON.stringify(req.body).slice(0, 500));
 
     const body = req.body;
-    const leads = body?.leads?.add || body?.leads?.update || [];
-    if (leads.length === 0) {
-      console.log('[KOMMO WEBHOOK] Nenhum lead no payload — ignorando.');
+    let leadsToProcess: any[] = [];
+
+    // 1. Processa leads criados (add)
+    const leadsAdd = body?.leads?.add || [];
+    leadsToProcess = [...leadsAdd];
+
+    // 2. Processa leads atualizados (update) movidos para a etapa LEAD
+    const leadsUpdate = body?.leads?.update || [];
+    if (leadsUpdate.length > 0) {
+      const statusIdLead = process.env.KOMMO_STATUS_ID_LEAD;
+      if (!statusIdLead) {
+        console.warn('[KOMMO WEBHOOK] KOMMO_STATUS_ID_LEAD não definido. Ignorando leads.update.');
+      } else {
+        for (const lead of leadsUpdate) {
+          if (String(lead.status_id) === String(statusIdLead)) {
+            console.log(`[KOMMO WEBHOOK] Lead ${lead.id} movido para etapa LEAD — processando como novo lead`);
+            leadsToProcess.push(lead);
+          }
+        }
+      }
+    }
+
+    if (leadsToProcess.length === 0) {
+      console.log('[KOMMO WEBHOOK] Nenhum lead aplicável no payload — ignorando.');
       return;
     }
 
@@ -4617,7 +4638,7 @@ app.post('/api/kommo/webhook', async (req, res) => {
 
     const companyId = company.id;
 
-    for (const lead of leads) {
+    for (const lead of leadsToProcess) {
       const leadId = String(lead.id);
       console.log(`[KOMMO WEBHOOK] Processando lead ID: ${leadId}`);
 
@@ -4866,6 +4887,34 @@ app.post('/api/kommo/fix-names', authenticateToken, async (req: any, res) => {
       message: `${fixedNames} nomes e ${fixedPhones} telefones atualizados, ${notFound} não encontrados no Kommo.`
     });
   } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Rota: lista todos os pipelines e seus respectivos statuses/etapas (apenas CEO)
+// Útil para descobrir o ID da etapa "LEAD" para configurar KOMMO_STATUS_ID_LEAD
+app.get('/api/kommo/pipeline-stages', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'CEO') return res.status(403).json({ error: 'Apenas CEO.' });
+
+  try {
+    const pipelinesData = await kommoApi('/leads/pipelines');
+    if (!pipelinesData) {
+      return res.status(500).json({ error: 'Falha ao buscar pipelines no Kommo' });
+    }
+
+    const pipelines = pipelinesData._embedded?.pipelines || [];
+    const result = pipelines.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      statuses: (p._embedded?.statuses || []).map((s: any) => ({
+        id: s.id,
+        name: s.name
+      }))
+    }));
+
+    res.json({ pipelines: result });
+  } catch (err: any) {
+    console.error('[KOMMO PIPELINES] Erro ao buscar pipelines:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

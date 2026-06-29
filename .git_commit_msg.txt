@@ -1,0 +1,9 @@
+﻿feat(kommo): captura de leads via leads.update (etapa LEAD)
+
+- Webhook processa leads.update além de leads.add
+- Verifica status_id contra KOMMO_STATUS_ID_LEAD (env var)
+- Anti-duplicata reutilizado para leads de update
+- Rota diagnóstica GET /api/kommo/pipeline-stages (somente CEO)
+- Nova variável de ambiente necessária na Vercel: KOMMO_STATUS_ID_LEAD
+
+Arquivos: api/index.ts, RESUMO_MESTRE.md
