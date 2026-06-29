@@ -4423,7 +4423,18 @@ async function kommoApi(endpoint: string, method: string = 'GET', body?: any, ti
       return null;
     }
 
-    return response.json();
+    const text = await response.text();
+    if (!text || text.trim() === '') {
+      return null;
+    }
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch (parseErr) {
+      console.warn(`[KOMMO API] Resposta não-JSON recebida: "${text.substring(0, 100)}"`);
+      return null;
+    }
+    return data;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -4557,6 +4568,7 @@ async function getKommoLeadContact(leadId: string, maxTentativas: number = 2): P
 async function getKommoLeadNotes(leadId: string): Promise<string> {
   try {
     const notesData = await kommoApi(`/leads/${leadId}/notes?limit=10`);
+    if (!notesData) return 'Sem notas disponíveis.';
     const notes = notesData?._embedded?.notes;
 
     if (!notes || notes.length === 0) return '';

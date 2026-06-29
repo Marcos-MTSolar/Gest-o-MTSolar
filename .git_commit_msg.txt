@@ -1,1 +1,8 @@
-﻿fix(kommo): mover res.200 para após processamento completo dos leads
+﻿fix(kommo): tratar resposta vazia da API de notas do lead
+
+- Adicionado verificação segura de tipo para evitar SyntaxError no json()
+- Retorno cru é interpretado via text() primeiro
+- Fallback elegante para null se retorno não for JSON ou for vazio
+- Guard em getKommoLeadNotes para tratar devolução de null com string vazia
+
+Arquivos: api/index.ts
