@@ -1,7 +1,27 @@
-# RESUMO MESTRE Ã¢â‚¬â€ GESTÃƒÆ’O MTSOLAR
+# RESUMO MESTRE — GESTÃO MTSOLAR
 
-Este documento consolida a análise detalhada e atualizada da arquitetura, stack de tecnologias, estrutura do banco de dados, regras de negócio e integrações do sistema **Gestão MTSolar**, servindo como a principal fonte de verdade técnica do projeto.
-
+* **Correção Completa da Integração Kommo CRM:**
+  * *O que foi feito:*
+    1. `kommoApi()`: timeout aumentado para 15000ms via AbortController.
+    2. `getKommoLeadContact()`: retry automático até 3 tentativas com 
+       1000ms de espera; retorna null com segurança se todas falharem.
+    3. Extração de telefone cobre dois formatos: `contact.phone` direto 
+       e `custom_fields_values` com `field_code === 'PHONE'`.
+    4. Normalização de telefone para `55XXXXXXXXXXX`.
+    5. Webhook anti-duplicata: verifica existência antes de inserir 
+       conversa com phone `kommo-lead-{leadId}`.
+    6. Leads sem telefone recebem tag `lead-sem-telefone` e nota interna 
+       automática com alerta para atualizar o Kommo.
+    7. `POST /api/kommo/fix-names` expandido: além de nomes, corrige 
+       phones temporários `kommo-lead-*` buscando o número real no Kommo.
+       Mantém temporário com log quando Kommo ainda não tem telefone.
+    8. Credenciais Kommo validadas antes do 200 OK; retorna 500 se 
+       ausentes.
+    9. Frontend `WhatsApp.tsx`: conversas com phone temporário exibem 
+       "📋 Sem telefone" e bloqueiam o campo de envio com aviso.
+  * *Data e hora da alteração:* 29/06/2026 às 21:00 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/WhatsApp.tsx`,
+    `RESUMO_MESTRE.md`
 * **Correção Definitiva do Recálculo de Margem de Venda (calculateResults):**
   * *O que foi feito:* Identificado e corrigido o bug central que fazia o "Valor Final de Venda" não persistir ao alterar a margem. O `useEffect([formData])` chamava `calculateResults()` que recalculava `salePrice = kitCost * (1 + marginPercent / 100)` — como `marginPercent` é sempre `'0'` quando o kit é selecionado pelo dropdown, o valor correto era imediatamente sobrescrito. Três pontos foram corrigidos:
     1. **`calculateResults`**: agora usa `formData.margemVenda` como fonte primária da margem (quando disponível), e prioriza `formData.valorFinalVenda` como `salePrice` se ele já foi calculado corretamente — só recalcula do zero caso nenhum esteja definido.

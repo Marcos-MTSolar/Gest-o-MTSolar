@@ -998,7 +998,11 @@ export default function WhatsApp() {
                       {selectedConversation.contact_name || selectedConversation.phone}
                     </h2>
                     <p className="text-[10px] lg:text-xs text-gray-400 truncate flex items-center gap-1">
-                      <Phone size={10} /> {selectedConversation.phone}
+                      {selectedConversation.phone?.startsWith('kommo-lead-') ? (
+                        <span className="italic">📋 Sem telefone</span>
+                      ) : (
+                        <><Phone size={10} /> {selectedConversation.phone}</>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -1252,6 +1256,10 @@ export default function WhatsApp() {
                   <Lock size={16} />
                   Esta conversa está sendo atendida por <strong className="ml-1">{lockedByName || 'outro atendente'}</strong>. Aguarde a finalização.
                 </div>
+              ) : selectedConversation.phone?.startsWith('kommo-lead-') ? (
+                <div className="text-center p-3 bg-red-50 text-red-600 rounded-lg text-sm font-medium border border-red-200 flex items-center justify-center gap-2">
+                  <Lock size={16} /> Número inválido — atualize o telefone no Kommo
+                </div>
               ) : selectedConversation.status === 'in_progress' && (Number(selectedConversation.assigned_to) === Number(user?.id) || isAdmin) ? (
                 <div className="flex items-end gap-2">
                   <input 
@@ -1373,7 +1381,11 @@ export default function WhatsApp() {
                 <Pencil size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
               </h3>
             )}
-            <p className="text-xs text-gray-500">{selectedConversation.phone}</p>
+            {selectedConversation.phone?.startsWith('kommo-lead-') ? (
+              <p className="text-xs text-gray-400 italic">📋 Sem telefone</p>
+            ) : (
+              <p className="text-xs text-gray-500">{selectedConversation.phone}</p>
+            )}
           </div>
 
           <div className="p-6 space-y-6 flex-1 overflow-y-auto">

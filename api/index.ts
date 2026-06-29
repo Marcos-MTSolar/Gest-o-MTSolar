@@ -4399,27 +4399,35 @@ app.post('/api/admin/fix-orphan-conversations', authenticateToken, async (req: a
 // ============================================================
 
 // Helper: chama a API REST do Kommo com o Long-Lived Token
+// Timeout aumentado para 15 segundos para evitar TimeoutError em redes lentas
 async function kommoApi(endpoint: string, method: string = 'GET', body?: any) {
   const KOMMO_TOKEN = process.env.KOMMO_LONG_LIVED_TOKEN;
   const KOMMO_SUBDOMAIN = process.env.KOMMO_SUBDOMAIN || 'mtsolarenergia';
   const baseUrl = `https://${KOMMO_SUBDOMAIN}.kommo.com/api/v4`;
 
-  const response = await fetch(`${baseUrl}${endpoint}`, {
-    method,
-    headers: {
-      'Authorization': `Bearer ${KOMMO_TOKEN}`,
-      'Content-Type': 'application/json'
-    },
-    body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(10000)
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos
 
-  if (!response.ok) {
-    console.error(`[KOMMO API] Erro ${response.status} em ${endpoint}`);
-    return null;
+  try {
+    const response = await fetch(`${baseUrl}${endpoint}`, {
+      method,
+      headers: {
+        'Authorization': `Bearer ${KOMMO_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      console.error(`[KOMMO API] Erro ${response.status} em ${endpoint}`);
+      return null;
+    }
+
+    return response.json();
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return response.json();
 }
 
 // Helper: retorna o vendedor com menos atendimentos ativos entre os que recebem leads (Round-Robin)
@@ -4462,42 +4470,89 @@ async function getRoundRobinVendedor(companyId: string): Promise<{ id: number; n
 }
 
 // Helper: busca dados do contato vinculado ao lead no Kommo
-async function getKommoLeadContact(leadId: string): Promise<{ name: string | null; phone: string | null }> {
-  try {
-    const leadData = await kommoApi(`/leads/${leadId}?with=contacts`);
-    if (!leadData) return { name: null, phone: null };
+// Implementa retry automático (até 3 tentativas, 1000ms de espera entre elas)
+// Retorna null em todas as dimensões se todas as tentativas falharem
+async function getKommoLeadContact(leadId: string): Promise<{ name: string | null; phone: string | null } | null> {
+  const MAX_TENTATIVAS = 3;
+  const ESPERA_MS = 1000;
 
-    const contacts = leadData?._embedded?.contacts;
-    if (!contacts || contacts.length === 0) return { name: null, phone: null };
+  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+    console.log(`[KOMMO] Tentativa ${tentativa}/${MAX_TENTATIVAS} para lead ${leadId}`);
+    try {
+      const leadData = await kommoApi(`/leads/${leadId}?with=contacts`);
+      if (!leadData) {
+        console.warn(`[KOMMO] Tentativa ${tentativa}/${MAX_TENTATIVAS} — leadData nulo para lead ${leadId}`);
+        if (tentativa < MAX_TENTATIVAS) {
+          await new Promise(resolve => setTimeout(resolve, ESPERA_MS));
+          continue;
+        }
+        break;
+      }
 
-    const contactId = contacts[0].id;
-    const contactData = await kommoApi(`/contacts/${contactId}`);
-    if (!contactData) return { name: null, phone: null };
+      const contacts = leadData?._embedded?.contacts;
+      if (!contacts || contacts.length === 0) return { name: null, phone: null };
 
-    const contactName = contactData.name || null;
+      const contactId = contacts[0].id;
+      const contactData = await kommoApi(`/contacts/${contactId}`);
+      if (!contactData) {
+        console.warn(`[KOMMO] Tentativa ${tentativa}/${MAX_TENTATIVAS} — contactData nulo para lead ${leadId}`);
+        if (tentativa < MAX_TENTATIVAS) {
+          await new Promise(resolve => setTimeout(resolve, ESPERA_MS));
+          continue;
+        }
+        break;
+      }
 
-    let phone: string | null = null;
-    const fields = contactData.custom_fields_values || [];
-    for (const field of fields) {
-      if (
-        field.field_code === 'PHONE' ||
-        field.field_name?.toLowerCase().includes('phone') ||
-        field.field_name?.toLowerCase().includes('telefone')
-      ) {
-        const value = field.values?.[0]?.value;
-        if (value) {
-          const digits = value.replace(/\D/g, '');
-          phone = digits.startsWith('55') ? digits : `55${digits}`;
-          break;
+      const contactName = contactData.name || null;
+
+      if (process.env.KOMMO_DEBUG === 'true') {
+        console.log(`[KOMMO] Dados brutos do contato lead ${leadId}: ${JSON.stringify(contactData)}`);
+      }
+
+      let rawPhone: string | null = contactData.phone || null;
+
+      if (!rawPhone) {
+        const fields = contactData.custom_fields_values || [];
+        for (const field of fields) {
+          if (
+            field.field_code === 'PHONE' ||
+            field.field_name?.toLowerCase().includes('phone') ||
+            field.field_name?.toLowerCase().includes('telefone')
+          ) {
+            const value = field.values?.[0]?.value;
+            if (value) {
+              rawPhone = value;
+              break;
+            }
+          }
         }
       }
-    }
 
-    return { name: contactName, phone };
-  } catch (err) {
-    console.error('[KOMMO] Erro ao buscar contato do lead:', err);
-    return { name: null, phone: null };
+      let phone: string | null = null;
+      if (rawPhone) {
+        const digits = rawPhone.replace(/\D/g, '');
+        if (digits.length === 10 || digits.length === 11) {
+          phone = `55${digits}`;
+        } else if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+          phone = digits;
+        } else {
+          phone = digits; // Fallback se não bater os padrões comuns
+        }
+        console.log(`[KOMMO] Telefone: original=${rawPhone} normalizado=${phone}`);
+      }
+
+      return { name: contactName, phone };
+    } catch (err: any) {
+      console.error(`[KOMMO] Tentativa ${tentativa}/${MAX_TENTATIVAS} falhou para lead ${leadId}: ${err?.message || err}`);
+      if (tentativa < MAX_TENTATIVAS) {
+        await new Promise(resolve => setTimeout(resolve, ESPERA_MS));
+      }
+    }
   }
+
+  // Todas as tentativas falharam
+  console.error(`[KOMMO] Todas as tentativas falharam para lead ${leadId} — retornando null`);
+  return null;
 }
 
 // Helper: busca as notas do lead no Kommo e monta resumo para nota interna
@@ -4525,8 +4580,18 @@ async function getKommoLeadNotes(leadId: string): Promise<string> {
 
 // Webhook: recebe leads do Kommo CRM e distribui via Round-Robin
 app.post('/api/kommo/webhook', async (req, res) => {
-  // Responde 200 imediatamente para evitar retries do Kommo
+  const KOMMO_SUBDOMAIN_CHECK = process.env.KOMMO_SUBDOMAIN || 'mtsolarenergia';
+  const KOMMO_TOKEN_CHECK = process.env.KOMMO_LONG_LIVED_TOKEN;
+
+  if (!KOMMO_TOKEN_CHECK || !process.env.KOMMO_SUBDOMAIN) {
+    console.error(`[KOMMO WEBHOOK] Erro Crítico: Kommo não configurado. Subdomain=${!!process.env.KOMMO_SUBDOMAIN}, Token=${!!KOMMO_TOKEN_CHECK}`);
+    return res.status(500).json({ error: 'Kommo não configurado' });
+  }
+
+  // Responde 200 imediatamente para evitar retries do Kommo apenas se credenciais válidas
   res.status(200).json({ received: true });
+
+  console.log(`[KOMMO] Config: subdomain=${KOMMO_SUBDOMAIN_CHECK}, token presente=${!!KOMMO_TOKEN_CHECK}`);
 
   try {
     console.log('[KOMMO WEBHOOK] Payload recebido:', JSON.stringify(req.body).slice(0, 500));
@@ -4556,12 +4621,47 @@ app.post('/api/kommo/webhook', async (req, res) => {
       const leadId = String(lead.id);
       console.log(`[KOMMO WEBHOOK] Processando lead ID: ${leadId}`);
 
-      // 1. Busca dados do contato no Kommo (nome + telefone)
-      const { name: contactName, phone: contactPhone } = await getKommoLeadContact(leadId);
+      // 1. Busca dados do contato no Kommo (nome + telefone) com retry automático
+      const contactResult = await getKommoLeadContact(leadId);
+
+      // Se getKommoLeadContact retornou null (todas as tentativas falharam),
+      // salva a conversa com dados parciais em vez de ignorar o lead
+      let contactName: string | null = null;
+      let contactPhone: string | null = null;
+
+      if (contactResult === null) {
+        console.warn(`[KOMMO WEBHOOK] Contato não encontrado para lead ${leadId} — salvando com dados parciais`);
+        contactName = `Lead ${leadId}`;
+        contactPhone = null; // sem telefone real disponível
+      } else {
+        contactName = contactResult.name;
+        contactPhone = contactResult.phone;
+      }
 
       if (!contactPhone) {
-        console.warn(`[KOMMO WEBHOOK] Lead ${leadId} sem telefone — ignorando.`);
-        continue;
+        // Tenta usar telefone do payload do webhook se disponível
+        const webhookPhone = lead.main_contact?.phone ||
+          lead._embedded?.contacts?.[0]?.phone ||
+          null;
+
+        if (webhookPhone) {
+          const rawPhone = String(webhookPhone);
+          const digits = rawPhone.replace(/\D/g, '');
+          if (digits.length === 10 || digits.length === 11) {
+            contactPhone = `55${digits}`;
+          } else if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+            contactPhone = digits;
+          } else {
+            contactPhone = digits;
+          }
+          console.log(`[KOMMO] Telefone: original=${rawPhone} normalizado=${contactPhone}`);
+          console.log(`[KOMMO WEBHOOK] Usando telefone do payload do webhook para lead ${leadId}: ${contactPhone}`);
+        } else {
+          // Salva sem telefone usando identificador do lead como "chave"
+          // Usa um placeholder único para não bloquear a conversa
+          contactPhone = `kommo-lead-${leadId}`;
+          console.warn(`[KOMMO WEBHOOK] Lead ${leadId} sem telefone real — usando identificador temporário ${contactPhone}`);
+        }
       }
 
       console.log(`[KOMMO WEBHOOK] Lead: ${contactName} | Telefone: ${contactPhone}`);
@@ -4575,6 +4675,11 @@ app.post('/api/kommo/webhook', async (req, res) => {
         .maybeSingle();
 
       if (existingConv) {
+        if (contactPhone.startsWith('kommo-lead-')) {
+          console.log(`[KOMMO WEBHOOK] Conversa duplicada evitada para lead sem telefone: ${existingConv.id}`);
+          continue;
+        }
+
         // Atualiza o nome se estava como "Você" ou null
         if (!existingConv.contact_name || existingConv.contact_name === 'Você') {
           await supabaseAdmin
@@ -4592,20 +4697,29 @@ app.post('/api/kommo/webhook', async (req, res) => {
       // 4. Cria a conversa no CRM
       const instanceName = process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO || 'atendimento-cliente';
 
+      const isTempPhone = contactPhone.startsWith('kommo-lead-');
+      const tagsToInsert = isTempPhone ? ['lead-sem-telefone'] : null;
+
+      const insertPayload: any = {
+        phone: contactPhone,
+        company_id: companyId,
+        contact_name: contactName,
+        last_message: `Lead do Kommo — ${lead.name || 'Sem título'}`,
+        last_message_at: new Date().toISOString(),
+        status: vendedor ? 'in_progress' : 'waiting',
+        assigned_to: vendedor?.id ?? null,
+        assigned_name: vendedor?.name ?? null,
+        assigned_at: vendedor ? new Date().toISOString() : null,
+        instance: instanceName
+      };
+
+      if (tagsToInsert) {
+        insertPayload.tags = tagsToInsert;
+      }
+
       const { data: novaConversa, error: convError } = await supabaseAdmin
         .from('whatsapp_conversations')
-        .insert({
-          phone: contactPhone,
-          company_id: companyId,
-          contact_name: contactName,
-          last_message: `Lead do Kommo — ${lead.name || 'Sem título'}`,
-          last_message_at: new Date().toISOString(),
-          status: vendedor ? 'in_progress' : 'waiting',
-          assigned_to: vendedor?.id ?? null,
-          assigned_name: vendedor?.name ?? null,
-          assigned_at: vendedor ? new Date().toISOString() : null,
-          instance: instanceName
-        })
+        .insert(insertPayload)
         .select()
         .single();
 
@@ -4614,12 +4728,16 @@ app.post('/api/kommo/webhook', async (req, res) => {
         continue;
       }
 
-      console.log(`[KOMMO WEBHOOK] Conversa criada: ${novaConversa.id} → atribuída para ${vendedor?.name ?? 'fila'}`);
+      if (isTempPhone) {
+        console.log(`[KOMMO WEBHOOK] Conversa criada/encontrada para lead sem telefone: ${novaConversa.id}`);
+      } else {
+        console.log(`[KOMMO WEBHOOK] Conversa criada: ${novaConversa.id} → atribuída para ${vendedor?.name ?? 'fila'}`);
+      }
 
       // 5. Busca histórico do bot e cria nota interna na conversa
       const notasBot = await getKommoLeadNotes(leadId);
 
-      const notaInterna = [
+      const notaInternaBase = [
         `🤖 *Lead capturado automaticamente do Kommo CRM*`,
         `📌 Lead: ${lead.name || 'Sem título'}`,
         contactName ? `👤 Nome: ${contactName}` : null,
@@ -4627,6 +4745,10 @@ app.post('/api/kommo/webhook', async (req, res) => {
         vendedor ? `👨‍💼 Atribuído para: ${vendedor.name}` : `⏳ Aguardando atendente na fila`,
         notasBot ? `\n${notasBot}` : null
       ].filter(Boolean).join('\n');
+
+      const notaInterna = isTempPhone
+        ? `⚠️ *Lead ${leadId} recebido do Kommo sem telefone cadastrado.*\nVerifique o cadastro no Kommo e atualize o número manualmente.\n\n${notaInternaBase}`
+        : notaInternaBase;
 
       await supabaseAdmin
         .from('whatsapp_messages')
@@ -4660,6 +4782,7 @@ app.post('/api/kommo/webhook', async (req, res) => {
 });
 
 // Rota: corrige nomes "Você"/null buscando na API do Kommo pelo telefone (apenas CEO)
+// e também corrige conversas com phone temporário 'kommo-lead-%' buscando na API do Kommo.
 app.post('/api/kommo/fix-names', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CEO') return res.status(403).json({ error: 'Apenas CEO.' });
 
@@ -4668,40 +4791,65 @@ app.post('/api/kommo/fix-names', authenticateToken, async (req: any, res) => {
       .from('whatsapp_conversations')
       .select('id, phone, contact_name')
       .eq('company_id', req.user.company_id)
-      .or('contact_name.is.null,contact_name.eq.Você,contact_name.eq.');
+      .or('contact_name.is.null,contact_name.eq.Você,contact_name.eq.,phone.like.kommo-lead-%');
 
     if (error) throw error;
     if (!conversas || conversas.length === 0) {
-      return res.json({ fixed: 0, message: 'Nenhuma conversa sem nome encontrada.' });
+      return res.json({ fixed: 0, message: 'Nenhuma conversa para corrigir encontrada.' });
     }
 
-    console.log(`[FIX-NAMES] ${conversas.length} conversas sem nome encontradas.`);
+    console.log(`[FIX-NAMES] ${conversas.length} conversas para correção encontradas.`);
 
-    let fixed = 0;
+    let fixedNames = 0;
+    let fixedPhones = 0;
     let notFound = 0;
 
     for (const conv of conversas) {
       try {
-        const phoneComCodigo = conv.phone.startsWith('55') ? conv.phone : `55${conv.phone}`;
-        const phoneSemCodigo = conv.phone.startsWith('55') ? conv.phone.slice(2) : conv.phone;
+        if (conv.phone.startsWith('kommo-lead-')) {
+          const leadIdMatch = conv.phone.match(/kommo-lead-(\d+)/);
+          if (leadIdMatch) {
+            const leadId = leadIdMatch[1];
+            const contactResult = await getKommoLeadContact(leadId);
+            if (contactResult && contactResult.phone) {
+              await supabaseAdmin
+                .from('whatsapp_conversations')
+                .update({ phone: contactResult.phone, contact_name: contactResult.name || conv.contact_name })
+                .eq('id', conv.id);
+              
+              console.log(`[KOMMO FIX] Conversa ${conv.id}: phone atualizado de ${conv.phone} para ${contactResult.phone}`);
+              fixedPhones++;
+              if (!conv.contact_name || conv.contact_name === 'Você') fixedNames++;
+            } else {
+              console.log(`[KOMMO FIX] Lead ${leadId} ainda sem telefone — mantendo temporário`);
+              notFound++;
+            }
+          } else {
+            notFound++;
+          }
+        } else {
+          // Correção apenas de nomes
+          const phoneComCodigo = conv.phone.startsWith('55') ? conv.phone : `55${conv.phone}`;
+          const phoneSemCodigo = conv.phone.startsWith('55') ? conv.phone.slice(2) : conv.phone;
 
-        const resultado =
-          await kommoApi(`/contacts?query=${phoneComCodigo}&limit=1`) ||
-          await kommoApi(`/contacts?query=${phoneSemCodigo}&limit=1`);
+          const resultado =
+            await kommoApi(`/contacts?query=${phoneComCodigo}&limit=1`) ||
+            await kommoApi(`/contacts?query=${phoneSemCodigo}&limit=1`);
 
-        const contatos = resultado?._embedded?.contacts;
-        if (!contatos || contatos.length === 0) { notFound++; continue; }
+          const contatos = resultado?._embedded?.contacts;
+          if (!contatos || contatos.length === 0) { notFound++; continue; }
 
-        const nome = contatos[0].name;
-        if (!nome) { notFound++; continue; }
+          const nome = contatos[0].name;
+          if (!nome) { notFound++; continue; }
 
-        await supabaseAdmin
-          .from('whatsapp_conversations')
-          .update({ contact_name: nome })
-          .eq('id', conv.id);
+          await supabaseAdmin
+            .from('whatsapp_conversations')
+            .update({ contact_name: nome })
+            .eq('id', conv.id);
 
-        console.log(`[FIX-NAMES] ${conv.phone} → ${nome}`);
-        fixed++;
+          console.log(`[FIX-NAMES] ${conv.phone} → ${nome}`);
+          fixedNames++;
+        }
 
         // Pausa para não sobrecarregar a API do Kommo
         await new Promise(resolve => setTimeout(resolve, 200));
@@ -4712,9 +4860,10 @@ app.post('/api/kommo/fix-names', authenticateToken, async (req: any, res) => {
 
     res.json({
       total: conversas.length,
-      fixed,
+      fixedNames,
+      fixedPhones,
       notFound,
-      message: `${fixed} nomes atualizados, ${notFound} não encontrados no Kommo.`
+      message: `${fixedNames} nomes e ${fixedPhones} telefones atualizados, ${notFound} não encontrados no Kommo.`
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
