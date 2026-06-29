@@ -4599,22 +4599,31 @@ app.post('/api/kommo/webhook', async (req, res) => {
     const body = req.body;
     let leadsToProcess: any[] = [];
 
-    // 1. Processa leads criados (add)
+    // 1. Processa leads criados (add) - todos entram
     const leadsAdd = body?.leads?.add || [];
-    leadsToProcess = [...leadsAdd];
+    for (const lead of leadsAdd) {
+      console.log(`[KOMMO WEBHOOK] Lead ${lead.id} via leads.add`);
+      leadsToProcess.push(lead);
+    }
 
-    // 2. Processa leads atualizados (update) movidos para a etapa LEAD
-    const leadsUpdate = body?.leads?.update || [];
-    if (leadsUpdate.length > 0) {
-      const statusIdLead = process.env.KOMMO_STATUS_ID_LEAD;
-      if (!statusIdLead) {
-        console.warn('[KOMMO WEBHOOK] KOMMO_STATUS_ID_LEAD não definido. Ignorando leads.update.');
-      } else {
-        for (const lead of leadsUpdate) {
-          if (String(lead.status_id) === String(statusIdLead)) {
-            console.log(`[KOMMO WEBHOOK] Lead ${lead.id} movido para etapa LEAD — processando como novo lead`);
-            leadsToProcess.push(lead);
-          }
+    // 2. Processa leads movidos (status) ou atualizados (update) para a etapa LEAD
+    const statusIdLead = process.env.KOMMO_STATUS_ID_LEAD;
+    if (!statusIdLead) {
+      console.warn('[KOMMO WEBHOOK] KOMMO_STATUS_ID_LEAD não definido. Ignorando leads.update e leads.status.');
+    } else {
+      const leadsUpdate = body?.leads?.update || [];
+      for (const lead of leadsUpdate) {
+        if (String(lead.status_id) === String(statusIdLead)) {
+          console.log(`[KOMMO WEBHOOK] Lead ${lead.id} via leads.update (status_id: ${lead.status_id})`);
+          leadsToProcess.push(lead);
+        }
+      }
+
+      const leadsStatus = body?.leads?.status || [];
+      for (const lead of leadsStatus) {
+        if (String(lead.status_id) === String(statusIdLead)) {
+          console.log(`[KOMMO WEBHOOK] Lead ${lead.id} via leads.status (status_id: ${lead.status_id})`);
+          leadsToProcess.push(lead);
         }
       }
     }

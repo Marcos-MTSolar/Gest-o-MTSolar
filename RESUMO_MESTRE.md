@@ -1,8 +1,8 @@
 # RESUMO MESTRE — GESTÃO MTSOLAR
 
-* **Captura de Leads Movidos no Kommo (leads.update):**
+* **Captura de Leads Movidos no Kommo (leads.update e leads.status):**
   * *O que foi feito:* 
-    1. O webhook `POST /api/kommo/webhook` foi aprimorado para capturar também leads que são movidos pelo bot do Kommo para a coluna "LEAD" (via `leads.update`), e não apenas os recém-criados na primeira etapa (`leads.add`).
+    1. O webhook `POST /api/kommo/webhook` foi aprimorado para capturar também leads que são movidos pelo bot do Kommo para a coluna "LEAD" (recebidos em `leads.update` e também no array correto de mudança de fase: `leads.status`), e não apenas os recém-criados na primeira etapa (`leads.add`).
     2. Apenas os leads atualizados que possuam o `status_id` correspondente à etapa LEAD serão processados. Este ID deve ser configurado na nova variável de ambiente `KOMMO_STATUS_ID_LEAD` na Vercel.
     3. Criada a rota de diagnóstico `GET /api/kommo/pipeline-stages` (acessível apenas para CEO) para listar os pipelines e descobrir facilmente o `status_id` correto de cada etapa sem precisar acessar configurações avançadas do Kommo manualmente.
     4. O fluxo anti-duplicata existente protegerá a inserção (impedindo que um lead atualizado múltiplas vezes crie várias conversas), atualizando apenas o nome se já houver conversa criada.
