@@ -4717,6 +4717,20 @@ app.post('/api/kommo/webhook', async (req, res) => {
             .eq('id', existingConv.id);
         }
         console.log(`[KOMMO WEBHOOK] Conversa já existe para ${contactPhone} — nome atualizado.`);
+
+        // Mover lead no Kommo para coluna "CONVERSANDO"
+        try {
+          await kommoApi(
+            `/leads/${lead.id}`,
+            'PATCH',
+            { status_id: 107282595 },
+            8000
+          );
+          console.log(`[KOMMO WEBHOOK] Lead ${lead.id} movido para CONVERSANDO no Kommo`);
+        } catch (kommoMoveErr: any) {
+          console.warn(`[KOMMO WEBHOOK] Não foi possível mover lead no Kommo: ${kommoMoveErr.message}`);
+        }
+
         continue;
       }
 
@@ -4761,6 +4775,19 @@ app.post('/api/kommo/webhook', async (req, res) => {
         console.log(`[KOMMO WEBHOOK] Conversa criada/encontrada para lead sem telefone: ${novaConversa.id}`);
       } else {
         console.log(`[KOMMO WEBHOOK] Conversa criada: ${novaConversa.id} → atribuída para ${vendedor?.name ?? 'fila'}`);
+
+        // Mover lead no Kommo para coluna "CONVERSANDO"
+        try {
+          await kommoApi(
+            `/leads/${lead.id}`,
+            'PATCH',
+            { status_id: 107282595 },
+            8000
+          );
+          console.log(`[KOMMO WEBHOOK] Lead ${lead.id} movido para CONVERSANDO no Kommo`);
+        } catch (kommoMoveErr: any) {
+          console.warn(`[KOMMO WEBHOOK] Não foi possível mover lead no Kommo: ${kommoMoveErr.message}`);
+        }
       }
 
       // 5. Busca histórico do bot e cria nota interna na conversa
