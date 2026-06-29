@@ -9,7 +9,7 @@ import multer from 'multer';
 import cors from 'cors';
 import * as dotenv from 'dotenv';
 import admin from 'firebase-admin';
-import { uploadToR2, deleteFromR2, R2_PUBLIC_URL, generatePresignedUrl } from './r2.js';
+import { uploadToR2, deleteFromR2, R2_PUBLIC_URL, generatePresignedUrl, listFromR2 } from './r2.js';
 
 dotenv.config();
 
@@ -4351,7 +4351,7 @@ app.delete('/api/solar-kits/:id', authenticateToken, requireAdminOrCEO, async (r
 // Cron: limpeza de mídias de vistoria com mais de 60 dias no R2
 app.get('/api/cron/cleanup-vistoria-midia', async (req, res) => {
   try {
-    const files = await listR2Files('vistoria/');
+    const files = await listFromR2('vistoria/');
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - 60);
 
@@ -4504,8 +4504,8 @@ async function getKommoLeadContact(leadId: string, maxTentativas: number = 2): P
       const contactId = contacts[0].id;
       const contactData = await kommoApi(`/contacts/${contactId}`);
       if (!contactData) {
-        console.warn(`[KOMMO] Tentativa ${tentativa}/${MAX_TENTATIVAS} — contactData nulo para lead ${leadId}`);
-        if (tentativa < MAX_TENTATIVAS) {
+        console.warn(`[KOMMO] Tentativa ${tentativa}/${maxTentativas} — contactData nulo para lead ${leadId}`);
+        if (tentativa < maxTentativas) {
           await new Promise(resolve => setTimeout(resolve, ESPERA_MS));
           continue;
         }
@@ -4552,8 +4552,8 @@ async function getKommoLeadContact(leadId: string, maxTentativas: number = 2): P
 
       return { name: contactName, phone };
     } catch (err: any) {
-      console.error(`[KOMMO] Tentativa ${tentativa}/${MAX_TENTATIVAS} falhou para lead ${leadId}: ${err?.message || err}`);
-      if (tentativa < MAX_TENTATIVAS) {
+      console.error(`[KOMMO] Tentativa ${tentativa}/${maxTentativas} falhou para lead ${leadId}: ${err?.message || err}`);
+      if (tentativa < maxTentativas) {
         await new Promise(resolve => setTimeout(resolve, ESPERA_MS));
       }
     }

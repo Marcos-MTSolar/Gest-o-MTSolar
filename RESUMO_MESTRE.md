@@ -1,5 +1,10 @@
 # RESUMO MESTRE — GESTÃO MTSOLAR
 
+* **Correção de Tipagem (TypeScript): MAX_TENTATIVAS e listFromR2:**
+  * *O que foi feito:* Corrigidos erros de TypeScript na `api/index.ts`. A constante `MAX_TENTATIVAS` foi renomeada para a variável correta `maxTentativas` para coincidir com o parâmetro recebido em `getKommoLeadContact`. A função inexistente `listR2Files` foi substituída por `listFromR2`, sendo importada corretamente. O arquivo `api/r2.ts` também foi atualizado para exportar `listFromR2` com esse nome.
+  * *Data e hora da alteração:* 29/06/2026 às 20:38 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `api/r2.ts`
+
 * **Automação Kommo: Mover Lead para CONVERSANDO ao Criar Conversa:**
   * *O que foi feito:* Implementada automação que move o card do lead no Kommo para a coluna "CONVERSANDO" (status_id: 107282595) automaticamente sempre que o MTSolar criar ou atualizar uma conversa originada do webhook. O movimento ocorre tanto na criação de nova conversa quanto no anti-duplicata (conversa já existente). Qualquer lead que passar pela coluna LEAD (status_id: 107282587) no Kommo terá seu card movido automaticamente para CONVERSANDO após ser processado pelo MTSolar.
   * *Data e hora da alteração:* 29/06/2026 às 23:10 (Horário Local)

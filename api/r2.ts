@@ -45,7 +45,7 @@ export async function deleteFromR2(filePath: string): Promise<void> {
   );
 }
 
-export async function listR2Files(prefix: string) {
+export async function listFromR2(prefix: string) {
   const response = await r2Client.send(
     new ListObjectsV2Command({
       Bucket: R2_BUCKET,

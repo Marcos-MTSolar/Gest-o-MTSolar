@@ -1,1 +1,0 @@
-﻿feat(kommo): mover lead para CONVERSANDO ao criar conversa no MTSolar
