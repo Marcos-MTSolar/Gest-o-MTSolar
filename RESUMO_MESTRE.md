@@ -2,6 +2,26 @@
 
 Este documento consolida a análise detalhada e atualizada da arquitetura, stack de tecnologias, estrutura do banco de dados, regras de negócio e integrações do sistema **Gestão MTSolar**, servindo como a principal fonte de verdade técnica do projeto.
 
+* **Filtro de Webhooks WhatsApp e Correção de Duplicidade:**
+  * *O que foi feito:* Realizadas 3 melhorias críticas no handler do webhook (`POST /api/webhooks/whatsapp`) e no salvamento de mensagens em todo o arquivo `api/index.ts`. (1) Implementado filtro inicial ignorando mensagens de grupo (`remoteJid.endsWith('@g.us')`). (2) Implementado filtro que ignora eventos puramente de confirmação (`DELIVERY_ACK`, `READ`, `PLAYED`, `SERVER_ACK`) sem sobrecarregar o DB. (3) Convertidas *todas as 6 operações* de `.insert()` na tabela `whatsapp_messages` espalhadas no arquivo para `.upsert(..., { onConflict: 'message_id', ignoreDuplicates: true })`, prevenindo que retentativas da Evolution API gerem logs de erro `duplicate key value violates unique constraint`.
+  * *Data e hora da alteração:* 29/06/2026 às 17:15 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`
+* **Tratamento de 500 na Neoenergia e Correção de Timeout no Upload:**
+  * *O que foi feito:* Adicionada configuração `maxDuration: 30` no `vercel.json` para a função `api/index.ts` com o intuito de prevenir Timeouts no Vercel (Erro 403/504) durante o upload de mídia de arquivos maiores (~2MB) pelo WhatsApp. Adicionado também log detalhado `try/catch` na rota `GET /api/neoenergia` para diagnosticar falhas de join (Possível erro em `created_by`).
+  * *Data e hora da alteração:* 29/06/2026 às 17:11 (Horário Local)
+  * *Arquivos modificados:* `vercel.json`, `api/index.ts`
+* **Margem de Venda para CEO/ADMIN no Kit Solar:**
+  * *O que foi feito:* Adicionado o campo `margemVenda` no `formData` para permitir que CEO e ADMIN visualizem e alterem a margem de venda na aba Kit Solar. O componente `ProposalGenerator.tsx` foi modificado para exibir o input e recalcular dinamicamente o `valorFinalVenda` no card de "Preview do Valor de Venda" sempre que a margem é alterada.
+  * *Data e hora da alteração:* 29/06/2026 às 17:05 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
+* **Diagnóstico e Correção do Histórico de Propostas:**
+  * *O que foi feito:* Realizada uma verificação nas rotas de manipulação de histórico de propostas em `api/index.ts`. Foi confirmado que o cronjob `/api/cleanup-proposals` já utiliza corretamente o `update({ url_arquivo: null })` em vez de apagar os registros. A rota `GET /api/proposal-history` não filtra por `url_arquivo IS NOT NULL` e o tempo de expiração da proposta em `POST /api/proposal-history` está corretamente configurado para 30 dias (o comentário foi corrigido para refletir isso).
+  * *Data e hora da alteração:* 29/06/2026 às 17:06 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`
+* **Simplificação da Tabela de Financiamento:**
+  * *O que foi feito:* A tabela de taxas de financiamento no módulo de propostas (`ProposalGenerator.tsx`) foi substituída. Antes ela renderizava múltiplos bancos (BV e Santander) com taxas variáveis. Agora utiliza uma estrutura fixa (`TABELA_FINANCIAMENTO`) apenas com os prazos de 36, 48 e 60 meses, carência de 3 meses e taxa fixa de 2.4% (Banco MT Solar). A UI foi atualizada com o novo JSX simplificado e a função de atualização do cálculo na proposta foi mantida.
+  * *Data e hora da alteração:* 29/06/2026 às 17:03 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
 * **Correção de Permissão na Aba Kits Solares:**
   * *O que foi feito:* A variável `isAdminOrCeo` (que controla a visibilidade da aba "Kits Solares" e seu conteúdo no módulo de Propostas) estava validando erroneamente o papel `ADM`. Foi corrigida para verificar a role `ADMIN` corretamente. A condição foi atualizada para `user?.role === 'CEO' || user?.role === 'ADMIN'`, garantindo que a gerência administrativa também tenha acesso à aba. A role `COMMERCIAL` continua sem acesso (vê apenas o dropdown).
   * *Data e hora da alteração:* 26/06/2026 às 13:33 (Horário Local)

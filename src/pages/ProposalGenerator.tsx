@@ -103,6 +103,8 @@ interface FormData {
   discountValue: string;
   discountType: 'fixed' | 'percent';
   discountObservation: string;
+  margemVenda?: number;
+  valorFinalVenda?: number;
 }
 
 interface Results {
@@ -158,19 +160,10 @@ const AVAILABLE_SERVICES = [
   }
 ];
 
-const TABELA_BANCOS = [
-  { banco: 'BV', prazo: '24 meses', taxa: 1.49, carencia: 0 },
-  { banco: 'BV', prazo: '36 meses', taxa: 1.35, carencia: 2 },
-  { banco: 'BV', prazo: '48 meses', taxa: 1.29, carencia: 3 },
-  { banco: 'BV', prazo: '60 meses', taxa: 1.25, carencia: 4 },
-  { banco: 'BV', prazo: '72 meses', taxa: 1.22, carencia: 4 },
-  { banco: 'BV', prazo: '84 meses', taxa: 1.20, carencia: 4 },
-  { banco: 'Santander', prazo: '24 meses', taxa: 1.45, carencia: 0 },
-  { banco: 'Santander', prazo: '36 meses', taxa: 1.32, carencia: 2 },
-  { banco: 'Santander', prazo: '48 meses', taxa: 1.27, carencia: 3 },
-  { banco: 'Santander', prazo: '60 meses', taxa: 1.22, carencia: 4 },
-  { banco: 'Santander', prazo: '72 meses', taxa: 1.19, carencia: 4 },
-  { banco: 'Santander', prazo: '84 meses', taxa: 1.17, carencia: 4 },
+const TABELA_FINANCIAMENTO = [
+  { prazo: 36, carencia: 3, taxa: 2.4 },
+  { prazo: 48, carencia: 3, taxa: 2.4 },
+  { prazo: 60, carencia: 3, taxa: 2.4 },
 ];
 
 
@@ -220,7 +213,7 @@ export default function ProposalGenerator() {
     energyRate: '0.85',
     financeValue: '',
     financeTerm: '60',
-    financeRate: '1.5',
+    financeRate: '2.4',
     moduleModel: '',
     modulePower: '',
     moduleQty: '',
@@ -239,9 +232,9 @@ export default function ProposalGenerator() {
     includePhotos: false,
     photos: [],
     kitSupplier: '',
-    financeGracePeriod: '0',
+    financeGracePeriod: '3',
     financeDownPayment: '',
-    financeBanco: '',
+    financeBanco: 'MT Solar',
     structureItems: [
       { id: '1', name: '', quantity: 1, warranty: '' },
       { id: '2', name: '', quantity: 1, warranty: '' },
@@ -252,7 +245,9 @@ export default function ProposalGenerator() {
     tipoEstrutura: 'telhado_ceramico',
     discountValue: '',
     discountType: 'percent',
-    discountObservation: ''
+    discountObservation: '',
+    margemVenda: 30,
+    valorFinalVenda: 0
   });
 
   const [results, setResults] = useState<Results>({
@@ -392,6 +387,8 @@ export default function ProposalGenerator() {
       ...prev,
       kitCost: precoVenda.toFixed(2),
       marginPercent: '0', // margem já embutida no preço
+      margemVenda: kit.margem_venda,
+      valorFinalVenda: kit.valor_total * (1 + kit.margem_venda / 100),
       kitPower: kit.potencia_kwp.toString(),
       moduleModel: kit.marca_modulo,
       modulePower: kit.potencia_modulo_w.toString(),
@@ -2974,6 +2971,33 @@ export default function ProposalGenerator() {
                   />
                 </div>
               </div>
+
+              {isAdminOrCeo && (
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Margem de Venda (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={formData.margemVenda ?? (selectedKitId ? solarKits.find(k => k.id === selectedKitId)?.margem_venda : 30)}
+                    onChange={(e) => {
+                      const novaMargemm = parseFloat(e.target.value) || 0;
+                      const selectedKit = solarKits.find(k => k.id === selectedKitId);
+                      setFormData(prev => ({
+                        ...prev,
+                        margemVenda: novaMargemm,
+                        valorFinalVenda: selectedKit
+                          ? selectedKit.valor_total * (1 + novaMargemm / 100)
+                          : prev.valorFinalVenda
+                      }));
+                    }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
             ) : (
               /* VENDEDOR: seleção obrigatória de kit cadastrado — sem exibir custos ou valores */
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
@@ -3124,7 +3148,7 @@ export default function ProposalGenerator() {
                   <div className="bg-white p-4 rounded-xl border-2 border-blue-200 shadow-sm transform hover:scale-105 transition-transform">
                     <p className="text-xs text-blue-700 uppercase font-bold">Valor Final de Venda</p>
                     <p className="text-3xl font-black text-blue-900">
-                      R$ {results.salePrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {(formData.valorFinalVenda || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
                   </div>
                 </div>
@@ -3570,45 +3594,31 @@ export default function ProposalGenerator() {
               <h2 className="text-xl font-bold text-gray-800">Simulação de Financiamento</h2>
             </div>
 
-            {/* Painel de Taxas dos Bancos */}
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 mb-6">
+            {/* Painel de Taxas de Financiamento */}
+            <div className="p-4 bg-white rounded-xl border border-gray-200 mb-6">
               <div className="flex items-center gap-2 mb-4">
-                <Calculator size={18} className="text-blue-900" />
-                <h3 className="font-bold text-gray-700">Tabela de Taxas — Financiamento Solar</h3>
+                <span className="text-lg">🧮</span>
+                <h3 className="font-semibold text-gray-800">Tabela de Taxas — Financiamento Solar</h3>
               </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {TABELA_BANCOS.map((item, idx) => (
+              <div className="grid grid-cols-3 gap-4">
+                {TABELA_FINANCIAMENTO.map((item) => (
                   <div 
-                    key={idx}
+                    key={item.prazo} 
                     onClick={() => {
                       updateForm('financeRate', item.taxa.toString());
-                      updateForm('financeTerm', item.prazo.split(' ')[0]);
+                      updateForm('financeTerm', item.prazo.toString());
                       updateForm('financeGracePeriod', item.carencia.toString());
-                      updateForm('financeBanco', item.banco);
+                      updateForm('financeBanco', 'MT Solar');
                     }}
-                    className={`p-3 rounded-lg border-2 transition-all cursor-pointer hover:shadow-md flex flex-col justify-between ${
-                      formData.financeBanco === item.banco && formData.financeRate === item.taxa.toString() && formData.financeTerm === item.prazo.split(' ')[0]
+                    className={`border rounded-lg p-4 text-center cursor-pointer hover:shadow-md transition-all ${
+                      formData.financeTerm === item.prazo.toString()
                         ? 'border-blue-600 bg-blue-50'
-                        : 'border-white bg-white hover:border-blue-200'
+                        : 'border-gray-200 bg-white hover:border-blue-200'
                     }`}
                   >
-                    <div className="flex justify-between items-start mb-2">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                        item.banco === 'BV' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
-                      }`}>
-                        {item.banco}
-                      </span>
-                      <span className="text-blue-900 font-bold">{item.prazo}</span>
-                    </div>
-                    <div className="flex justify-between items-end">
-                      <div className="text-xs text-gray-500">
-                        Carencia: <span className="font-bold">{item.carencia} m</span>
-                      </div>
-                      <div className="text-lg font-black text-blue-900">
-                        {item.taxa}% <span className="text-[10px] font-normal text-gray-500">a.m.</span>
-                      </div>
-                    </div>
+                    <p className="text-sm text-gray-500 mb-1">Carência: {item.carencia} m</p>
+                    <p className="text-base font-semibold text-gray-700">{item.prazo} meses</p>
+                    <p className="text-2xl font-bold text-blue-700 mt-1">{item.taxa.toFixed(1)}% <span className="text-sm font-normal text-gray-500">a.m.</span></p>
                   </div>
                 ))}
               </div>

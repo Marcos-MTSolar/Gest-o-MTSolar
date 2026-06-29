@@ -1981,7 +1981,7 @@ app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) =>
       const audioFileName = `whatsapp-media/${req.user.company_id}/${conversationId}/audio-${Date.now()}.ogg`;
       const audioPublicUrl = await uploadToR2(audioBuffer, audioFileName, 'audio/ogg');
 
-      await supabase.from('whatsapp_messages').insert({
+      await supabase.from('whatsapp_messages').upsert({
         conversation_id: conversationId,
         phone: phone,
         message: '[Áudio]',
@@ -1994,7 +1994,7 @@ app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) =>
         file_name: 'audio.ogg',
         instance: creds.instanceName,
         company_id: req.user.company_id
-      });
+      }, { onConflict: 'message_id', ignoreDuplicates: true });
 
       await supabase.from('whatsapp_conversations').update({
         last_message: '[Áudio]',
@@ -2089,7 +2089,7 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
       // Construir URL pública do R2 diretamente a partir do filePath enviado pelo frontend
       const publicUrl = `${R2_PUBLIC_URL}/${filePath}`;
 
-      await supabase.from('whatsapp_messages').insert({
+      await supabase.from('whatsapp_messages').upsert({
         conversation_id: conversationId,
         phone: phone,
         message: caption || `[${mediatype}]`,
@@ -2102,7 +2102,7 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
         file_name: filename,
         instance: creds.instanceName,
         company_id: req.user.company_id
-      });
+      }, { onConflict: 'message_id', ignoreDuplicates: true });
 
       await supabase.from('whatsapp_conversations').update({
         last_message: caption || `[${mediatype}]`,
@@ -2167,7 +2167,7 @@ app.post('/api/whatsapp/send', authenticateToken, async (req: any, res) => {
 
     // Salvar no banco
     if (conversationId) {
-      await supabase.from('whatsapp_messages').insert({
+      await supabase.from('whatsapp_messages').upsert({
         conversation_id: conversationId,
         phone: phone,
         message: text,
@@ -2178,7 +2178,7 @@ app.post('/api/whatsapp/send', authenticateToken, async (req: any, res) => {
         media_type: null,
         instance: creds.instanceName,
         company_id: req.user.company_id
-      });
+      }, { onConflict: 'message_id', ignoreDuplicates: true });
 
       await supabase.from('whatsapp_conversations').update({
         last_message: text,
@@ -2278,7 +2278,7 @@ app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
 
     // Inserir nota interna, se fornecida
     if (internalNote && internalNote.trim() !== '') {
-      await supabase.from('whatsapp_messages').insert({
+      await supabase.from('whatsapp_messages').upsert({
         conversation_id: targetConvId,
         phone: conv.phone,
         message: `📌 NOTA DE TRANSFERÊNCIA: ${internalNote.trim()}`,
@@ -2287,7 +2287,7 @@ app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
         timestamp: new Date().toISOString(),
         instance: creds.instanceName,
         company_id: req.user.company_id
-      });
+      }, { onConflict: 'message_id', ignoreDuplicates: true });
     }
 
     const clientName = conv.contact_name ? conv.contact_name.trim() : 'prezado(a) cliente';
@@ -2304,7 +2304,7 @@ app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
     });
 
     // Salvar mensagem de despedida no banco
-    await supabase.from('whatsapp_messages').insert({
+    await supabase.from('whatsapp_messages').upsert({
       conversation_id: targetConvId,
       phone: conv.phone,
       message: farewellMsg,
@@ -2313,7 +2313,7 @@ app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
       status: 'sent',
       instance: originCreds.instanceName,
       company_id: req.user.company_id
-    });
+    }, { onConflict: 'message_id', ignoreDuplicates: true });
 
     res.json({ success: true });
   } catch (err: any) {
@@ -2324,8 +2324,23 @@ app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
 
 
 app.post('/api/webhooks/whatsapp', async (req, res) => {
+  res.status(200).json({ status: 'ok' });
   const body = req.body;
+  const payload = body;
   console.log('[WA-WEBHOOK] payload recebido:', JSON.stringify(req.body).slice(0, 500));
+
+  const remoteJid: string = payload?.data?.key?.remoteJid ?? '';
+  if (remoteJid.endsWith('@g.us')) {
+    console.log('[WA-WEBHOOK] Mensagem de grupo ignorada:', remoteJid);
+    return;
+  }
+
+  const messageStatus: string = payload?.data?.status ?? '';
+  const statusesParaIgnorar = ['DELIVERY_ACK', 'READ', 'PLAYED', 'SERVER_ACK'];
+  if (statusesParaIgnorar.includes(messageStatus)) {
+    console.log('[WA-WEBHOOK] Status de confirmação ignorado:', messageStatus);
+    return;
+  }
 
   // 0. Atualização de Status da Mensagem (Event messages.update)
   if (body.event === 'messages.update') {
@@ -2695,7 +2710,7 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
         }
 
         try {
-          const { error: msgError } = await supabase.from('whatsapp_messages').insert({
+          const { error: msgError } = await supabase.from('whatsapp_messages').upsert({
             conversation_id: conversationId,
             phone,
             message: text,
@@ -2709,7 +2724,7 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
             file_size: fileSize,
             instance: instanceName,
             company_id: companyId
-          });
+          }, { onConflict: 'message_id', ignoreDuplicates: true });
 
           if (msgError) {
             console.error('[WEBHOOK ERROR] Falha ao salvar mensagem:', msgError.message, msgError.details);
@@ -2928,7 +2943,7 @@ app.post('/api/proposal-history', authenticateToken, async (req: any, res) => {
   const { client_name, margin, kit_value, proposal_number, url_arquivo, raw_data } = req.body;
   const created_by = req.user?.name || req.user?.email || 'Desconhecido';
   
-  // Define data de expiração para 7 dias a partir de agora
+  // Define data de expiração para 30 dias a partir de agora
   const data_geracao = new Date();
   const data_expiracao = new Date();
   data_expiracao.setDate(data_geracao.getDate() + 30);
@@ -3059,10 +3074,14 @@ app.get('/api/neoenergia', authenticateToken, async (req: any, res) => {
     }
 
     const { data: protocols, error } = await query;
-    if (error) throw error;
-    res.json(protocols || []);
+    if (error) {
+      console.error('[NEOENERGIA ERROR]', JSON.stringify(error));
+      return res.status(500).json({ error: error.message, details: error });
+    }
+    return res.json(protocols || []);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[NEOENERGIA CATCH]', err);
+    return res.status(500).json({ error: 'Erro interno' });
   }
 });
 
