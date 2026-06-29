@@ -1,1 +1,1 @@
-﻿fix(kommo): buscar empresa antes do res.200 — eliminar setImmediate
+﻿fix(kommo): mover res.200 para após processamento completo dos leads

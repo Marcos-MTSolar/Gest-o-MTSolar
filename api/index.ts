@@ -4630,10 +4630,7 @@ app.post('/api/kommo/webhook', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    // 4. res.200 IMEDIATO
-    res.status(200).json({ ok: true });
-
-    // 5. PROCESSAMENTO DOS LEADS (após res.200, usando variáveis já em memória)
+    // 5. PROCESSAMENTO DOS LEADS (usando variáveis já em memória)
     const companyId = company.id;
     for (const lead of leadsToProcess) {
       try {
@@ -4800,9 +4797,14 @@ app.post('/api/kommo/webhook', async (req, res) => {
         console.error(err?.stack || err);
       }
     }
+
+    // res.200 SOMENTE AQUI — depois de tudo
+    return res.status(200).json({ ok: true });
+    
   } catch (err: any) {
-    console.error('[KOMMO WEBHOOK] Erro catastrófico:', err.message);
+    console.error(`[KOMMO WEBHOOK] Erro geral: ${err.message}`);
     console.error(err?.stack || err);
+    return res.status(200).json({ ok: true }); // sempre 200 pro Kommo não fazer retry
   }
 });
 
