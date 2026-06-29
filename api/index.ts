@@ -4631,6 +4631,8 @@ app.post('/api/kommo/webhook', async (req, res) => {
       return;
     }
 
+    console.log(`[KOMMO WEBHOOK] Total de leads para processar: ${leadsToProcess.length}`);
+
     // Busca a empresa MT Solar (single-tenant por enquanto)
     const { data: company } = await supabaseAdmin
       .from('companies')
@@ -4646,8 +4648,10 @@ app.post('/api/kommo/webhook', async (req, res) => {
     const companyId = company.id;
 
     for (const lead of leadsToProcess) {
-      const leadId = String(lead.id);
-      console.log(`[KOMMO WEBHOOK] Processando lead ID: ${leadId}`);
+      try {
+        console.log(`[KOMMO WEBHOOK] Iniciando processamento do lead ${lead.id}`);
+        const leadId = String(lead.id);
+        console.log(`[KOMMO WEBHOOK] Processando lead ID: ${leadId}`);
 
       // 1. Busca dados do contato no Kommo (nome + telefone) com retry automático
       const contactResult = await getKommoLeadContact(leadId);
@@ -4803,6 +4807,10 @@ app.post('/api/kommo/webhook', async (req, res) => {
       }
 
       console.log(`[KOMMO WEBHOOK] Lead ${leadId} processado com sucesso.`);
+      } catch (err: any) {
+        console.error(`[KOMMO WEBHOOK] Erro ao processar lead ${lead?.id}: ${err?.message || err}`);
+        console.error(err?.stack || err);
+      }
     }
   } catch (err: any) {
     console.error('[KOMMO WEBHOOK] Erro catastrófico:', err.message);
