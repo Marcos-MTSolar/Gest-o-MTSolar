@@ -4399,14 +4399,13 @@ app.post('/api/admin/fix-orphan-conversations', authenticateToken, async (req: a
 // ============================================================
 
 // Helper: chama a API REST do Kommo com o Long-Lived Token
-// Timeout aumentado para 15 segundos para evitar TimeoutError em redes lentas
-async function kommoApi(endpoint: string, method: string = 'GET', body?: any) {
+async function kommoApi(endpoint: string, method: string = 'GET', body?: any, timeoutMs: number = 8000) {
   const KOMMO_TOKEN = process.env.KOMMO_LONG_LIVED_TOKEN;
   const KOMMO_SUBDOMAIN = process.env.KOMMO_SUBDOMAIN || 'mtsolarenergia';
   const baseUrl = `https://${KOMMO_SUBDOMAIN}.kommo.com/api/v4`;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(`${baseUrl}${endpoint}`, {
@@ -4470,19 +4469,18 @@ async function getRoundRobinVendedor(companyId: string): Promise<{ id: number; n
 }
 
 // Helper: busca dados do contato vinculado ao lead no Kommo
-// Implementa retry automático (até 3 tentativas, 1000ms de espera entre elas)
+// Implementa retry automático com limite customizável
 // Retorna null em todas as dimensões se todas as tentativas falharem
-async function getKommoLeadContact(leadId: string): Promise<{ name: string | null; phone: string | null } | null> {
-  const MAX_TENTATIVAS = 3;
+async function getKommoLeadContact(leadId: string, maxTentativas: number = 2): Promise<{ name: string | null; phone: string | null } | null> {
   const ESPERA_MS = 1000;
 
-  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
-    console.log(`[KOMMO] Tentativa ${tentativa}/${MAX_TENTATIVAS} para lead ${leadId}`);
+  for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
+    console.log(`[KOMMO] Tentativa ${tentativa}/${maxTentativas} para lead ${leadId}`);
     try {
       const leadData = await kommoApi(`/leads/${leadId}?with=contacts`);
       if (!leadData) {
-        console.warn(`[KOMMO] Tentativa ${tentativa}/${MAX_TENTATIVAS} — leadData nulo para lead ${leadId}`);
-        if (tentativa < MAX_TENTATIVAS) {
+        console.warn(`[KOMMO] Tentativa ${tentativa}/${maxTentativas} — leadData nulo para lead ${leadId}`);
+        if (tentativa < maxTentativas) {
           await new Promise(resolve => setTimeout(resolve, ESPERA_MS));
           continue;
         }
@@ -4906,7 +4904,7 @@ app.get('/api/kommo/pipeline-stages', authenticateToken, async (req: any, res) =
   if (req.user.role !== 'CEO') return res.status(403).json({ error: 'Apenas CEO.' });
 
   try {
-    const pipelinesData = await kommoApi('/leads/pipelines');
+    const pipelinesData = await kommoApi('/leads/pipelines', 'GET', undefined, 15000);
     if (!pipelinesData) {
       return res.status(500).json({ error: 'Falha ao buscar pipelines no Kommo' });
     }

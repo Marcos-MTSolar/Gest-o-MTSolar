@@ -1,9 +1,0 @@
-﻿fix(kommo): capturar leads.status além de leads.update
-
-- Kommo envia leads.status (não leads.update) em mudanças de etapa
-- Adicionado processamento de req.body.leads?.status com filtro por
-  KOMMO_STATUS_ID_LEAD (107282587 = etapa LEAD)
-- Logs distintos por origem: leads.add / leads.status / leads.update
-- Ignorado leads.status com status_id diferente do configurado
-
-Arquivos: api/index.ts, RESUMO_MESTRE.md

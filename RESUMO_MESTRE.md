@@ -1,5 +1,12 @@
 # RESUMO MESTRE — GESTÃO MTSOLAR
 
+* **Otimização de Timeout para Serverless (Kommo):**
+  * *O que foi feito:* A função Vercel responsável pelo webhook (`api/index.ts`) estava sofrendo aborto (timeout sem status code) devido ao limite de 30s.
+    1. A função `kommoApi` foi ajustada para aceitar um `timeoutMs` com padrão de 8000ms.
+    2. A função `getKommoLeadContact` teve seu `maxTentativas` reduzido de 3 para 2 como padrão, garantindo que o processamento em cadeia não estoure o teto limite da Serverless Function. Chamadas diretas (ex: `pipeline-stages`) mantiveram o timeout de 15s original.
+  * *Data e hora da alteração:* 29/06/2026 às 18:52 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`
+
 * **Captura de Leads Movidos no Kommo (leads.update e leads.status):**
   * *O que foi feito:* 
     1. O webhook `POST /api/kommo/webhook` foi aprimorado para capturar também leads que são movidos pelo bot do Kommo para a coluna "LEAD" (recebidos em `leads.update` e também no array correto de mudança de fase: `leads.status`), e não apenas os recém-criados na primeira etapa (`leads.add`).
