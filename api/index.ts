@@ -4589,8 +4589,9 @@ app.post('/api/kommo/webhook', async (req, res) => {
   // Responde 200 imediatamente para evitar retries do Kommo apenas se credenciais válidas
   res.status(200).json({ received: true });
 
-  console.log(`[KOMMO] Config: subdomain=${KOMMO_SUBDOMAIN_CHECK}, token presente=${!!KOMMO_TOKEN_CHECK}`);
-
+  // Processa em background com setImmediate para garantir que a Vercel
+  // não encerre a função logo após o res.end()
+  setImmediate(async () => {
   try {
     console.log('[KOMMO WEBHOOK] Payload recebido:', JSON.stringify(req.body).slice(0, 500));
 
@@ -4829,7 +4830,9 @@ app.post('/api/kommo/webhook', async (req, res) => {
     }
   } catch (err: any) {
     console.error('[KOMMO WEBHOOK] Erro catastrófico:', err.message);
+    console.error(err?.stack || err);
   }
+  }); // fim do setImmediate
 });
 
 // Rota: corrige nomes "Você"/null buscando na API do Kommo pelo telefone (apenas CEO)

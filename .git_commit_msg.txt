@@ -1,0 +1,8 @@
+﻿fix(kommo): mover processamento para setImmediate após res.200
+
+- Vercel encerrava a função logo após res.status(200).json()
+- Todo o processamento assíncrono movido para setImmediate()
+- Isso mantém o event loop ativo após a resposta HTTP
+- Resolve o corte silencioso na query do Supabase (empresa MT Solar)
+
+Arquivos: api/index.ts
