@@ -4635,29 +4635,53 @@ app.post('/api/kommo/webhook', async (req, res) => {
     console.log(`[KOMMO WEBHOOK] Total de leads para processar: ${leadsToProcess.length}`);
 
     console.log('[KOMMO WEBHOOK] Buscando empresa MT Solar no banco...');
-    
-    const queryPromise = supabaseAdmin
-      .from('companies')
-      .select('id, name, whatsapp_instance')
-      .eq('id', 'e4bf6f22-6182-414d-afa4-c5449c014323')
-      .single();
 
-    const timeoutPromise = new Promise<any>((_, reject) =>
-      setTimeout(() => reject(new Error('Timeout na busca da empresa')), 5000)
-    );
+    let company: any = null;
+    let companyError: any = null;
 
-    const { data: company, error: companyError } = await Promise.race([
-      queryPromise,
-      timeoutPromise
-    ]).catch(err => {
-      console.error(`[KOMMO WEBHOOK] Erro/timeout na busca da empresa: ${err.message}`);
-      return { data: null, error: err };
-    });
-
-    console.log(`[KOMMO WEBHOOK] Empresa: ${company?.name}, erro: ${companyError?.message || 'nenhum'}`);
+    try {
+      const result = await Promise.race([
+        supabaseAdmin
+          .from('companies')
+          .select('id, name, whatsapp_instance')
+          .eq('id', 'e4bf6f22-6182-414d-afa4-c5449c014323')
+          .single(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('TIMEOUT_5S')), 5000)
+        )
+      ]);
+      company = (result as any).data;
+      companyError = (result as any).error;
+      console.log(`[KOMMO WEBHOOK] Query retornou — company: ${company?.name ?? 'null'}, error: ${companyError?.message ?? 'nenhum'}`);
+    } catch (raceErr: any) {
+      console.error(`[KOMMO WEBHOOK] Promise.race falhou: ${raceErr.message}`);
+      if (raceErr.message === 'TIMEOUT_5S') {
+        console.error('[KOMMO WEBHOOK] Supabase não respondeu em 5s — tentando fetch direto...');
+        try {
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+          const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+          const resp = await fetch(
+            `${supabaseUrl}/rest/v1/companies?id=eq.e4bf6f22-6182-414d-afa4-c5449c014323&select=id,name,whatsapp_instance&limit=1`,
+            {
+              headers: {
+                apikey: serviceKey!,
+                Authorization: `Bearer ${serviceKey}`,
+                Accept: 'application/json'
+              },
+              signal: AbortSignal.timeout(4000)
+            }
+          );
+          const rows = await resp.json();
+          company = rows?.[0] ?? null;
+          console.log(`[KOMMO WEBHOOK] Fetch direto retornou: ${company?.name ?? 'null'}`);
+        } catch (fetchErr: any) {
+          console.error(`[KOMMO WEBHOOK] Fetch direto também falhou: ${fetchErr.message}`);
+        }
+      }
+    }
 
     if (!company) {
-      console.error('[KOMMO WEBHOOK] Empresa MT Solar não encontrada pelo ID — abortando.');
+      console.error('[KOMMO WEBHOOK] Empresa MT Solar não encontrada — abortando.');
       return;
     }
 

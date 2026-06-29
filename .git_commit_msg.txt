@@ -1,8 +1,8 @@
-﻿fix(kommo): mover processamento para setImmediate após res.200
+﻿fix(kommo): fallback fetch direto se supabaseAdmin travar no webhook
 
-- Vercel encerrava a função logo após res.status(200).json()
-- Todo o processamento assíncrono movido para setImmediate()
-- Isso mantém o event loop ativo após a resposta HTTP
-- Resolve o corte silencioso na query do Supabase (empresa MT Solar)
+- Promise.race com TIMEOUT_5S explícito para supabaseAdmin
+- Se timeout disparar, tenta fetch direto à REST API do Supabase
+- Logs distintos para cada cenário (query ok / timeout / fetch fallback)
+- Resolve corte silencioso na busca da empresa MT Solar
 
 Arquivos: api/index.ts
