@@ -4578,115 +4578,63 @@ async function getKommoLeadNotes(leadId: string): Promise<string> {
 
 // Webhook: recebe leads do Kommo CRM e distribui via Round-Robin
 app.post('/api/kommo/webhook', async (req, res) => {
-  const KOMMO_SUBDOMAIN_CHECK = process.env.KOMMO_SUBDOMAIN || 'mtsolarenergia';
-  const KOMMO_TOKEN_CHECK = process.env.KOMMO_LONG_LIVED_TOKEN;
-
-  if (!KOMMO_TOKEN_CHECK || !process.env.KOMMO_SUBDOMAIN) {
-    console.error(`[KOMMO WEBHOOK] Erro Crítico: Kommo não configurado. Subdomain=${!!process.env.KOMMO_SUBDOMAIN}, Token=${!!KOMMO_TOKEN_CHECK}`);
-    return res.status(500).json({ error: 'Kommo não configurado' });
-  }
-
-  // Responde 200 imediatamente para evitar retries do Kommo apenas se credenciais válidas
-  res.status(200).json({ received: true });
-
-  // Processa em background com setImmediate para garantir que a Vercel
-  // não encerre a função logo após o res.end()
-  setImmediate(async () => {
   try {
-    console.log('[KOMMO WEBHOOK] Payload recebido:', JSON.stringify(req.body).slice(0, 500));
+    // 1. VALIDAÇÃO DE CREDENCIAIS (já existente — manter)
+    const kommoToken = process.env.KOMMO_LONG_LIVED_TOKEN;
+    const kommoSubdomain = process.env.KOMMO_SUBDOMAIN;
+    const kommoStatusIdLead = process.env.KOMMO_STATUS_ID_LEAD;
+    if (!kommoToken || !kommoSubdomain) {
+      console.error('[KOMMO WEBHOOK] Credenciais Kommo ausentes');
+      return res.status(500).json({ error: 'Credenciais Kommo não configuradas' });
+    }
 
+    // 2. EXTRAIR LEADS APLICÁVEIS (já existente — manter lógica atual)
     const body = req.body;
-    let leadsToProcess: any[] = [];
+    console.log(`[KOMMO WEBHOOK] Payload recebido: ${JSON.stringify(body).substring(0, 300)}`);
 
-    // 1. Processa leads criados (add) - todos entram
-    const leadsAdd = body?.leads?.add || [];
-    for (const lead of leadsAdd) {
-      console.log(`[KOMMO WEBHOOK] Lead ${lead.id} via leads.add`);
-      leadsToProcess.push(lead);
-    }
+    const leadsAdd: any[] = body?.leads?.add || [];
+    const leadsStatus: any[] = body?.leads?.status || [];
+    const leadsUpdate: any[] = body?.leads?.update || [];
 
-    // 2. Processa leads movidos (status) ou atualizados (update) para a etapa LEAD
-    const statusIdLead = process.env.KOMMO_STATUS_ID_LEAD;
-    if (!statusIdLead) {
-      console.warn('[KOMMO WEBHOOK] KOMMO_STATUS_ID_LEAD não definido. Ignorando leads.update e leads.status.');
-    } else {
-      const leadsUpdate = body?.leads?.update || [];
-      for (const lead of leadsUpdate) {
-        if (String(lead.status_id) === String(statusIdLead)) {
-          console.log(`[KOMMO WEBHOOK] Lead ${lead.id} via leads.update (status_id: ${lead.status_id})`);
-          leadsToProcess.push(lead);
-        }
-      }
+    const targetStatusId = kommoStatusIdLead ? parseInt(kommoStatusIdLead) : null;
 
-      const leadsStatus = body?.leads?.status || [];
-      for (const lead of leadsStatus) {
-        if (String(lead.status_id) === String(statusIdLead)) {
-          console.log(`[KOMMO WEBHOOK] Lead ${lead.id} via leads.status (status_id: ${lead.status_id})`);
-          leadsToProcess.push(lead);
-        }
-      }
-    }
+    const leadsToProcess = [
+      ...leadsAdd,
+      ...(targetStatusId
+        ? leadsStatus.filter((l: any) => Number(l.status_id) === targetStatusId)
+        : []),
+      ...(targetStatusId
+        ? leadsUpdate.filter((l: any) => Number(l.status_id) === targetStatusId)
+        : []),
+    ];
 
     if (leadsToProcess.length === 0) {
       console.log('[KOMMO WEBHOOK] Nenhum lead aplicável no payload — ignorando.');
-      return;
+      return res.status(200).json({ ok: true });
     }
 
     console.log(`[KOMMO WEBHOOK] Total de leads para processar: ${leadsToProcess.length}`);
 
+    // 3. BUSCAR EMPRESA ANTES DO res.200
     console.log('[KOMMO WEBHOOK] Buscando empresa MT Solar no banco...');
+    const { data: company, error: companyError } = await supabaseAdmin
+      .from('companies')
+      .select('id, name, whatsapp_instance')
+      .eq('id', 'e4bf6f22-6182-414d-afa4-c5449c014323')
+      .single();
 
-    let company: any = null;
-    let companyError: any = null;
-
-    try {
-      const result = await Promise.race([
-        supabaseAdmin
-          .from('companies')
-          .select('id, name, whatsapp_instance')
-          .eq('id', 'e4bf6f22-6182-414d-afa4-c5449c014323')
-          .single(),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('TIMEOUT_5S')), 5000)
-        )
-      ]);
-      company = (result as any).data;
-      companyError = (result as any).error;
-      console.log(`[KOMMO WEBHOOK] Query retornou — company: ${company?.name ?? 'null'}, error: ${companyError?.message ?? 'nenhum'}`);
-    } catch (raceErr: any) {
-      console.error(`[KOMMO WEBHOOK] Promise.race falhou: ${raceErr.message}`);
-      if (raceErr.message === 'TIMEOUT_5S') {
-        console.error('[KOMMO WEBHOOK] Supabase não respondeu em 5s — tentando fetch direto...');
-        try {
-          const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-          const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-          const resp = await fetch(
-            `${supabaseUrl}/rest/v1/companies?id=eq.e4bf6f22-6182-414d-afa4-c5449c014323&select=id,name,whatsapp_instance&limit=1`,
-            {
-              headers: {
-                apikey: serviceKey!,
-                Authorization: `Bearer ${serviceKey}`,
-                Accept: 'application/json'
-              },
-              signal: AbortSignal.timeout(4000)
-            }
-          );
-          const rows = await resp.json();
-          company = rows?.[0] ?? null;
-          console.log(`[KOMMO WEBHOOK] Fetch direto retornou: ${company?.name ?? 'null'}`);
-        } catch (fetchErr: any) {
-          console.error(`[KOMMO WEBHOOK] Fetch direto também falhou: ${fetchErr.message}`);
-        }
-      }
-    }
+    console.log(`[KOMMO WEBHOOK] Empresa: ${company?.name ?? 'null'}, erro: ${companyError?.message ?? 'nenhum'}`);
 
     if (!company) {
-      console.error('[KOMMO WEBHOOK] Empresa MT Solar não encontrada — abortando.');
-      return;
+      console.error('[KOMMO WEBHOOK] Empresa não encontrada — abortando.');
+      return res.status(200).json({ ok: true });
     }
 
-    const companyId = company.id;
+    // 4. res.200 IMEDIATO
+    res.status(200).json({ ok: true });
 
+    // 5. PROCESSAMENTO DOS LEADS (após res.200, usando variáveis já em memória)
+    const companyId = company.id;
     for (const lead of leadsToProcess) {
       try {
         console.log(`[KOMMO WEBHOOK] Iniciando processamento do lead ${lead.id}`);
@@ -4856,7 +4804,6 @@ app.post('/api/kommo/webhook', async (req, res) => {
     console.error('[KOMMO WEBHOOK] Erro catastrófico:', err.message);
     console.error(err?.stack || err);
   }
-  }); // fim do setImmediate
 });
 
 // Rota: corrige nomes "Você"/null buscando na API do Kommo pelo telefone (apenas CEO)

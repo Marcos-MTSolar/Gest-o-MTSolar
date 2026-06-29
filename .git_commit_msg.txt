@@ -1,8 +1,1 @@
-﻿fix(kommo): fallback fetch direto se supabaseAdmin travar no webhook
-
-- Promise.race com TIMEOUT_5S explícito para supabaseAdmin
-- Se timeout disparar, tenta fetch direto à REST API do Supabase
-- Logs distintos para cada cenário (query ok / timeout / fetch fallback)
-- Resolve corte silencioso na busca da empresa MT Solar
-
-Arquivos: api/index.ts
+﻿fix(kommo): buscar empresa antes do res.200 — eliminar setImmediate
