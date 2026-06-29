@@ -4633,19 +4633,22 @@ app.post('/api/kommo/webhook', async (req, res) => {
 
     console.log(`[KOMMO WEBHOOK] Total de leads para processar: ${leadsToProcess.length}`);
 
+    console.log('[KOMMO WEBHOOK] Buscando empresa MT Solar no banco...');
     // Busca a empresa MT Solar (single-tenant por enquanto)
-    const { data: company } = await supabaseAdmin
+    const companyResult = await supabaseAdmin
       .from('companies')
       .select('id')
       .eq('name', 'MT Solar')
       .single();
+    
+    console.log(`[KOMMO WEBHOOK] Resultado da busca por empresa: data=${JSON.stringify(companyResult.data)}, error=${companyResult.error?.message}`);
 
-    if (!company) {
-      console.error('[KOMMO WEBHOOK] Empresa MT Solar não encontrada no banco.');
+    if (!companyResult.data) {
+      console.error('[KOMMO WEBHOOK] Empresa MT Solar não encontrada no banco — abortando.');
       return;
     }
 
-    const companyId = company.id;
+    const companyId = companyResult.data.id;
 
     for (const lead of leadsToProcess) {
       try {
