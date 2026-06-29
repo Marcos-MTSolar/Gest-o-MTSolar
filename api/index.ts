@@ -4634,21 +4634,33 @@ app.post('/api/kommo/webhook', async (req, res) => {
     console.log(`[KOMMO WEBHOOK] Total de leads para processar: ${leadsToProcess.length}`);
 
     console.log('[KOMMO WEBHOOK] Buscando empresa MT Solar no banco...');
-    // Busca a empresa MT Solar (single-tenant por enquanto)
-    const companyResult = await supabaseAdmin
-      .from('companies')
-      .select('id')
-      .eq('name', 'MT Solar')
-      .single();
     
-    console.log(`[KOMMO WEBHOOK] Resultado da busca por empresa: data=${JSON.stringify(companyResult.data)}, error=${companyResult.error?.message}`);
+    const queryPromise = supabaseAdmin
+      .from('companies')
+      .select('id, name, whatsapp_instance')
+      .eq('id', 'e4bf6f22-6182-414d-afa4-c5449c014323')
+      .single();
 
-    if (!companyResult.data) {
-      console.error('[KOMMO WEBHOOK] Empresa MT Solar não encontrada no banco — abortando.');
+    const timeoutPromise = new Promise<any>((_, reject) =>
+      setTimeout(() => reject(new Error('Timeout na busca da empresa')), 5000)
+    );
+
+    const { data: company, error: companyError } = await Promise.race([
+      queryPromise,
+      timeoutPromise
+    ]).catch(err => {
+      console.error(`[KOMMO WEBHOOK] Erro/timeout na busca da empresa: ${err.message}`);
+      return { data: null, error: err };
+    });
+
+    console.log(`[KOMMO WEBHOOK] Empresa: ${company?.name}, erro: ${companyError?.message || 'nenhum'}`);
+
+    if (!company) {
+      console.error('[KOMMO WEBHOOK] Empresa MT Solar não encontrada pelo ID — abortando.');
       return;
     }
 
-    const companyId = companyResult.data.id;
+    const companyId = company.id;
 
     for (const lead of leadsToProcess) {
       try {
