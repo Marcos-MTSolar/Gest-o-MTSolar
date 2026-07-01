@@ -4,6 +4,12 @@
 
 ## Alterações — Sessão 01/07/2026
 
+* **🔥 HOTFIX CRÍTICO: Correção de Quebra em Produção (WhatsApp.tsx):**
+  * *O que foi feito:* Corrigido erro fatal `TypeError: undefined is not a function at Array.filter` que derrubou o painel de atendimento. O erro ocorria quando a API não retornava um array válido, tornando as variáveis de estado (`conversations`, `availableAgents`, `messages`, etc.) nulas ou indefinidas, quebrando a renderização nas chamadas subsequentes de `.filter()` e `.map()`. A solução consistiu em (1) blindar o set inicial das conversas com `setConversations(Array.isArray(data) ? data : [])` e (2) adicionar guards preventivos `(variavel || [])` antes de absolutamente todas as chamadas iterativas de arrays (`filter` e `map`) presentes no componente `WhatsApp.tsx`, garantindo que o React jamais tente mapear valores indefinidos.
+  * *Data e hora da alteração:* 01/07/2026 às 07:15 (Horário Local)
+  * *Arquivos modificados:* `src/pages/WhatsApp.tsx`
+
+
 * **Renomear Contatos no Atendimento WhatsApp:**
   * *O que foi feito:* Implementada funcionalidade completa para
     vendedores renomearem contatos diretamente no painel de
