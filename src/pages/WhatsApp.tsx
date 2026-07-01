@@ -36,6 +36,9 @@ import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import api from '../lib/api';
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 interface Message {
   id: string;
@@ -157,6 +160,21 @@ export default function WhatsApp() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const shouldAutoScrollRef = useRef(true);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  function autoResize(el: HTMLTextAreaElement) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (newMessage.trim() || selectedFile) {
+        handleSendMessage(e as any);
+      }
+    }
+  }
 
   useEffect(() => {
     if (selectedConversation) {
@@ -360,6 +378,9 @@ export default function WhatsApp() {
     const currentFile = selectedFile;
     
     setNewMessage('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
     setSelectedFile(null);
     setFilePreview(null);
     setIsSending(true);
@@ -488,18 +509,25 @@ export default function WhatsApp() {
 
 
   const updateContactName = async () => {
-    if (!selectedConversation || !tempName.trim()) return;
-
-    const { error } = await supabase
-      .from('whatsapp_conversations')
-      .update({ contact_name: tempName.trim() })
-      .eq('id', selectedConversation.id)
-      .eq('company_id', user?.company_id);
-
-    if (!error) {
-      setSelectedConversation({ ...selectedConversation, contact_name: tempName.trim() });
+    if (!selectedConversation || !tempName.trim()) {
       setIsEditingName(false);
-      fetchConversations();
+      return;
+    }
+    const novoNome = tempName.trim();
+    if (novoNome === selectedConversation.contact_name) {
+      setIsEditingName(false);
+      return;
+    }
+    try {
+      await api.put(`/api/conversations/${selectedConversation.id}/rename`, { name: novoNome });
+      setConversations(prev => prev.map(c =>
+        c.id === selectedConversation.id ? { ...c, contact_name: novoNome } : c
+      ));
+      setSelectedConversation(prev => prev ? { ...prev, contact_name: novoNome } : prev);
+    } catch (err) {
+      console.error('Erro ao renomear contato:', err);
+    } finally {
+      setIsEditingName(false);
     }
   };
 
@@ -696,11 +724,68 @@ export default function WhatsApp() {
 
   // Outros em atendimento — visível mas bloqueado (exceto CEO/ADMIN que veem tudo)
   const othersConversations = allFiltered.filter(
-    c => c.status === 'in_progress' && Number(c.assigned_to) !== Number(user?.id)
   );
 
-  // Encerrados
   const closedConversations = allFiltered.filter(c => c.status === 'closed');
+
+  const getMediaUrl = (mediaUrl: string | null | undefined) => {
+    if (!mediaUrl) return '';
+    const isR2Url = mediaUrl.includes('r2.dev') || mediaUrl.includes('r2.cloudflarestorage.com');
+    if (isR2Url) {
+      try {
+        const urlObj = new URL(mediaUrl);
+        const filePath = urlObj.pathname.substring(1);
+        const token = localStorage.getItem('token');
+        return `${api.defaults.baseURL}/api/media/download?path=${encodeURIComponent(filePath)}${token ? `&token=${token}` : ''}`;
+      } catch (e) {
+        return mediaUrl;
+      }
+    }
+    return mediaUrl;
+  };
+
+  const handleDownloadMedia = async (mediaUrl: string | null | undefined, fileName: string) => {
+    if (!mediaUrl) return;
+    try {
+      const token = localStorage.getItem('token');
+      const downloadUrl = getMediaUrl(mediaUrl);
+
+      if (Capacitor.isNativePlatform()) {
+        const response = await fetch(downloadUrl, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (!response.ok) throw new Error('Erro no download');
+        const blob = await response.blob();
+        
+        const blobToBase64 = (b: Blob) => {
+          return new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onerror = reject;
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(b);
+          });
+        };
+        const base64 = await blobToBase64(blob);
+        await Filesystem.writeFile({
+          path: fileName,
+          data: base64,
+          directory: Directory.Documents,
+        });
+        await Share.share({ url: fileName, title: fileName });
+      } else {
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = fileName;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    } catch (error) {
+      console.error('Erro ao baixar mídia:', error);
+      alert('Não foi possível fazer o download do arquivo.');
+    }
+  };
 
   const renderConversationItem = (conv: Conversation) => {
     // Só considera "atribuído a outro" se assigned_to estiver de fato preenchido
@@ -993,10 +1078,41 @@ export default function WhatsApp() {
                   <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-full bg-blue-100 flex-shrink-0 flex items-center justify-center text-blue-700">
                     <User size={18} />
                   </div>
-                  <div className="min-w-0">
-                    <h2 className="font-bold text-gray-800 text-sm lg:text-base truncate">
-                      {selectedConversation.contact_name || selectedConversation.phone}
-                    </h2>
+                  <div className="min-w-0 flex-1">
+                    {isEditingName ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={tempName}
+                          onChange={(e) => setTempName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') updateContactName();
+                            if (e.key === 'Escape') setIsEditingName(false);
+                          }}
+                          onBlur={updateContactName}
+                          autoFocus
+                          maxLength={100}
+                          className="text-sm lg:text-base font-bold border-b-2 border-blue-500 outline-none bg-transparent w-full max-w-[180px]"
+                        />
+                        <button onClick={() => setIsEditingName(false)} className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <h2 className="font-bold text-gray-800 text-sm lg:text-base truncate flex items-center gap-1.5 group/rename">
+                        <span className="truncate">{selectedConversation.contact_name || selectedConversation.phone}</span>
+                        <button
+                          onClick={() => {
+                            setTempName(selectedConversation.contact_name || '');
+                            setIsEditingName(true);
+                          }}
+                          title="Renomear contato"
+                          className="opacity-0 group-hover/rename:opacity-100 transition-opacity text-gray-400 hover:text-blue-500 flex-shrink-0"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                      </h2>
+                    )}
                     <p className="text-[10px] lg:text-xs text-gray-400 truncate flex items-center gap-1">
                       {selectedConversation.phone?.startsWith('kommo-lead-') ? (
                         <span className="italic">📋 Sem telefone</span>
@@ -1148,10 +1264,10 @@ export default function WhatsApp() {
                     {msg.media_type === 'image' && (
                       <div className="mb-2 max-w-full">
                         <img 
-                          src={msg.media_url || ''} 
+                          src={getMediaUrl(msg.media_url)} 
                           alt="Imagem" 
                           className="rounded-lg max-h-64 object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                          onClick={() => setLightboxImage(msg.media_url || null)}
+                          onClick={() => setLightboxImage(getMediaUrl(msg.media_url))}
                           onError={(e) => {
                             console.error('[IMG ERROR] URL:', msg.media_url);
                             // If media_url is missing or broken, we can't show it easily without proxying
@@ -1165,9 +1281,9 @@ export default function WhatsApp() {
                     {msg.media_type === 'audio' && (
                       <div className="mb-2 min-w-[240px]">
                         <audio controls className="w-full h-10 accent-blue-600">
-                          <source src={msg.media_url || ''} type="audio/ogg; codecs=opus" />
-                          <source src={msg.media_url || ''} type="audio/mpeg" />
-                          <source src={msg.media_url || ''} type="audio/mp4" />
+                          <source src={getMediaUrl(msg.media_url)} type="audio/ogg; codecs=opus" />
+                          <source src={getMediaUrl(msg.media_url)} type="audio/mpeg" />
+                          <source src={getMediaUrl(msg.media_url)} type="audio/mp4" />
                         </audio>
                       </div>
                     )}
@@ -1184,15 +1300,13 @@ export default function WhatsApp() {
                           </p>
                         </div>
                         {msg.media_url && (
-                          <a 
-                            href={msg.media_url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
+                          <button 
+                            onClick={() => handleDownloadMedia(msg.media_url, msg.file_name || 'documento')}
                             className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
                             title="Baixar"
                           >
                             <Download size={16} />
-                          </a>
+                          </button>
                         )}
                       </div>
                     )}
@@ -1291,12 +1405,19 @@ export default function WhatsApp() {
                         </button>
                       </div>
                     ) : (
-                      <input 
-                        type="text" 
-                        placeholder="Digite uma mensagem..." 
-                        className="flex-1 bg-transparent border-none py-2 text-sm focus:ring-0 transition-all"
+                      <textarea
+                        ref={textareaRef}
+                        placeholder="Digite uma mensagem..."
+                        className="flex-1 bg-transparent border-none py-2 text-sm focus:ring-0 transition-all custom-scrollbar"
                         value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
+                        onChange={(e) => {
+                          setNewMessage(e.target.value);
+                          autoResize(e.target);
+                        }}
+                        onKeyDown={handleKeyDown}
+                        rows={1}
+                        style={{ resize: 'none', overflowY: 'auto', minHeight: '36px' }}
+                        enterKeyHint="send"
                       />
                     )}
                   </form>
@@ -1610,12 +1731,21 @@ export default function WhatsApp() {
           className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 animate-in fade-in duration-200"
           onClick={() => setLightboxImage(null)}
         >
-          <button 
-            className="absolute top-6 right-6 p-2 text-white/70 hover:text-white transition-colors bg-white/10 hover:bg-white/20 rounded-full"
-            onClick={(e) => { e.stopPropagation(); setLightboxImage(null); }}
-          >
-            <X size={24} />
-          </button>
+          <div className="absolute top-6 right-6 flex items-center gap-4">
+            <button 
+              className="p-2 text-white/70 hover:text-white transition-colors bg-white/10 hover:bg-white/20 rounded-full"
+              onClick={(e) => { e.stopPropagation(); handleDownloadMedia(lightboxImage, 'imagem.jpg'); }}
+              title="Baixar Imagem"
+            >
+              <Download size={24} />
+            </button>
+            <button 
+              className="p-2 text-white/70 hover:text-white transition-colors bg-white/10 hover:bg-white/20 rounded-full"
+              onClick={(e) => { e.stopPropagation(); setLightboxImage(null); }}
+            >
+              <X size={24} />
+            </button>
+          </div>
           <img 
             src={lightboxImage} 
             alt="Lightbox" 

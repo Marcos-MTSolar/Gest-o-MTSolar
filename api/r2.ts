@@ -3,6 +3,7 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
   ListObjectsV2Command,
+  GetObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
@@ -33,7 +34,16 @@ export async function uploadToR2(
       Metadata: { uploadedAt: new Date().toISOString(), ...customMetadata },
     })
   );
-  return `${R2_PUBLIC_URL}/${filePath}`;
+  const baseUrl = R2_PUBLIC_URL.endsWith('/') ? R2_PUBLIC_URL.slice(0, -1) : R2_PUBLIC_URL;
+  return `${baseUrl}/${filePath}`;
+}
+
+export async function getFileFromR2(filePath: string) {
+  const command = new GetObjectCommand({
+    Bucket: R2_BUCKET,
+    Key: filePath,
+  });
+  return await r2Client.send(command);
 }
 
 export async function deleteFromR2(filePath: string): Promise<void> {

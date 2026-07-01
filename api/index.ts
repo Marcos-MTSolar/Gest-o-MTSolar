@@ -102,7 +102,7 @@ app.use((req, res, next) => {
 
 // Auth Middleware
 const authenticateToken = (req: any, res: any, next: any) => {
-  const token = req.cookies.token || req.headers['authorization']?.split(' ')[1];
+  const token = req.cookies.token || req.headers['authorization']?.split(' ')[1] || req.query.token;
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
   jwt.verify(token, JWT_SECRET, async (err: any, decoded: any) => {
@@ -1432,7 +1432,9 @@ app.get('/api/r2/presigned-url', authenticateToken, async (req: any, res) => {
     const filePath = `homologacao-docs/${req.user.company_id}/${clientId}/${documentType}-${Date.now()}.${ext}`;
 
     const presignedUrl = await generatePresignedUrl(filePath, contentType as string);
-    const publicUrl = `${R2_PUBLIC_URL}/${filePath}`;
+    const safeR2Url = R2_PUBLIC_URL.endsWith('/') ? R2_PUBLIC_URL.slice(0, -1) : R2_PUBLIC_URL;
+    const cleanPath = filePath.startsWith('/') ? filePath.slice(1) : filePath;
+    const publicUrl = `${safeR2Url}/${cleanPath}`;
 
     res.json({ presignedUrl, publicUrl, filePath });
   } catch (error: any) {
@@ -1699,6 +1701,56 @@ app.post('/api/conversations/:id/observations', authenticateToken, async (req: a
 
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
+});
+
+// Renomear contato de uma conversa
+app.put('/api/conversations/:id/rename', authenticateToken, async (req: any, res) => {
+  const conversationId = req.params.id;
+  const companyId = req.user.company_id;
+  const userName = req.user.name || 'Usuário';
+  const { name } = req.body;
+
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'O nome não pode estar vazio.' });
+  }
+  if (name.trim().length > 100) {
+    return res.status(400).json({ error: 'O nome deve ter no máximo 100 caracteres.' });
+  }
+
+  const novoNome = name.trim();
+
+  const { data: conv, error: convError } = await supabase
+    .from('whatsapp_conversations')
+    .select('id')
+    .eq('id', conversationId)
+    .eq('company_id', companyId)
+    .single();
+
+  if (convError || !conv) {
+    return res.status(404).json({ error: 'Conversa não encontrada.' });
+  }
+
+  const { error: updateError } = await supabase
+    .from('whatsapp_conversations')
+    .update({ contact_name: novoNome })
+    .eq('id', conversationId)
+    .eq('company_id', companyId);
+
+  if (updateError) {
+    return res.status(500).json({ error: updateError.message });
+  }
+
+  // Mensagem interna registrando o rename
+  await supabase.from('whatsapp_messages').insert({
+    conversation_id: conversationId,
+    company_id: companyId,
+    message: `✏️ Contato renomeado para "${novoNome}" por ${userName}`,
+    is_internal: true,
+    from_me: true,
+    timestamp: new Date().toISOString()
+  });
+
+  res.json({ success: true, name: novoNome });
 });
 
 // Helper para resolver a instância WhatsApp e as credenciais do tenant autenticado
@@ -2087,7 +2139,9 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
     // Salvar no banco
     if (conversationId) {
       // Construir URL pública do R2 diretamente a partir do filePath enviado pelo frontend
-      const publicUrl = `${R2_PUBLIC_URL}/${filePath}`;
+      const safeR2Url = R2_PUBLIC_URL.endsWith('/') ? R2_PUBLIC_URL.slice(0, -1) : R2_PUBLIC_URL;
+      const cleanPath = filePath.startsWith('/') ? filePath.slice(1) : filePath;
+      const publicUrl = `${safeR2Url}/${cleanPath}`;
 
       await supabase.from('whatsapp_messages').upsert({
         conversation_id: conversationId,
@@ -2623,9 +2677,12 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
           // Se pushName veio preenchido, usa ele.
           // Se não veio (mensagem fromMe do Kommo), mantém o nome já salvo na conversa.
           // Se não há nome salvo, tenta buscar na tabela clients pelo telefone.
-          let resolvedName = pushName || existingConv.contact_name || null;
+          let resolvedName = 
+            (pushName && pushName.trim() !== '' && pushName !== 'Você') 
+              ? pushName 
+              : existingConv?.contact_name || null;
 
-          if (!resolvedName) {
+          if (!resolvedName || resolvedName === 'Você') {
             const { data: clientMatch } = await supabaseAdmin
               .from('clients')
               .select('name')
@@ -2638,7 +2695,7 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
           const { data: updated } = await supabase
             .from('whatsapp_conversations')
             .update({
-              contact_name: resolvedName,
+              contact_name: (resolvedName && resolvedName !== 'Você') ? resolvedName : (existingConv.contact_name !== 'Você' ? existingConv.contact_name : null),
               last_message: text,
               last_message_at: new Date().toISOString(),
               status: newStatus
@@ -2653,9 +2710,9 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
         } else {
           // Criar nova conversa
           // Tenta resolver o nome mesmo quando pushName vem vazio (ex: mensagens fromMe do Kommo)
-          let newConvName = pushName || null;
+          let newConvName = (pushName && pushName.trim() !== '' && pushName !== 'Você') ? pushName : null;
 
-          if (!newConvName) {
+          if (!newConvName || newConvName === 'Você') {
             const { data: clientMatch } = await supabaseAdmin
               .from('clients')
               .select('name')
@@ -2670,7 +2727,7 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
             .insert({
               phone,
               company_id: companyId,
-              contact_name: newConvName,
+              contact_name: (newConvName && newConvName !== 'Você') ? newConvName : null,
               last_message: text,
               last_message_at: new Date().toISOString(),
               status: sanitizeConversationStatus('waiting', null),
@@ -4660,11 +4717,30 @@ app.post('/api/kommo/webhook', async (req, res) => {
 
       if (contactResult === null) {
         console.warn(`[KOMMO WEBHOOK] Contato não encontrado para lead ${leadId} — salvando com dados parciais`);
-        contactName = `Lead ${leadId}`;
         contactPhone = null; // sem telefone real disponível
       } else {
         contactName = contactResult.name;
         contactPhone = contactResult.phone;
+      }
+
+      if (!contactName || contactName.trim() === '' || contactName === 'Você') {
+        try {
+          const notasBot = await getKommoLeadNotes(leadId);
+          let foundName = null;
+          if (typeof notasBot === 'string') {
+            const match = notasBot.match(/Nome:\s*([^\n]+)/i);
+            if (match && match[1]) {
+              foundName = match[1].trim();
+            }
+          }
+          if (foundName && foundName !== 'Você') {
+            contactName = foundName;
+          } else {
+            contactName = `Lead Kommo #${leadId}`;
+          }
+        } catch (e) {
+          contactName = `Lead Kommo #${leadId}`;
+        }
       }
 
       if (!contactPhone) {

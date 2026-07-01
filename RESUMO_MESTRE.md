@@ -1,5 +1,77 @@
 # RESUMO MESTRE — GESTÃO MTSOLAR
 
+---
+
+## Alterações — Sessão 01/07/2026
+
+* **Renomear Contatos no Atendimento WhatsApp:**
+  * *O que foi feito:* Implementada funcionalidade completa para
+    vendedores renomearem contatos diretamente no painel de
+    atendimento. Backend: nova rota `PUT /api/conversations/:id/rename`
+    com autenticação JWT, validação multi-tenant, limite de 100
+    caracteres e registro automático de mensagem interna de auditoria
+    (`✏️ Contato renomeado para "X" por Fulano`). Frontend: ícone de
+    lápis (Pencil) aparece ao hover sobre o nome no cabeçalho da
+    conversa — Enter salva, Escape cancela, onBlur também salva.
+    Função `updateContactName` migrada de chamada direta ao Supabase
+    para a nova rota de API.
+  * *Data e hora da alteração:* 01/07/2026 às 07:03 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/WhatsApp.tsx`, `RESUMO_MESTRE.md`
+
+* **Quebra de Linha (Shift+Enter) no Campo de Mensagem:**
+  * *O que foi feito:* Campo de digitação do chat substituído de
+    `<input type="text">` para `<textarea>` dinâmico com auto-resize
+    (máximo 160px). Regras: Enter sozinho envia, Shift+Enter quebra
+    linha. Atributo `enterKeyHint="send"` para teclado nativo Android.
+    Após envio, altura é resetada para 1 linha automaticamente.
+    Quebras de linha (\n) preservadas na entrega à Evolution API.
+  * *Data e hora da alteração:* 01/07/2026 às 06:50 (Horário Local)
+  * *Arquivos modificados:* `src/pages/WhatsApp.tsx`, `RESUMO_MESTRE.md`
+
+* **Download de Mídias no Atendimento (Web e APK):**
+  * *O que foi feito:* (1) Correção da construção de URLs do R2 em
+    `r2.ts` e `api/index.ts` eliminando barras duplicadas. (2) Nova
+    rota proxy `GET /api/media/download?path=X&token=Y` com autenticação
+    via query param (para `<img>` e `<audio>`) e via header Bearer,
+    fetch streamado do R2, headers CORS limpos e `Content-Disposition:
+    attachment`. (3) Helper `handleDownloadMedia` no frontend: usa
+    `@capacitor/filesystem` + `Share.share()` no APK nativo e link
+    `<a download>` invisível no web. Imagens com botão de download no
+    lightbox, documentos com botão dedicado, áudios roteados pelo proxy.
+    Middleware de autenticação atualizado para aceitar token em
+    query param.
+  * *Data e hora da alteração:* 01/07/2026 às 06:45 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `api/r2.ts`, `src/pages/WhatsApp.tsx`, `RESUMO_MESTRE.md`
+
+* **Correções no PDF da Proposta Comercial:**
+  * *O que foi feito:* (A) Constante `MARGEM_INFERIOR = 25mm` e
+    `LIMITE_Y` unificados em todos os pontos de quebra de página,
+    eliminando lacunas e rodapé invadindo página seguinte. (B) Guard
+    `propNumeroLimpo` com `startsWith('PROP-')` corrigindo número
+    duplicado `PROP-PROP-XXXXX`. (C) Guard no gráfico Consumo X
+    Geração com fallback elegante quando dados estão ausentes.
+    (D) Datas de geração e validade corrigidas com construção manual
+    sem bug de UTC, validade atualizada para 30 dias. (E) Tabela de
+    materiais exibe "Incluso no Kit" por item e "Valor Total do Kit"
+    no rodapé quando o kit vem de solar_kits.
+  * *Data e hora da alteração:* 01/07/2026 às 06:58 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`, `RESUMO_MESTRE.md`
+
+* **Correção do Nome "Você" em Leads do Kommo:**
+  * *O que foi feito:* (1) Webhook `POST /api/webhooks/whatsapp`:
+    pushName igual a "Você" ou nulo é descartado. Resolução em
+    cascata: mantém contact_name existente → busca em clients por
+    phone → fallback para número. Regra anti-sobrescrita: jamais
+    substitui nome válido por nulo ou "Você". (2) Webhook
+    `POST /api/kommo/webhook`: se Kommo não retorna nome, extrai
+    via Regex das notas do lead (getKommoLeadNotes) antes de usar
+    placeholder `Lead Kommo #ID`. (3) Rota `POST /api/kommo/fix-names`
+    confirmada com suporte a correção retroativa de contact_name =
+    'Você'. Correção de tipagem em variável de notas (string vs array).
+  * *Data e hora da alteração:* 01/07/2026 às 06:40 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `RESUMO_MESTRE.md`
+
+
 * **Correção de Tipagem (TypeScript): MAX_TENTATIVAS e listFromR2:**
   * *O que foi feito:* Corrigidos erros de TypeScript na `api/index.ts`. A constante `MAX_TENTATIVAS` foi renomeada para a variável correta `maxTentativas` para coincidir com o parâmetro recebido em `getKommoLeadContact`. A função inexistente `listR2Files` foi substituída por `listFromR2`, sendo importada corretamente. O arquivo `api/r2.ts` também foi atualizado para exportar `listFromR2` com esse nome.
   * *Data e hora da alteração:* 29/06/2026 às 20:38 (Horário Local)

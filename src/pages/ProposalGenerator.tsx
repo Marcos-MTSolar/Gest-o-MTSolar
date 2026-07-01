@@ -505,16 +505,23 @@ export default function ProposalGenerator() {
     const larguraUtil = pageWidth - margemLateral * 2;
     let y = 0;
 
+    const MARGEM_INFERIOR = 25;
+    const LIMITE_Y = pageHeight - MARGEM_INFERIOR;
+
+    const adicionarCabecalhoServico = (d: any, w: number) => {
+      d.setFontSize(8);
+      d.setTextColor(100);
+      d.text(`Proposta de Serviços — ${serviceFormData.clientName}`, margemLateral, 12);
+      d.text(dataGerada, w - margemLateral, 12, { align: 'right' });
+      d.setDrawColor(200);
+      d.line(margemLateral, 15, w - margemLateral, 15);
+    };
+
     const checkPage = (altura: number) => {
-      if (y + altura > pageHeight - margemBase) {
+      if (y + altura > LIMITE_Y) {
         doc.addPage();
+        adicionarCabecalhoServico(doc, pageWidth);
         y = margemTopo;
-        doc.setFontSize(8);
-        doc.setTextColor(100);
-        doc.text(`Proposta de Serviços — ${serviceFormData.clientName}`, margemLateral, 12);
-        doc.text(dataGerada, pageWidth - margemLateral, 12, { align: 'right' });
-        doc.setDrawColor(200);
-        doc.line(margemLateral, 15, pageWidth - margemLateral, 15);
       }
     };
 
@@ -888,12 +895,23 @@ export default function ProposalGenerator() {
     const AZUL_CLARO = '#d6e4f0';
     const AMARELO = '#f59e0b';
     const CINZA = '#6b7280';
-    const propNumber = Date.now().toString().slice(-6);
-    const proposalNumber = `PROP-${propNumber}`;
-    const dataGerada = new Date().toLocaleDateString('pt-BR');
-    const validade = new Date();
-    validade.setDate(validade.getDate() + 7);
-    const dataValidade = validade.toLocaleDateString('pt-BR');
+    const basePropNum = formData.proposalNumber || Date.now().toString().slice(-6);
+    const propNumeroLimpo = basePropNum.startsWith('PROP-') ? basePropNum : `PROP-${basePropNum}`;
+    const proposalNumber = propNumeroLimpo;
+    
+    const hoje = new Date();
+    const dia = String(hoje.getDate()).padStart(2, '0');
+    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+    const ano = hoje.getFullYear();
+    const dataGeracao = `${dia}/${mes}/${ano}`;
+    const dataGerada = dataGeracao;
+
+    const validadeObj = new Date(hoje);
+    validadeObj.setDate(validadeObj.getDate() + 30);
+    const diaV = String(validadeObj.getDate()).padStart(2, '0');
+    const mesV = String(validadeObj.getMonth() + 1).padStart(2, '0');
+    const anoV = validadeObj.getFullYear();
+    const dataValidade = `${diaV}/${mesV}/${anoV}`;
 
     // Usa salePrice do estado (já considera margemVenda), com fallback robusto
     const margem = formData.margemVenda != null ? formData.margemVenda : Number(formData.marginPercent || 0);
@@ -1261,7 +1279,7 @@ export default function ProposalGenerator() {
             <div style="text-align:right;">
               <div style="color:rgba(255,255,255,0.7);font-size:8pt;">Proposta Nº</div>
               <div style="color:#f59e0b;font-size:13pt;font-weight:bold;">
-                PROP-${propNumber}</div>
+                ${propNumeroLimpo}</div>
               <div style="color:rgba(255,255,255,0.7);font-size:8pt;">
                 ${new Date().toLocaleDateString('pt-BR')}</div>
             </div>
@@ -1577,6 +1595,7 @@ export default function ProposalGenerator() {
 
             <!-- GRÁFICO SVG -->
             <div style="width:100%; height:180px; position:relative; margin-bottom: 10mm;">
+              ${(consumoMensal > 0 || geracaoMes.some((g: number) => g > 0)) ? `
               <svg width="${svgW}" height="${svgH}"
                 viewBox="0 0 ${svgW} ${svgH}"
                 style="width:100%;max-width:${svgW}px;display:block;margin:0 auto;"
@@ -1601,7 +1620,7 @@ export default function ProposalGenerator() {
                   font-family="Arial" transform="rotate(-90, 8, ${chartAreaH / 2})">kWh</text>
 
                 <!-- BARRAS -->
-                ${meses6.map((mes, i) => {
+                ${meses6.map((mes: string, i: number) => {
                   const xBase = paddingLeft + i * (chartAreaW / 12) + 2;
                   const barW = Math.floor((chartAreaW / 12) - 6);
                   const hConsumo = Math.round((consumoMensal / maxVal6) * chartAreaH);
@@ -1625,6 +1644,12 @@ export default function ProposalGenerator() {
                   stroke="#1e3a5f" stroke-width="1.5"/>
 
               </svg>
+              ` : `
+              <div style="height:${svgH}px;display:flex;align-items:center;justify-content:center;
+                color:#6b7280;font-size:11pt;font-style:italic;border:1px dashed #d1d5db;border-radius:8px;">
+                Dados de consumo não informados
+              </div>
+              `}
             </div>
 
             <!-- LEGENDA DO GRÁFICO -->
@@ -2039,7 +2064,7 @@ export default function ProposalGenerator() {
                 <strong style="color:#f59e0b;">${dataValidade}</strong>
               </div>
               <div style="color:rgba(255,255,255,0.6);font-size:8.5pt;margin-top:1mm;">
-                7 dias corridos a partir da data de geração</div>
+                30 dias corridos a partir da data de geração</div>
             </div>
 
             <!-- ASSINATURAS -->
@@ -2078,7 +2103,7 @@ export default function ProposalGenerator() {
                 <div style="text-align:right;">
                   <div style="color:#6b7280;font-size:8pt;">Nº da Proposta</div>
                   <div style="color:#1e3a5f;font-size:11pt;font-weight:bold;">
-                    PROP-${propNumber}
+                    ${propNumeroLimpo}
                   </div>
                 </div>
               </div>
@@ -2305,15 +2330,20 @@ export default function ProposalGenerator() {
 
             // Qtd, Valor Unit., Valor Total (sem valores monetários nos itens de estrutura)
             doc.setTextColor(100, 116, 139);
-            doc.text('1',  mat_margEsq + 120, mat_y + 5.5, { align: 'right' });
-            doc.text('—', mat_margEsq + 147, mat_y + 5.5, { align: 'right' });
-            doc.text('—', mat_margEsq + 175, mat_y + 5.5, { align: 'right' });
+            const matchQtd = item.nome.match(/Qtd:\s*(\d+)/);
+            const qtdStr = matchQtd ? matchQtd[1] : '1';
+            doc.text(qtdStr, mat_margEsq + 120, mat_y + 5.5, { align: 'right' });
+            doc.setFontSize(7.5);
+            doc.text('Incluso no Kit', mat_margEsq + 147, mat_y + 5.5, { align: 'right' });
+            doc.text('Incluso no Kit', mat_margEsq + 175, mat_y + 5.5, { align: 'right' });
+            doc.setFontSize(8.5);
 
             mat_y += mat_alturaLinha;
           });
 
           // Linha de totais ao final da tabela
-          if (mat_y + 10 > pageHeight - mat_margemInf) {
+          const LIMITE_Y_MAT = pageHeight - mat_margemInf;
+          if (mat_y + 12 > LIMITE_Y_MAT) {
             doc.addPage();
             mat_y = mat_margSup;
           }
@@ -2324,6 +2354,11 @@ export default function ProposalGenerator() {
           doc.setFontSize(9);
           doc.setTextColor(30, 58, 95);
           doc.text(`Total de itens: ${itensEstrutura.length}`, mat_margEsq + 2, mat_y + 7);
+          // Exibe o valor total do kit na linha de totais
+          const kitTotalFormatado = parseFloat(formData.kitCost || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+          if (parseFloat(formData.kitCost || '0') > 0) {
+            doc.text(`Valor Total do Kit: R$ ${kitTotalFormatado}`, mat_margEsq + mat_larguraTab, mat_y + 7, { align: 'right' });
+          }
         }
         // =========================================================
 
@@ -2344,7 +2379,7 @@ export default function ProposalGenerator() {
             doc.line(15, 12, 195, 12);
 
             // Conteúdo do cabeçalho
-            const headerLeft = `Proposta: PROP-${proposalNumber}`;
+            const headerLeft = `Proposta: ${propNumeroLimpo}`;
             const headerRight = `Cliente: ${formData.clientName || 'Cliente'}`;
             doc.text(headerLeft, 15, 9);
             doc.text(headerRight, 195, 9, { align: 'right' });
