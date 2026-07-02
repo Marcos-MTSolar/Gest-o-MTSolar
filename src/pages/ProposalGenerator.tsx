@@ -590,6 +590,26 @@ export default function ProposalGenerator() {
         reader.readAsDataURL(logoBlob);
       });
 
+      const logoJpeg = await new Promise<string>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/jpeg', 1.0));
+          } else {
+            resolve(logoBase64); // fallback if no context
+          }
+        };
+        img.onerror = reject;
+        img.src = logoBase64;
+      });
+
       const logoX = (pageWidth - 45) / 2;
       const logoY = 6;
       const logoWidth = 45;
@@ -599,11 +619,8 @@ export default function ProposalGenerator() {
       doc.setFillColor(255, 255, 255);
       doc.roundedRect(logoX - 3, logoY - 3, logoWidth + 6, logoHeight + 6, 2, 2, 'F');
 
-      // @ts-ignore
-      if (doc.GState) doc.setGState(new doc.GState({ opacity: 1.0, 'fill-opacity': 1.0 }));
-      doc.addImage(logoBase64, 'PNG', logoX, logoY, logoWidth, logoHeight);
-      // @ts-ignore
-      if (doc.GState) doc.setGState(new doc.GState({ opacity: 1.0, 'fill-opacity': 1.0 }));
+      // Insere como JPEG 100% opaco
+      doc.addImage(logoJpeg, 'JPEG', logoX, logoY, logoWidth, logoHeight);
 
       // Restaura a cor de fill para o azul do cabeçalho
       doc.setFillColor(30, 58, 95);
@@ -677,12 +694,24 @@ export default function ProposalGenerator() {
     doc.setFontSize(8.5);
     doc.setFont('helvetica', 'normal');
     
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
     const linesMissao = doc.splitTextToSize(missao, larguraUtil - 10);
     const linesVisao = doc.splitTextToSize(visao, larguraUtil - 10);
     const linesValores = doc.splitTextToSize(valores, larguraUtil - 10);
     const linesPq = doc.splitTextToSize(pq, larguraUtil - 10);
 
-    const alturaBloco = 5 + 4 + (linesMissao.length * 4) + 4 + 4 + (linesVisao.length * 4) + 4 + 4 + (linesValores.length * 4) + 4 + 4 + (linesPq.length * 4) + 5;
+    const titleSpace = 4.5;
+    const itemSpace = 4.5;
+    const bottomSpace = 5;
+    const topSpace = 5;
+    const lh = 10 * 0.4; // 4mm de height por linha
+
+    const alturaBloco = topSpace + 
+                        titleSpace + (linesMissao.length * lh) + itemSpace +
+                        titleSpace + (linesVisao.length * lh) + itemSpace +
+                        titleSpace + (linesValores.length * lh) + itemSpace +
+                        titleSpace + (linesPq.length * lh) + bottomSpace;
 
     // INSTITUCIONAL
     checkPage(8 + alturaBloco + 8);
@@ -700,46 +729,46 @@ export default function ProposalGenerator() {
     doc.setFillColor(238, 243, 251);
     doc.rect(margemLateral, y, larguraUtil, alturaBloco, 'F');
     
-    let yInst = y + 5;
-    doc.setFontSize(9);
+    let yInst = y + topSpace;
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 58, 95);
     doc.text('Nossa Missão:', margemLateral + 5, yInst);
-    yInst += 4;
-    doc.setFontSize(8.5);
+    yInst += titleSpace;
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(60, 60, 60);
     doc.text(linesMissao, margemLateral + 5, yInst);
-    yInst += linesMissao.length * 4 + 4;
+    yInst += linesMissao.length * lh + itemSpace;
 
-    doc.setFontSize(9);
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 58, 95);
     doc.text('Nossa Visão:', margemLateral + 5, yInst);
-    yInst += 4;
-    doc.setFontSize(8.5);
+    yInst += titleSpace;
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(60, 60, 60);
     doc.text(linesVisao, margemLateral + 5, yInst);
-    yInst += linesVisao.length * 4 + 4;
+    yInst += linesVisao.length * lh + itemSpace;
 
-    doc.setFontSize(9);
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 58, 95);
     doc.text('Nossos Valores:', margemLateral + 5, yInst);
-    yInst += 4;
-    doc.setFontSize(8.5);
+    yInst += titleSpace;
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(60, 60, 60);
     doc.text(linesValores, margemLateral + 5, yInst);
-    yInst += linesValores.length * 4 + 4;
+    yInst += linesValores.length * lh + itemSpace;
 
-    doc.setFontSize(9);
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 58, 95);
     doc.text('Por que contratar a MT Solar?:', margemLateral + 5, yInst);
-    yInst += 4;
-    doc.setFontSize(8.5);
+    yInst += titleSpace;
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(60, 60, 60);
     doc.text(linesPq, margemLateral + 5, yInst);

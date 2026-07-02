@@ -4,6 +4,14 @@
 
 ## Alterações — Sessão 02/07/2026
 
+* **Correção Definitiva da Logomarca e Fontes do Bloco Institucional (Prompt 9):**
+  * *O que foi feito:*
+    1. **Logomarca com Cores Opacas Reais:** Substituída a estratégia de `GState` pela renderização real da imagem em um elemento HTML Canvas na memória. O arquivo original `.png` com canal alfa (transparência) agora é desenhado num canvas de fundo branco (`#FFFFFF`) e depois exportado usando `canvas.toDataURL('image/jpeg', 1.0)`. Essa conversão para `.jpeg` força a exclusão do canal alfa na própria base de dados da imagem, resolvendo de vez o bug histórico do `jsPDF` que desbotava o logo transparente ao compor com as cores de fundo.
+    2. **Escala de Leitura do Bloco "Sobre a MT Solar":** Todo o bloco institucional no final do PDF de Serviços (Missão, Visão, Valores, Por que Contratar) foi atualizado para ter os títulos e conteúdos em `10pt`. A lógica matemática do espaçamento foi ajustada para obedecer fielmente ao `lineHeight` de proporção ideal (`10 * 0.4`), e os espaçamentos internos superior/inferior (`topSpace`, `bottomSpace`) agora somam com exatidão no bloco pai para prever as quebras de página.
+  * *Data e hora da alteração:* 02/07/2026 às 20:17 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
+
+
 * **Melhorias de Visualização e Detalhamento no PDF de Serviços:**
   * *O que foi feito:*
     1. **Logomarca com Opacidade Total (Prompt 6):** Removidos quaisquer resíduos de GState desbotado aplicados de instâncias anteriores. O código agora aplica ativamente `{ opacity: 1.0, 'fill-opacity': 1.0 }` no GState antes de desenhar a logo, e restaura o GState após a renderização, garantindo a tonalidade original do PNG sem herdar opacidades baixas.
