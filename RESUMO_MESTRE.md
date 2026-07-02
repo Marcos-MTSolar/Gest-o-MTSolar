@@ -2,6 +2,21 @@
 
 ---
 
+## Alterações — Sessão 02/07/2026
+
+* **Novo Serviço de Remoção e Detalhamento Técnico na Aba "Proposta de Serviços":**
+  * *O que foi feito:*
+    1. **Novo serviço "Remoção de Equipamentos Fotovoltaicos"** adicionado à constante `AVAILABLE_SERVICES` com descrição, normas aplicáveis (NBR 16690, NBR 5410, NBR 10004) e flags `hasEquipment: true` e `hasRemovalObservation: true`. Quando marcado, exibe uma textarea com label "Observações sobre a remoção" (campo obrigatório, visível apenas quando o serviço estiver selecionado).
+    2. **Flag `hasEquipment`** adicionada a todos os serviços existentes para determinar quais exibem o bloco de detalhamento técnico. Serviços com equipamentos físicos: Limpeza de Módulos, Instalação dos Módulos Fotovoltaicos, Comissionamento Fotovoltaico e Remoção de Equipamentos Fotovoltaicos. Serviços sem: Limpeza de Terreno, Projeto de Subestação, Projeto de Usina Fotovoltaica, Homologação.
+    3. **Bloco de detalhamento técnico** exibido abaixo de cada serviço marcado que possui `hasEquipment: true`, contendo: Qtd. de Módulos (número), Potência do Módulo em Wp (número), Potência Total em kWp (somente leitura, calculada automaticamente: `qtd × potWp / 1000`), Potência do Inversor em kW (número), Marca do Módulo (texto), Modelo do Módulo (texto), Marca do Inversor (texto), Modelo do Inversor (texto).
+    4. Adicionados dois novos estados: `serviceObservations` (`Record<string, string>`) para a textarea de remoção, e `serviceEquipmentData` (`Record<string, ServiceEquipmentData>`) para os dados técnicos de cada serviço. Adicionada função `updateServiceEquipment` que recalcula `potenciaTotalKwp` automaticamente a cada mudança de quantidade ou potência do módulo.
+    5. Grid de serviços alterado de `grid-cols-2` para `grid-cols-1` para dar espaço aos sub-blocos colapsáveis.
+    6. Nenhuma outra aba, componente, lógica de geração de PDF da Proposta Comercial ou rota de backend foi alterada.
+  * *Data e hora da alteração:* 02/07/2026 às 18:38 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
+
+---
+
 ## Alterações — Sessão 01/07/2026
 
 * **🔥 HOTFIX CRÍTICO: Correção de Quebra em Produção (WhatsApp.tsx):**

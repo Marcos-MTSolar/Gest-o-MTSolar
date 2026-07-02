@@ -120,43 +120,58 @@ const AVAILABLE_SERVICES = [
     id: 'limpeza',
     name: 'Limpeza de Módulos',
     description: 'Limpeza técnica dos módulos fotovoltaicos com produtos adequados, removendo sujeira, pó e resíduos que reduzem a eficiência do sistema.',
-    norms: 'NBR 16274, recomendações do fabricante dos módulos.'
+    norms: 'NBR 16274, recomendações do fabricante dos módulos.',
+    hasEquipment: true
   },
   {
     id: 'instalacao',
     name: 'Instalação dos Módulos Fotovoltaicos',
     description: 'Instalação completa dos módulos fotovoltaicos, incluindo fixação estrutural, cabeamento CC, conexão ao inversor e testes de funcionamento.',
-    norms: 'NBR 16690, NBR 5410, Resolução Normativa ANEEL 482/2012 e atualizações.'
+    norms: 'NBR 16690, NBR 5410, Resolução Normativa ANEEL 482/2012 e atualizações.',
+    hasEquipment: true
   },
   {
     id: 'terreno',
     name: 'Limpeza de Terreno',
     description: 'Limpeza e preparação do terreno para instalação de usinas fotovoltaicas, incluindo remoção de vegetação e nivelamento básico.',
-    norms: 'Legislação ambiental municipal e estadual aplicável.'
+    norms: 'Legislação ambiental municipal e estadual aplicável.',
+    hasEquipment: false
   },
   {
     id: 'comissionamento',
     name: 'Comissionamento Fotovoltaico',
     description: 'Verificação e testes completos do sistema instalado, incluindo medição de parâmetros elétricos, verificação de string, análise de inversores e emissão de laudo técnico.',
-    norms: 'NBR 16274, IEC 62446-1.'
+    norms: 'NBR 16274, IEC 62446-1.',
+    hasEquipment: true
   },
   {
     id: 'projeto_subestacao',
     name: 'Projeto de Subestação',
     description: 'Elaboração de projeto elétrico de subestação conforme requisitos da concessionária local, incluindo memorial descritivo, diagramas unifilares e especificação de equipamentos.',
-    norms: 'NBR 14039, NBR 5460, normas da concessionária local.'
+    norms: 'NBR 14039, NBR 5460, normas da concessionária local.',
+    hasEquipment: false
   },
   {
     id: 'projeto_usina',
     name: 'Projeto de Usina Fotovoltaica',
     description: 'Elaboração de projeto completo de usina fotovoltaica, incluindo dimensionamento do sistema, memorial de cálculo, diagramas elétricos, layout e documentação para homologação.',
-    norms: 'NBR 16690, NBR 5410, NBR 16274, Resolução Normativa ANEEL 482/2012.'
+    norms: 'NBR 16690, NBR 5410, NBR 16274, Resolução Normativa ANEEL 482/2012.',
+    hasEquipment: false
   },
   {
     id: 'homologacao',
     name: 'Homologação',
     description: 'Acompanhamento e execução de todo o processo de homologação junto à concessionária de energia, incluindo protocolo de documentos, acompanhamento do processo e vistoria técnica.',
-    norms: 'Resolução Normativa ANEEL 482/2012, Resolução Normativa ANEEL 687/2015 e normativas da concessionária local.'
+    norms: 'Resolução Normativa ANEEL 482/2012, Resolução Normativa ANEEL 687/2015 e normativas da concessionária local.',
+    hasEquipment: false
+  },
+  {
+    id: 'remocao',
+    name: 'Remoção de Equipamentos Fotovoltaicos',
+    description: 'Desmontagem e remoção dos equipamentos fotovoltaicos instalados (módulos, inversores, estruturas e cabeamentos), com descarte ou guarda conforme orientação do cliente.',
+    norms: 'NBR 16690, NBR 5410, NBR 10004 (resíduos sólidos).',
+    hasEquipment: true,
+    hasRemovalObservation: true
   }
 ];
 
@@ -480,6 +495,41 @@ export default function ProposalGenerator() {
     responsible: '',
     validityDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   });
+
+  // Estado para observações do serviço de remoção
+  const [serviceObservations, setServiceObservations] = useState<Record<string, string>>({});
+
+  // Interface para detalhamento técnico por serviço
+  interface ServiceEquipmentData {
+    qtdModulos: string;
+    potenciaModuloWp: string;
+    potenciaTotalKwp: string; // calculado automaticamente, somente leitura
+    marcaModulo: string;
+    modeloModulo: string;
+    potenciaInversorKw: string;
+    marcaInversor: string;
+    modeloInversor: string;
+  }
+
+  // Estado para dados técnicos de cada serviço (por id do serviço)
+  const [serviceEquipmentData, setServiceEquipmentData] = useState<Record<string, ServiceEquipmentData>>({});
+
+  // Atualiza campo de equipamento de um serviço e recalcula potência total
+  const updateServiceEquipment = (serviceId: string, field: keyof ServiceEquipmentData, value: string) => {
+    setServiceEquipmentData(prev => {
+      const current = prev[serviceId] || {
+        qtdModulos: '', potenciaModuloWp: '', potenciaTotalKwp: '',
+        marcaModulo: '', modeloModulo: '', potenciaInversorKw: '',
+        marcaInversor: '', modeloInversor: ''
+      };
+      const updated = { ...current, [field]: value };
+      // Recalcula potência total: quantidade × potência do módulo ÷ 1000
+      const qtd = parseFloat(field === 'qtdModulos' ? value : updated.qtdModulos) || 0;
+      const potWp = parseFloat(field === 'potenciaModuloWp' ? value : updated.potenciaModuloWp) || 0;
+      updated.potenciaTotalKwp = (qtd * potWp / 1000).toFixed(2);
+      return { ...prev, [serviceId]: updated };
+    });
+  };
 
   const toggleService = (serviceId: string) => {
     setServiceFormData(prev => ({
@@ -2880,30 +2930,167 @@ export default function ProposalGenerator() {
 
                 <div className="space-y-3">
                   <label className="text-sm font-bold text-gray-800 uppercase tracking-wider">Serviços Disponíveis</label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {AVAILABLE_SERVICES.map(service => (
-                      <div 
-                        key={service.id}
-                        onClick={() => toggleService(service.id)}
-                        className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex items-start gap-3 ${
-                          serviceFormData.selectedServices.includes(service.id)
-                            ? 'border-blue-600 bg-blue-50'
-                            : 'border-gray-100 bg-white hover:border-blue-200'
-                        }`}
-                      >
-                        <div className={`mt-1 w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                          serviceFormData.selectedServices.includes(service.id)
-                            ? 'bg-blue-600 border-blue-600'
-                            : 'bg-white border-gray-300'
-                        }`}>
-                          {serviceFormData.selectedServices.includes(service.id) && <Check size={12} className="text-white" />}
+                  <div className="grid grid-cols-1 gap-3">
+                    {AVAILABLE_SERVICES.map(service => {
+                      const isSelected = serviceFormData.selectedServices.includes(service.id);
+                      const eqData = serviceEquipmentData[service.id] || {
+                        qtdModulos: '', potenciaModuloWp: '', potenciaTotalKwp: '',
+                        marcaModulo: '', modeloModulo: '', potenciaInversorKw: '',
+                        marcaInversor: '', modeloInversor: ''
+                      };
+                      return (
+                        <div key={service.id}>
+                          {/* Card de seleção do serviço */}
+                          <div
+                            onClick={() => toggleService(service.id)}
+                            className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex items-start gap-3 ${
+                              isSelected
+                                ? 'border-blue-600 bg-blue-50'
+                                : 'border-gray-100 bg-white hover:border-blue-200'
+                            }`}
+                          >
+                            <div className={`mt-1 w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
+                              isSelected ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'
+                            }`}>
+                              {isSelected && <Check size={12} className="text-white" />}
+                            </div>
+                            <div>
+                              <p className="font-bold text-sm text-gray-800">{service.name}</p>
+                              <p className="text-[11px] text-gray-500 mt-1">{service.description}</p>
+                            </div>
+                          </div>
+
+                          {/* Textarea de observações para serviço de remoção */}
+                          {isSelected && (service as any).hasRemovalObservation && (
+                            <div className="mt-2 ml-4 p-4 bg-amber-50 border border-amber-200 rounded-xl" onClick={e => e.stopPropagation()}>
+                              <label className="text-sm font-semibold text-amber-900 block mb-1">
+                                Observações sobre a remoção <span className="text-red-500">*</span>
+                              </label>
+                              <textarea
+                                rows={3}
+                                value={serviceObservations[service.id] || ''}
+                                onChange={e => setServiceObservations(prev => ({ ...prev, [service.id]: e.target.value }))}
+                                onClick={e => e.stopPropagation()}
+                                className="border border-amber-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm resize-none bg-white"
+                                placeholder="Descreva situações específicas da remoção (quantidade de equipamentos, estado de conservação, destino dos materiais, etc.)"
+                              />
+                            </div>
+                          )}
+
+                          {/* Detalhamento técnico para serviços com equipamentos fotovoltaicos */}
+                          {isSelected && service.hasEquipment && (
+                            <div className="mt-2 ml-4 p-4 bg-blue-50 border border-blue-200 rounded-xl" onClick={e => e.stopPropagation()}>
+                              <p className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <Zap size={14} />
+                                Detalhamento Técnico dos Equipamentos
+                              </p>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                                {/* Qtd módulos */}
+                                <div className="space-y-1">
+                                  <label className="text-xs font-medium text-gray-700">Qtd. de Módulos</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={eqData.qtdModulos}
+                                    onChange={e => updateServiceEquipment(service.id, 'qtdModulos', e.target.value)}
+                                    onClick={e => e.stopPropagation()}
+                                    className="border border-gray-300 rounded-lg px-2 py-1.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    placeholder="Ex: 10"
+                                  />
+                                </div>
+                                {/* Potência do módulo */}
+                                <div className="space-y-1">
+                                  <label className="text-xs font-medium text-gray-700">Potência Módulo (Wp)</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={eqData.potenciaModuloWp}
+                                    onChange={e => updateServiceEquipment(service.id, 'potenciaModuloWp', e.target.value)}
+                                    onClick={e => e.stopPropagation()}
+                                    className="border border-gray-300 rounded-lg px-2 py-1.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    placeholder="Ex: 555"
+                                  />
+                                </div>
+                                {/* Potência total (calculada) */}
+                                <div className="space-y-1">
+                                  <label className="text-xs font-medium text-gray-700">Potência Total (kWp)</label>
+                                  <input
+                                    type="text"
+                                    readOnly
+                                    value={eqData.potenciaTotalKwp || '—'}
+                                    onClick={e => e.stopPropagation()}
+                                    className="border border-gray-200 rounded-lg px-2 py-1.5 w-full text-sm bg-gray-100 text-gray-600 cursor-not-allowed"
+                                  />
+                                </div>
+                                {/* Potência do inversor */}
+                                <div className="space-y-1">
+                                  <label className="text-xs font-medium text-gray-700">Potência Inversor (kW)</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={eqData.potenciaInversorKw}
+                                    onChange={e => updateServiceEquipment(service.id, 'potenciaInversorKw', e.target.value)}
+                                    onClick={e => e.stopPropagation()}
+                                    className="border border-gray-300 rounded-lg px-2 py-1.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    placeholder="Ex: 5"
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                {/* Marca do módulo */}
+                                <div className="space-y-1">
+                                  <label className="text-xs font-medium text-gray-700">Marca do Módulo</label>
+                                  <input
+                                    type="text"
+                                    value={eqData.marcaModulo}
+                                    onChange={e => updateServiceEquipment(service.id, 'marcaModulo', e.target.value)}
+                                    onClick={e => e.stopPropagation()}
+                                    className="border border-gray-300 rounded-lg px-2 py-1.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    placeholder="Ex: Risen"
+                                  />
+                                </div>
+                                {/* Modelo do módulo */}
+                                <div className="space-y-1">
+                                  <label className="text-xs font-medium text-gray-700">Modelo do Módulo</label>
+                                  <input
+                                    type="text"
+                                    value={eqData.modeloModulo}
+                                    onChange={e => updateServiceEquipment(service.id, 'modeloModulo', e.target.value)}
+                                    onClick={e => e.stopPropagation()}
+                                    className="border border-gray-300 rounded-lg px-2 py-1.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    placeholder="Ex: RSM144-7-555M"
+                                  />
+                                </div>
+                                {/* Marca do inversor */}
+                                <div className="space-y-1">
+                                  <label className="text-xs font-medium text-gray-700">Marca do Inversor</label>
+                                  <input
+                                    type="text"
+                                    value={eqData.marcaInversor}
+                                    onChange={e => updateServiceEquipment(service.id, 'marcaInversor', e.target.value)}
+                                    onClick={e => e.stopPropagation()}
+                                    className="border border-gray-300 rounded-lg px-2 py-1.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    placeholder="Ex: Growatt"
+                                  />
+                                </div>
+                                {/* Modelo do inversor */}
+                                <div className="space-y-1">
+                                  <label className="text-xs font-medium text-gray-700">Modelo do Inversor</label>
+                                  <input
+                                    type="text"
+                                    value={eqData.modeloInversor}
+                                    onChange={e => updateServiceEquipment(service.id, 'modeloInversor', e.target.value)}
+                                    onClick={e => e.stopPropagation()}
+                                    className="border border-gray-300 rounded-lg px-2 py-1.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    placeholder="Ex: MIN 5000TL-X"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <div>
-                          <p className="font-bold text-sm text-gray-800">{service.name}</p>
-                          <p className="text-[11px] text-gray-500 mt-1 line-clamp-2">{service.description}</p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
