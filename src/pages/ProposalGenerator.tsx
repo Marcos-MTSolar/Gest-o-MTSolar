@@ -654,18 +654,6 @@ export default function ProposalGenerator() {
 
     y += 45;
 
-    // INSTITUCIONAL
-    checkPage(80);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(30, 58, 95);
-    doc.text('SOBRE A MT SOLAR', margemLateral, y);
-    
-    doc.setDrawColor(245, 166, 35);
-    doc.setLineWidth(0.5);
-    doc.line(margemLateral, y + 2, margemLateral + doc.getTextWidth('SOBRE A MT SOLAR'), y + 2);
-    y += 8;
-
     const missao = 'Democratizar o acesso à energia solar limpa e sustentável, oferecendo soluções fotovoltaicas de alta qualidade com atendimento próximo, técnico e transparente, transformando a conta de energia de nossos clientes em investimento com retorno garantido.';
     const visao = 'Ser referência regional em energia solar fotovoltaica, reconhecida pela excelência técnica, pela confiança dos clientes e pelo compromisso com um futuro mais sustentável e economicamente justo.';
     const valores = 'Transparência · Qualidade · Sustentabilidade · Compromisso com o cliente · Inovação · Responsabilidade técnica';
@@ -680,7 +668,20 @@ export default function ProposalGenerator() {
     const linesPq = doc.splitTextToSize(pq, larguraUtil - 10);
 
     const alturaBloco = 5 + 4 + (linesMissao.length * 4) + 4 + 4 + (linesVisao.length * 4) + 4 + 4 + (linesValores.length * 4) + 4 + 4 + (linesPq.length * 4) + 5;
+
+    // INSTITUCIONAL
+    checkPage(8 + alturaBloco + 8);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(30, 58, 95);
+    doc.text('SOBRE A MT SOLAR', margemLateral, y);
     
+    doc.setDrawColor(245, 166, 35);
+    doc.setLineWidth(0.5);
+    doc.line(margemLateral, y + 2, margemLateral + doc.getTextWidth('SOBRE A MT SOLAR'), y + 2);
+    y += 8;
+
+    // Altura já calculada acima
     doc.setFillColor(238, 243, 251);
     doc.rect(margemLateral, y, larguraUtil, alturaBloco, 'F');
     
@@ -742,7 +743,16 @@ export default function ProposalGenerator() {
     y += 8;
 
     for (const s of servicesList) {
-      checkPage(30);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      const descLines = doc.splitTextToSize(s.description, larguraUtil - 6);
+      
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'italic');
+      const normLines = doc.splitTextToSize('Normas aplicáveis: ' + s.norms, larguraUtil - 6);
+      
+      const alturaServico = 7 + (descLines.length * 4 + 3) + (normLines.length * 3.5 + 4) + 6;
+      checkPage(alturaServico);
 
       doc.setFillColor(39, 174, 96);
       doc.rect(margemLateral, y, 5, 5, 'F');
@@ -759,16 +769,12 @@ export default function ProposalGenerator() {
       doc.setTextColor(68, 68, 68);
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
-      const descLines = doc.splitTextToSize(s.description, larguraUtil - 6);
-      checkPage(descLines.length * 4 + 6);
       doc.text(descLines, margemLateral + 6, y);
       y += descLines.length * 4 + 3;
 
       doc.setTextColor(136, 136, 136);
       doc.setFontSize(8);
       doc.setFont('helvetica', 'italic');
-      const normLines = doc.splitTextToSize('Normas aplicáveis: ' + s.norms, larguraUtil - 6);
-      checkPage(normLines.length * 3.5 + 5);
       doc.text(normLines, margemLateral + 6, y);
       y += normLines.length * 3.5 + 4;
 
@@ -781,7 +787,8 @@ export default function ProposalGenerator() {
     }
 
     // CONDIÇÕES COMERCIAIS
-    checkPage(60);
+    const condicoesHeight = 10 + 30 + 7 + (serviceFormData.paymentConditions ? 7 : 0) + 7 + 15;
+    checkPage(condicoesHeight);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(30, 58, 95);

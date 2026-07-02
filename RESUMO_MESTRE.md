@@ -4,6 +4,16 @@
 
 ## Alterações — Sessão 02/07/2026
 
+* **Correção na Lógica de Paginação da Proposta de Serviços (`generateServicePDF`):**
+  * *O que foi feito:*
+    1. A função `generateServicePDF` estava superestimando a altura dos blocos de texto, gerando quebras prematuras de página e excesso de espaço em branco.
+    2. Modificamos os blocos Institucional ("Sobre a MT Solar") e de listagem de Serviços Contratados para utilizarem a função nativa do jsPDF `doc.splitTextToSize(texto, larguraUtil)` **antes** da decisão de quebrar a página (`checkPage`).
+    3. Isso garante que a altura exata do texto (multiplicando a quantidade real de linhas renderizadas pela altura de cada linha, ex: `linesMissao.length * 4`) seja usada como parâmetro para a verificação de limite da página.
+    4. Agora a listagem de serviços calcula a altura total do item atual (título + descrição + normas) com precisão e chama `checkPage` apenas **uma vez** por serviço, impedindo que textos de um mesmo bloco fiquem órfãos em páginas diferentes.
+  * *Data e hora da alteração:* 02/07/2026 às 19:17 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
+
+
 * **Correção no Download de Mídias e Propostas (Integração Cloudflare R2):**
   * *O que foi feito:*
     1. **Criação da rota `/api/media/download`:** A rota foi implementada em `api/index.ts` usando o helper `getFileFromR2` (importado de `r2.ts`). A rota recebe o `path` via query, busca o arquivo no bucket R2 e faz o pipe do ReadableStream de volta para o cliente, injetando os headers `Content-Disposition: attachment` (com o filename correto) e `Content-Type`.
