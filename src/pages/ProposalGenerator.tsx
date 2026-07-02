@@ -589,6 +589,8 @@ export default function ProposalGenerator() {
         reader.onloadend = () => resolve(reader.result as string);
         reader.readAsDataURL(logoBlob);
       });
+      // @ts-ignore
+      if (doc.GState) doc.setGState(new doc.GState({ opacity: 1.0 }));
       doc.addImage(logoBase64, 'PNG', (pageWidth - 45) / 2, 6, 45, 18);
       // @ts-ignore
       if (doc.GState) doc.setGState(new doc.GState({ opacity: 1.0 }));
@@ -743,15 +745,26 @@ export default function ProposalGenerator() {
     y += 8;
 
     for (const s of servicesList) {
+      let customDesc = s.description;
+      if (s.id === 'remocao') {
+        customDesc = customDesc.replace(', com descarte ou guarda conforme orientação do cliente.', '.').replace(' com descarte ou guarda conforme orientação do cliente.', '.');
+      }
+
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
-      const descLines = doc.splitTextToSize(s.description, larguraUtil - 6);
+      const descLines = doc.splitTextToSize(customDesc, larguraUtil - 6);
+      
+      let obsLines: string[] = [];
+      if (s.id === 'remocao' && serviceObservations['remocao']) {
+        doc.setFont('helvetica', 'italic');
+        obsLines = doc.splitTextToSize(`Observações: ${serviceObservations['remocao']}`, larguraUtil - 6);
+      }
       
       doc.setFontSize(8);
       doc.setFont('helvetica', 'italic');
       const normLines = doc.splitTextToSize('Normas aplicáveis: ' + s.norms, larguraUtil - 6);
       
-      const alturaServico = 7 + (descLines.length * 4 + 3) + (normLines.length * 3.5 + 4) + 6;
+      const alturaServico = 7 + (descLines.length * 4 + 3) + (obsLines.length > 0 ? obsLines.length * 4 + 3 : 0) + (normLines.length * 3.5 + 4) + 6;
       checkPage(alturaServico);
 
       doc.setFillColor(39, 174, 96);
@@ -771,6 +784,12 @@ export default function ProposalGenerator() {
       doc.setFont('helvetica', 'normal');
       doc.text(descLines, margemLateral + 6, y);
       y += descLines.length * 4 + 3;
+
+      if (obsLines.length > 0) {
+        doc.setFont('helvetica', 'italic');
+        doc.text(obsLines, margemLateral + 6, y);
+        y += obsLines.length * 4 + 3;
+      }
 
       doc.setTextColor(136, 136, 136);
       doc.setFontSize(8);
@@ -813,13 +832,14 @@ export default function ProposalGenerator() {
     doc.setTextColor(60, 60, 60);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Forma de Pagamento: ${serviceFormData.paymentMethod}`, margemLateral, y);
+    doc.text(`Forma de Pagamento: ${serviceFormData.paymentMethod || '—'}`, margemLateral, y);
     y += 7;
     if (serviceFormData.paymentConditions) {
-      doc.text(`Condições: ${serviceFormData.paymentConditions}`, margemLateral, y);
-      y += 7;
+      const condLines = doc.splitTextToSize(`Condições: ${serviceFormData.paymentConditions}`, larguraUtil);
+      doc.text(condLines, margemLateral, y);
+      y += condLines.length * 4 + 3;
     }
-    doc.text(`Prazo de Execução: ${serviceFormData.executionTime}`, margemLateral, y);
+    doc.text(`Prazo de Execução: ${serviceFormData.executionTime || '—'}`, margemLateral, y);
     y += 7;
     doc.text(`Validade desta Proposta: ${validityDateFormatted}`, margemLateral, y);
     y += 15;
@@ -1110,7 +1130,7 @@ export default function ProposalGenerator() {
           body { margin: 0; padding: 0; font-family: Arial, sans-serif; background: #fff; }
           .page { 
             width: 210mm; 
-            min-height: 297mm; 
+            height: 297mm; 
             margin: 0 auto; 
             page-break-after: always; 
             position: relative; 
@@ -1337,8 +1357,8 @@ export default function ProposalGenerator() {
         </div>
 
         <!-- PÁGINA 5: DADOS DO CLIENTE + EQUIPAMENTOS -->
-        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
-          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;position:relative;">
+        <div style="width:210mm;height:297mm;margin:0 auto;page-break-after:always;
+          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;position:relative;overflow:hidden;">
 
           <!-- FAIXA DECORATIVA TOPO -->
           <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
@@ -1589,8 +1609,8 @@ export default function ProposalGenerator() {
         </div>
 
         <!-- PÁGINA 6: INFORMAÇÕES DO SISTEMA -->
-        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
-          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
+        <div style="width:210mm;height:297mm;margin:0 auto;page-break-after:always;
+          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;overflow:hidden;">
 
           <!-- FAIXA TOPO (mesmo padrão) -->
           <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
@@ -1762,8 +1782,8 @@ export default function ProposalGenerator() {
         </div>
 
         <!-- PÁGINA 7: INDICADORES DE VIABILIDADE -->
-        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
-          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
+        <div style="width:210mm;height:297mm;margin:0 auto;page-break-after:always;
+          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;overflow:hidden;">
 
           <!-- FAIXA TOPO -->
           <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
@@ -1959,8 +1979,8 @@ export default function ProposalGenerator() {
         </div>
 
         <!-- PÁGINA 8: SERVIÇOS INCLUSOS -->
-        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:always;
-          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
+        <div style="width:210mm;height:297mm;margin:0 auto;page-break-after:always;
+          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;overflow:hidden;">
 
           <!-- FAIXA TOPO -->
           <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
@@ -2092,8 +2112,8 @@ export default function ProposalGenerator() {
         </div>
 
         <!-- PÁGINA 9: CONSIDERAÇÕES FINAIS E VALIDADE -->
-        <div style="width:210mm;min-height:297mm;margin:0 auto;page-break-after:auto;
-          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
+        <div style="width:210mm;height:297mm;margin:0 auto;page-break-after:auto;
+          box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;overflow:hidden;">
 
           <!-- FAIXA TOPO -->
           <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);
@@ -2242,7 +2262,7 @@ export default function ProposalGenerator() {
           y: 0,
           width: 210,
           windowWidth: 800,
-          autoPaging: 'slice'
+          autoPaging: 'text'
         });
 
         // =========================================================
@@ -2252,22 +2272,23 @@ export default function ProposalGenerator() {
           doc.addPage();
           
           const margemEsquerda = 15;
-          const margemDireita = 15;
-          const margemSuperior = 15;
-          const margemInferior = 20;
+          const margemDireita  = 15;
+          const MARGEM_SUPERIOR_FOTO = 15;
+          const MARGEM_INFERIOR_FOTO = 20;
+          const LIMITE_Y_FOTO = pageHeight - MARGEM_INFERIOR_FOTO;
           
-          let y = margemSuperior;
+          let y = MARGEM_SUPERIOR_FOTO;
           
           doc.setTextColor(30, 58, 95);
           doc.setFontSize(14);
           doc.setFont('helvetica', 'bold');
           doc.text("Fotos de Vistoria Técnica", margemEsquerda, y + 5);
           
-          y += 15; // Incrementar y pelo tamanho do título + espaçamento
+          y += 15;
           
-          const photoWidth = 180;
+          const photoWidth  = pageWidth - margemEsquerda - margemDireita;
           const photoHeight = 100;
-          const spacing = 10;
+          const spacing     = 10;
           
           for (let i = 0; i < formData.photos.length; i++) {
             const photoUrl = formData.photos[i];
@@ -2285,10 +2306,10 @@ export default function ProposalGenerator() {
                 reader.readAsDataURL(blob);
               });
               
-              // Verificar se a imagem cabe na página atual (com base na margem inferior)
-              if (y + photoHeight > pageHeight - margemInferior) {
+              // Verificar se a imagem cabe na página atual
+              if (y + photoHeight > LIMITE_Y_FOTO) {
                 doc.addPage();
-                y = margemSuperior;
+                y = MARGEM_SUPERIOR_FOTO;
               }
               
               // 3. Inserir no PDF respeitando as margens horizontais e verticais
@@ -2304,9 +2325,9 @@ export default function ProposalGenerator() {
             } catch (err) {
               console.error(`[PDF IMAGE ERROR] Falha ao carregar imagem ${i+1}:`, err);
               // Feedback no PDF caso a imagem quebre
-              if (y + 15 > pageHeight - margemInferior) {
+              if (y + 15 > LIMITE_Y_FOTO) {
                 doc.addPage();
-                y = margemSuperior;
+                y = MARGEM_SUPERIOR_FOTO;
               }
               doc.setTextColor(239, 68, 68); // red-500
               doc.setFontSize(10);

@@ -1847,20 +1847,26 @@ app.get('/api/media/download', authenticateToken, async (req: any, res: any) => 
     const { path } = req.query;
     if (!path) return res.status(400).json({ error: 'Path is required' });
 
-    const data = await getFileFromR2(path);
+    const baseUrl = R2_PUBLIC_URL.endsWith('/') ? R2_PUBLIC_URL.slice(0, -1) : R2_PUBLIC_URL;
+    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+    const r2Url = `${baseUrl}/${cleanPath}`;
+
+    const response = await fetch(r2Url);
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Failed to fetch from R2' });
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Content-Type', data.ContentType || 'application/octet-stream');
+    res.setHeader('Content-Type', response.headers.get('content-type') || 'application/octet-stream');
     
-    const filename = path.split('/').pop() || 'download';
+    const filename = cleanPath.split('/').pop() || 'download';
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
     
-    if (data.Body) {
-      // @ts-ignore - Body from AWS SDK is typically a Readable stream in Node
-      data.Body.pipe(res);
-    } else {
-      res.status(404).json({ error: 'File body empty' });
-    }
+    res.end(buffer);
   } catch (error: any) {
     console.error('[MEDIA DOWNLOAD ERROR]', error);
     res.status(500).json({ error: error.message });

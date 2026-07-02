@@ -4,6 +4,37 @@
 
 ## Alterações — Sessão 02/07/2026
 
+* **Correção de Proporção e Espaços em Branco nas Páginas da Proposta Comercial:**
+  * *O que foi feito:*
+    1. **Causa raiz identificada:** O `autoPaging: 'slice'` no `doc.html()` do `uploadFullPDF` não respeita os atributos CSS `page-break-after: always`. Com divs de `min-height: 297mm`, o jsPDF desconhecia os limites de cada página e cortava o conteúdo em posições aleatórias, gerando espaços em branco.
+    2. **Troca para `autoPaging: 'text'`:** O modo `'text'` respeita as marcações `page-break-after` do CSS, garantindo que cada `<div class="page">` seja renderizada como uma página exata do A4.
+    3. **`min-height` → `height: 297mm`:** Todas as divs de conteúdo corrido (páginas 5–9) foram alteradas de `min-height: 297mm` para `height: 297mm` com `overflow: hidden`. Isso força cada div a ser exatamente uma página A4, sem crescer além do limite e gerar espaço excedente na próxima página.
+    4. **Constantes de margem nas fotos:** Nomeadas com `MARGEM_SUPERIOR_FOTO`, `MARGEM_INFERIOR_FOTO` e `LIMITE_Y_FOTO` para maior clareza e consistência com o padrão do arquivo.
+    5. **Nota:** O HTML que vai para o print do browser (`htmlParaNavegador`) não foi alterado — ele continua com `min-height` para que o layout visual do print funcione corretamente.
+  * *Data e hora da alteração:* 02/07/2026 às 19:40 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
+
+
+* **Correção no Download de Mídias (Encoding de Arquivos Corrompidos):**
+  * *O que foi feito:* 
+    1. A rota `GET /api/media/download` no backend sofreu uma refatoração no método de busca e envio de dados para corrigir falhas de encoding onde o arquivo de mídia baixava com o tamanho correto (ex: 14.7 MB), mas não era legível pelo sistema operacional.
+    2. O método baseado na API de Streams (`data.Body.pipe(res)`) foi descontinuado em prol de um `fetch` nativo apontado para a URL pública do R2.
+    3. O buffer de dados passa a ser lido explicitamente via `response.arrayBuffer()`, convertido para `Buffer.from(arrayBuffer)`, e finalizado com a instrução `res.end(buffer)` (preservando perfeitamente a estrutura binária).
+    4. Adicionado o `Content-Length` aos cabeçalhos de resposta.
+  * *Data e hora da alteração:* 02/07/2026 às 19:35 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`
+
+
+* **Correções no PDF da Proposta de Serviços (Remoção, Pagamento e Logomarca):**
+  * *O que foi feito:*
+    1. **Observação de Remoção:** Adicionado bloco em itálico com as "Observações: " logo após a descrição do serviço de Remoção de Equipamentos Fotovoltaicos, caso haja texto preenchido na interface. O cálculo de quebra de página também foi ajustado para contabilizar a altura extra da observação.
+    2. **Condições Comerciais e Valor Total:** Substituída a string interpolada de uma linha por um `doc.splitTextToSize` no campo de Condições de Pagamento, garantindo que se o usuário digitar uma condição extensa (ex: descrições detalhadas de financiamento) ela seja quebrada em múltiplas linhas e exiba corretamente no PDF, recalculando o incremento no cursor Y. Além disso, adicionado tratativas para imprimir "—" caso não haja preenchimento.
+    3. **Remoção de Frase Hardcoded:** A frase fixa "com descarte ou guarda conforme orientação do cliente" foi extirpada via `.replace()` na geração da descrição do serviço de Remoção, mantendo o controle total da descrição daquele trecho pelo usuário via o novo campo de observação livre.
+    4. **Correção de Opacidade da Logomarca:** O `doc.setGState(new doc.GState({ opacity: 1.0 }))` estava sendo chamado apenas após a inclusão da logomarca do cabeçalho. Ele foi duplicado, passando a ser invocado antes e depois do `doc.addImage`, consertando a impressão translúcida/apagada da marca.
+  * *Data e hora da alteração:* 02/07/2026 às 19:33 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
+
+
 * **Correção na Lógica de Paginação da Proposta de Serviços (`generateServicePDF`):**
   * *O que foi feito:*
     1. A função `generateServicePDF` estava superestimando a altura dos blocos de texto, gerando quebras prematuras de página e excesso de espaço em branco.
