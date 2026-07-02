@@ -1841,31 +1841,41 @@ async function getEvolutionApiCredentials(companyId: string, requestedInstance?:
   return { baseUrl, apiKey: EVOLUTION_KEY, instanceName: validatedInstance };
 }
 
-// Download Media Route (Cloudflare R2)
+// Download Media Route (Cloudflare R2 + fallback Supabase legado)
 app.get('/api/media/download', authenticateToken, async (req: any, res: any) => {
   try {
     const { path } = req.query;
     if (!path) return res.status(400).json({ error: 'Path is required' });
 
-    const baseUrl = R2_PUBLIC_URL.endsWith('/') ? R2_PUBLIC_URL.slice(0, -1) : R2_PUBLIC_URL;
-    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
-    const r2Url = `${baseUrl}/${cleanPath}`;
+    let fetchUrl: string;
 
-    const response = await fetch(r2Url);
+    // Fallback: se receber uma URL completa (ex: Supabase legado), faz fetch direto
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      fetchUrl = path;
+    } else {
+      // Path relativo → constrói URL do R2 público
+      const baseUrl = R2_PUBLIC_URL.endsWith('/') ? R2_PUBLIC_URL.slice(0, -1) : R2_PUBLIC_URL;
+      const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+      fetchUrl = `${baseUrl}/${cleanPath}`;
+    }
+
+    const response = await fetch(fetchUrl);
     if (!response.ok) {
-      return res.status(response.status).json({ error: 'Failed to fetch from R2' });
+      return res.status(response.status).json({ error: 'Arquivo não encontrado' });
     }
 
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Content-Type', response.headers.get('content-type') || 'application/octet-stream');
-    
-    const filename = cleanPath.split('/').pop() || 'download';
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+    const cleanPath2 = path.startsWith('/') ? path.substring(1) : path;
+    const fileName = cleanPath2.split('/').pop() || 'arquivo';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.setHeader('Content-Length', buffer.length);
-    
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
     res.end(buffer);
   } catch (error: any) {
     console.error('[MEDIA DOWNLOAD ERROR]', error);

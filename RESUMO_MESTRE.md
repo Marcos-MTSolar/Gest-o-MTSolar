@@ -4,6 +4,19 @@
 
 ## Alterações — Sessão 02/07/2026
 
+* **Correção de URL do Path no Download de Mídias (Supabase legado + R2):**
+  * *O que foi feito:*
+    1. **Frontend (`WhatsApp.tsx`):** Adicionada a função auxiliar `extrairPathRelativo(mediaUrl)` que trata dois formatos de URL: URLs do Supabase Storage (`https://xxx.supabase.co/storage/v1/object/public/BUCKET/...` → extrai tudo após `/object/public/`) e URLs do R2 público ou outros domínios (extrai o `pathname` via `new URL()`). A função `getMediaUrl` passou a usar `extrairPathRelativo` em vez de extrair o pathname cru da URL, resolvendo o problema de 404 em arquivos antigos do Supabase.
+    2. **Backend (`api/index.ts`):** A rota `/api/media/download` ganhou um `if` de fallback: se o `path` recebido via query string começar com `http://` ou `https://` (indicando que é uma URL completa legada), o `fetch` é feito diretamente nessa URL sem construir a URL do R2. Caso contrário, segue o fluxo normal de path relativo → R2.
+  * *Data e hora da alteração:* 02/07/2026 às 20:00 (Horário Local)
+  * *Arquivos modificados:* `src/pages/WhatsApp.tsx`, `api/index.ts`
+
+* **Logomarca com Fundo Branco no PDF de Serviços:**
+  * *O que foi feito:* O PNG da logo MT Solar tem fundo transparente. No cabeçalho azul escuro do PDF, as cores da marca desapareciam sobre o fundo azul. Solução: imediatamente antes do `doc.addImage`, é desenhado um `doc.roundedRect` com `setFillColor(255, 255, 255)` na posição exata da logo com uma margem de 3mm em cada lado. Após a inserção da imagem, a cor de fill é restaurada para o azul do cabeçalho (`setFillColor(30, 58, 95)`).
+  * *Data e hora da alteração:* 02/07/2026 às 20:00 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
+
+
 * **Correção de Proporção e Espaços em Branco nas Páginas da Proposta Comercial:**
   * *O que foi feito:*
     1. **Causa raiz identificada:** O `autoPaging: 'slice'` no `doc.html()` do `uploadFullPDF` não respeita os atributos CSS `page-break-after: always`. Com divs de `min-height: 297mm`, o jsPDF desconhecia os limites de cada página e cortava o conteúdo em posições aleatórias, gerando espaços em branco.

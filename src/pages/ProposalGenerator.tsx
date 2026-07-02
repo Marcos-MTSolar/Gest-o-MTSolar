@@ -589,11 +589,24 @@ export default function ProposalGenerator() {
         reader.onloadend = () => resolve(reader.result as string);
         reader.readAsDataURL(logoBlob);
       });
+
+      const logoX = (pageWidth - 45) / 2;
+      const logoY = 6;
+      const logoWidth = 45;
+      const logoHeight = 18;
+
+      // Fundo branco atrás da logo para que o PNG transparente fique visível sobre o azul
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(logoX - 3, logoY - 3, logoWidth + 6, logoHeight + 6, 2, 2, 'F');
+
       // @ts-ignore
       if (doc.GState) doc.setGState(new doc.GState({ opacity: 1.0 }));
-      doc.addImage(logoBase64, 'PNG', (pageWidth - 45) / 2, 6, 45, 18);
+      doc.addImage(logoBase64, 'PNG', logoX, logoY, logoWidth, logoHeight);
       // @ts-ignore
       if (doc.GState) doc.setGState(new doc.GState({ opacity: 1.0 }));
+
+      // Restaura a cor de fill para o azul do cabeçalho
+      doc.setFillColor(30, 58, 95);
     } catch (e) {
       console.warn('Erro ao carregar logo no PDF:', e);
     }

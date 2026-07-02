@@ -731,11 +731,24 @@ export default function WhatsApp() {
 
   const closedConversations = (allFiltered || []).filter(c => c.status === 'closed');
 
+  const extrairPathRelativo = (mediaUrl: string): string => {
+    // URL do Supabase Storage: extrai tudo após "/object/public/"
+    if (mediaUrl.includes('/object/public/')) {
+      return mediaUrl.split('/object/public/')[1];
+    }
+    // URL do R2 público ou qualquer outra URL: extrai o pathname sem a barra inicial
+    try {
+      const url = new URL(mediaUrl);
+      return url.pathname.replace(/^\//, '');
+    } catch {
+      return mediaUrl;
+    }
+  };
+
   const getMediaUrl = (mediaUrl: string | null | undefined) => {
     if (!mediaUrl) return '';
     try {
-      const urlObj = new URL(mediaUrl);
-      const filePath = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+      const filePath = extrairPathRelativo(mediaUrl);
       const token = localStorage.getItem('token');
       const baseUrl = api.defaults.baseURL || (typeof window !== 'undefined' ? window.location.origin : '');
       return `${baseUrl}/api/media/download?path=${encodeURIComponent(filePath)}${token ? `&token=${token}` : ''}`;
