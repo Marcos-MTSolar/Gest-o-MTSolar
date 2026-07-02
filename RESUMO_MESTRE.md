@@ -4,6 +4,15 @@
 
 ## Alterações — Sessão 02/07/2026
 
+* **Melhorias de Visualização e Detalhamento no PDF de Serviços:**
+  * *O que foi feito:*
+    1. **Logomarca com Opacidade Total (Prompt 6):** Removidos quaisquer resíduos de GState desbotado aplicados de instâncias anteriores. O código agora aplica ativamente `{ opacity: 1.0, 'fill-opacity': 1.0 }` no GState antes de desenhar a logo, e restaura o GState após a renderização, garantindo a tonalidade original do PNG sem herdar opacidades baixas.
+    2. **Detalhamento Técnico de Equipamentos (Prompt 7):** Integrada a variável de estado `serviceEquipmentData` à pipeline de geração. Caso um serviço possua flag de equipamento e dados preenchidos no formulário (quantidade, potência e modelos de módulos/inversores), um novo bloco chamado "Especificações Técnicas:" é dinamicamente inserido abaixo das observações no PDF, listando apenas as propriedades preenchidas e com espaçamento proporcional.
+    3. **Tamanho das Fontes e Espaçamento (Prompt 8):** Todo o bloco de renderização de serviços sofreu upscale nas fontes. As descrições e observações foram de `9pt/8pt` para `10pt`; as especificações técnicas fixadas em `9.5pt` com títulos em `10pt` negrito; e as normas aplicáveis aumentadas para `9pt`. Todo o cálculo de quebra de página `checkPage` foi refatorado e recalibrado para usar um multiplicador fixo de espaçamento de linha (`fontSize * 0.4`), prestando conta exata dos milímetros que cada sub-bloco consumirá na folha.
+  * *Data e hora da alteração:* 02/07/2026 às 20:07 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
+
+
 * **Correção de URL do Path no Download de Mídias (Supabase legado + R2):**
   * *O que foi feito:*
     1. **Frontend (`WhatsApp.tsx`):** Adicionada a função auxiliar `extrairPathRelativo(mediaUrl)` que trata dois formatos de URL: URLs do Supabase Storage (`https://xxx.supabase.co/storage/v1/object/public/BUCKET/...` → extrai tudo após `/object/public/`) e URLs do R2 público ou outros domínios (extrai o `pathname` via `new URL()`). A função `getMediaUrl` passou a usar `extrairPathRelativo` em vez de extrair o pathname cru da URL, resolvendo o problema de 404 em arquivos antigos do Supabase.

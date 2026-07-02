@@ -600,10 +600,10 @@ export default function ProposalGenerator() {
       doc.roundedRect(logoX - 3, logoY - 3, logoWidth + 6, logoHeight + 6, 2, 2, 'F');
 
       // @ts-ignore
-      if (doc.GState) doc.setGState(new doc.GState({ opacity: 1.0 }));
+      if (doc.GState) doc.setGState(new doc.GState({ opacity: 1.0, 'fill-opacity': 1.0 }));
       doc.addImage(logoBase64, 'PNG', logoX, logoY, logoWidth, logoHeight);
       // @ts-ignore
-      if (doc.GState) doc.setGState(new doc.GState({ opacity: 1.0 }));
+      if (doc.GState) doc.setGState(new doc.GState({ opacity: 1.0, 'fill-opacity': 1.0 }));
 
       // Restaura a cor de fill para o azul do cabeçalho
       doc.setFillColor(30, 58, 95);
@@ -763,21 +763,52 @@ export default function ProposalGenerator() {
         customDesc = customDesc.replace(', com descarte ou guarda conforme orientação do cliente.', '.').replace(' com descarte ou guarda conforme orientação do cliente.', '.');
       }
 
-      doc.setFontSize(9);
+      doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
       const descLines = doc.splitTextToSize(customDesc, larguraUtil - 6);
+      const descLh = 10 * 0.4; // espaçamento de linha = tamanho da fonte * 0.4
       
       let obsLines: string[] = [];
+      const obsLh = 10 * 0.4;
       if (s.id === 'remocao' && serviceObservations['remocao']) {
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'italic');
         obsLines = doc.splitTextToSize(`Observações: ${serviceObservations['remocao']}`, larguraUtil - 6);
       }
       
-      doc.setFontSize(8);
+      let specLines: {text: string, font: string, size: number, isBold: boolean}[] = [];
+      const specLh = 9.5 * 0.4;
+      if (s.hasEquipment && serviceEquipmentData[s.id]) {
+        const eq = serviceEquipmentData[s.id];
+        const fields = [];
+        if (eq.qtdModulos) fields.push(`• Qtd. de Módulos: ${eq.qtdModulos} unidades`);
+        if (eq.potenciaModuloWp) fields.push(`• Potência do Módulo: ${eq.potenciaModuloWp} Wp`);
+        if (eq.potenciaTotalKwp) fields.push(`• Potência Total do Sistema: ${eq.potenciaTotalKwp} kWp`);
+        if (eq.marcaModulo || eq.modeloModulo) fields.push(`• Marca/Modelo do Módulo: ${eq.marcaModulo} ${eq.modeloModulo}`.trim());
+        if (eq.potenciaInversorKw) fields.push(`• Potência do Inversor: ${eq.potenciaInversorKw} kW`);
+        if (eq.marcaInversor || eq.modeloInversor) fields.push(`• Marca/Modelo do Inversor: ${eq.marcaInversor} ${eq.modeloInversor}`.trim());
+        
+        if (fields.length > 0) {
+          specLines.push({ text: 'Especificações Técnicas:', font: 'helvetica', size: 10, isBold: true });
+          fields.forEach(f => {
+            specLines.push({ text: f, font: 'helvetica', size: 9.5, isBold: false });
+          });
+        }
+      }
+
+      doc.setFontSize(9);
       doc.setFont('helvetica', 'italic');
       const normLines = doc.splitTextToSize('Normas aplicáveis: ' + s.norms, larguraUtil - 6);
+      const normLh = 9 * 0.4;
       
-      const alturaServico = 7 + (descLines.length * 4 + 3) + (obsLines.length > 0 ? obsLines.length * 4 + 3 : 0) + (normLines.length * 3.5 + 4) + 6;
+      const titleSpace = 8;
+      const descSpace = descLines.length * descLh + 3;
+      const obsSpace = obsLines.length > 0 ? obsLines.length * obsLh + 3 : 0;
+      const specSpace = specLines.length > 0 ? specLines.length * specLh + 4 : 0;
+      const normSpace = normLines.length * normLh + 4;
+      const bottomSpace = 6;
+
+      const alturaServico = titleSpace + descSpace + obsSpace + specSpace + normSpace + bottomSpace;
       checkPage(alturaServico);
 
       doc.setFillColor(39, 174, 96);
@@ -790,32 +821,48 @@ export default function ProposalGenerator() {
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
       doc.text(s.name, margemLateral + 7, y + 4);
-      y += 7;
+      y += titleSpace;
 
       doc.setTextColor(68, 68, 68);
-      doc.setFontSize(9);
+      doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
       doc.text(descLines, margemLateral + 6, y);
-      y += descLines.length * 4 + 3;
+      y += descSpace;
 
       if (obsLines.length > 0) {
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'italic');
         doc.text(obsLines, margemLateral + 6, y);
-        y += obsLines.length * 4 + 3;
+        y += obsSpace;
+      }
+
+      if (specLines.length > 0) {
+        specLines.forEach((line, idx) => {
+          doc.setFontSize(line.size);
+          doc.setFont(line.font, line.isBold ? 'bold' : 'normal');
+          if (idx === 0) {
+            doc.setTextColor(30, 58, 95);
+          } else {
+            doc.setTextColor(80, 80, 80);
+          }
+          doc.text(line.text, margemLateral + 6, y);
+          y += specLh;
+        });
+        y += 4;
       }
 
       doc.setTextColor(136, 136, 136);
-      doc.setFontSize(8);
+      doc.setFontSize(9);
       doc.setFont('helvetica', 'italic');
       doc.text(normLines, margemLateral + 6, y);
-      y += normLines.length * 3.5 + 4;
+      y += normSpace;
 
       doc.setDrawColor(221, 221, 221);
       doc.setLineWidth(0.3);
       (doc as any).setLineDash([1, 1]);
       doc.line(margemLateral, y, pageWidth - margemLateral, y);
       (doc as any).setLineDash([]);
-      y += 6;
+      y += bottomSpace;
     }
 
     // CONDIÇÕES COMERCIAIS
