@@ -733,18 +733,15 @@ export default function WhatsApp() {
 
   const getMediaUrl = (mediaUrl: string | null | undefined) => {
     if (!mediaUrl) return '';
-    const isR2Url = mediaUrl.includes('r2.dev') || mediaUrl.includes('r2.cloudflarestorage.com');
-    if (isR2Url) {
-      try {
-        const urlObj = new URL(mediaUrl);
-        const filePath = urlObj.pathname.substring(1);
-        const token = localStorage.getItem('token');
-        return `${api.defaults.baseURL}/api/media/download?path=${encodeURIComponent(filePath)}${token ? `&token=${token}` : ''}`;
-      } catch (e) {
-        return mediaUrl;
-      }
+    try {
+      const urlObj = new URL(mediaUrl);
+      const filePath = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+      const token = localStorage.getItem('token');
+      const baseUrl = api.defaults.baseURL || (typeof window !== 'undefined' ? window.location.origin : '');
+      return `${baseUrl}/api/media/download?path=${encodeURIComponent(filePath)}${token ? `&token=${token}` : ''}`;
+    } catch (e) {
+      return mediaUrl;
     }
-    return mediaUrl;
   };
 
   const handleDownloadMedia = async (mediaUrl: string | null | undefined, fileName: string) => {

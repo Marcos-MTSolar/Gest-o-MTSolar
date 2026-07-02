@@ -9,7 +9,7 @@ import multer from 'multer';
 import cors from 'cors';
 import * as dotenv from 'dotenv';
 import admin from 'firebase-admin';
-import { uploadToR2, deleteFromR2, R2_PUBLIC_URL, generatePresignedUrl, listFromR2 } from './r2.js';
+import { uploadToR2, deleteFromR2, R2_PUBLIC_URL, generatePresignedUrl, listFromR2, getFileFromR2 } from './r2.js';
 
 dotenv.config();
 
@@ -1840,6 +1840,32 @@ async function getEvolutionApiCredentials(companyId: string, requestedInstance?:
 
   return { baseUrl, apiKey: EVOLUTION_KEY, instanceName: validatedInstance };
 }
+
+// Download Media Route (Cloudflare R2)
+app.get('/api/media/download', authenticateToken, async (req: any, res: any) => {
+  try {
+    const { path } = req.query;
+    if (!path) return res.status(400).json({ error: 'Path is required' });
+
+    const data = await getFileFromR2(path);
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', data.ContentType || 'application/octet-stream');
+    
+    const filename = path.split('/').pop() || 'download';
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    
+    if (data.Body) {
+      // @ts-ignore - Body from AWS SDK is typically a Readable stream in Node
+      data.Body.pipe(res);
+    } else {
+      res.status(404).json({ error: 'File body empty' });
+    }
+  } catch (error: any) {
+    console.error('[MEDIA DOWNLOAD ERROR]', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // WhatsApp - Assume Conversation
 app.post('/api/whatsapp/assume', authenticateToken, async (req: any, res) => {

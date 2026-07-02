@@ -4,6 +4,15 @@
 
 ## Alterações — Sessão 02/07/2026
 
+* **Correção no Download de Mídias e Propostas (Integração Cloudflare R2):**
+  * *O que foi feito:*
+    1. **Criação da rota `/api/media/download`:** A rota foi implementada em `api/index.ts` usando o helper `getFileFromR2` (importado de `r2.ts`). A rota recebe o `path` via query, busca o arquivo no bucket R2 e faz o pipe do ReadableStream de volta para o cliente, injetando os headers `Content-Disposition: attachment` (com o filename correto) e `Content-Type`.
+    2. **Ajuste na construção da URL no Frontend:** No `WhatsApp.tsx`, a função `getMediaUrl` foi atualizada. A validação `.includes('r2.dev')` foi removida para suportar eventuais custom domains, passando a extrair o `pathname` de qualquer URL absoluta persistida no banco e roteando-a para a nossa própria rota `/api/media/download` (enviando junto o `token` de autenticação).
+    3. **Fluxo nativo e web intactos:** A lógica que diferencia `Capacitor.isNativePlatform()` (usando o FileSystem) e o ambiente web (usando a tag `<a>` invisível) na função `handleDownloadMedia` permaneceu intacta, pois já operava corretamente assim que a URL validada é entregue.
+  * *Data e hora da alteração:* 02/07/2026 às 19:05 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/WhatsApp.tsx`
+
+
 * **Forma de Pagamento e Correção da Logomarca na Proposta de Serviços:**
   * *O que foi feito:*
     1. **Seção de Forma de Pagamento e Prazos:** Adicionada no final da aba Proposta de Serviço, incluindo `Forma de Pagamento` (Select: À Vista, Parcelado no Cartão, Transferência/PIX, Financiamento, Outro), `Condições / Observações` (input text) e `Valor Total do Serviço (R$)` (que já existia, agora agrupado nesta seção).
