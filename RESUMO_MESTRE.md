@@ -4,6 +4,15 @@
 
 ## Alterações — Sessão 02/07/2026
 
+* **Forma de Pagamento e Correção da Logomarca na Proposta de Serviços:**
+  * *O que foi feito:*
+    1. **Seção de Forma de Pagamento e Prazos:** Adicionada no final da aba Proposta de Serviço, incluindo `Forma de Pagamento` (Select: À Vista, Parcelado no Cartão, Transferência/PIX, Financiamento, Outro), `Condições / Observações` (input text) e `Valor Total do Serviço (R$)` (que já existia, agora agrupado nesta seção).
+    2. **PDF Atualizado:** Estes novos campos foram inseridos na renderização do PDF de Serviços (CONDIÇÕES COMERCIAIS).
+    3. **Logomarca Nítida no PDF:** A inserção da imagem da MT Solar (`PNG_-_MT_SOLAR__1_.png`) no `jsPDF` foi reescrita. Agora, ela é carregada via `fetch()`, convertida para um blob e lida para `base64` através do `FileReader`. Adicionado também a restauração explícita da opacidade para 1.0 via `doc.setGState(new doc.GState({ opacity: 1.0 }))` logo após renderizar a logo, garantindo a visibilidade total da imagem no PDF de serviços.
+  * *Data e hora da alteração:* 02/07/2026 às 18:52 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
+
+
 * **Novo Serviço de Remoção e Detalhamento Técnico na Aba "Proposta de Serviços":**
   * *O que foi feito:*
     1. **Novo serviço "Remoção de Equipamentos Fotovoltaicos"** adicionado à constante `AVAILABLE_SERVICES` com descrição, normas aplicáveis (NBR 16690, NBR 5410, NBR 10004) e flags `hasEquipment: true` e `hasRemovalObservation: true`. Quando marcado, exibe uma textarea com label "Observações sobre a remoção" (campo obrigatório, visível apenas quando o serviço estiver selecionado).

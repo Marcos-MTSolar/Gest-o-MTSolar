@@ -491,6 +491,8 @@ export default function ProposalGenerator() {
     clientName: '',
     selectedServices: [] as string[],
     totalValue: '',
+    paymentMethod: 'À Vista',
+    paymentConditions: '',
     executionTime: '15 dias úteis',
     responsible: '',
     validityDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
@@ -580,7 +582,16 @@ export default function ProposalGenerator() {
     doc.rect(0, 0, pageWidth, 58, 'F');
 
     try {
-      doc.addImage('/PNG_-_MT_SOLAR__1_.png', 'PNG', (pageWidth - 45) / 2, 6, 45, 18);
+      const logoResponse = await fetch('/PNG_-_MT_SOLAR__1_.png');
+      const logoBlob = await logoResponse.blob();
+      const logoBase64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(logoBlob);
+      });
+      doc.addImage(logoBase64, 'PNG', (pageWidth - 45) / 2, 6, 45, 18);
+      // @ts-ignore
+      if (doc.GState) doc.setGState(new doc.GState({ opacity: 1.0 }));
     } catch (e) {
       console.warn('Erro ao carregar logo no PDF:', e);
     }
@@ -795,6 +806,12 @@ export default function ProposalGenerator() {
     doc.setTextColor(60, 60, 60);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
+    doc.text(`Forma de Pagamento: ${serviceFormData.paymentMethod}`, margemLateral, y);
+    y += 7;
+    if (serviceFormData.paymentConditions) {
+      doc.text(`Condições: ${serviceFormData.paymentConditions}`, margemLateral, y);
+      y += 7;
+    }
     doc.text(`Prazo de Execução: ${serviceFormData.executionTime}`, margemLateral, y);
     y += 7;
     doc.text(`Validade desta Proposta: ${validityDateFormatted}`, margemLateral, y);
@@ -3094,35 +3111,66 @@ export default function ProposalGenerator() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700">Valor Total (R$)</label>
-                    <input 
-                      type="number" 
-                      value={serviceFormData.totalValue}
-                      onChange={(e) => setServiceFormData({...serviceFormData, totalValue: e.target.value})}
-                      className={inputStyle}
-                      placeholder="0,00"
-                    />
+                <div className="pt-4 border-t space-y-4">
+                  <label className="text-sm font-bold text-gray-800 uppercase tracking-wider">Forma de Pagamento e Prazos</label>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-gray-700">Forma de Pagamento</label>
+                      <select
+                        value={serviceFormData.paymentMethod}
+                        onChange={(e) => setServiceFormData({...serviceFormData, paymentMethod: e.target.value})}
+                        className={inputStyle}
+                      >
+                        <option value="À Vista">À Vista</option>
+                        <option value="Parcelado no Cartão">Parcelado no Cartão</option>
+                        <option value="Transferência/PIX">Transferência/PIX</option>
+                        <option value="Financiamento">Financiamento</option>
+                        <option value="Outro">Outro</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <label className="text-sm font-medium text-gray-700">Condições / Observações</label>
+                      <input 
+                        type="text" 
+                        value={serviceFormData.paymentConditions}
+                        onChange={(e) => setServiceFormData({...serviceFormData, paymentConditions: e.target.value})}
+                        className={inputStyle}
+                        placeholder="Ex: 50% entrada + 50% na conclusão"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700">Tempo de Execução</label>
-                    <input 
-                      type="text" 
-                      value={serviceFormData.executionTime}
-                      onChange={(e) => setServiceFormData({...serviceFormData, executionTime: e.target.value})}
-                      className={inputStyle}
-                      placeholder="Ex: 15 dias úteis"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700">Validade</label>
-                    <input 
-                      type="date" 
-                      value={serviceFormData.validityDate}
-                      onChange={(e) => setServiceFormData({...serviceFormData, validityDate: e.target.value})}
-                      className={inputStyle}
-                    />
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-gray-700">Valor Total do Serviço (R$)</label>
+                      <input 
+                        type="number" 
+                        value={serviceFormData.totalValue}
+                        onChange={(e) => setServiceFormData({...serviceFormData, totalValue: e.target.value})}
+                        className={inputStyle}
+                        placeholder="0,00"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-gray-700">Tempo de Execução</label>
+                      <input 
+                        type="text" 
+                        value={serviceFormData.executionTime}
+                        onChange={(e) => setServiceFormData({...serviceFormData, executionTime: e.target.value})}
+                        className={inputStyle}
+                        placeholder="Ex: 15 dias úteis"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-gray-700">Validade</label>
+                      <input 
+                        type="date" 
+                        value={serviceFormData.validityDate}
+                        onChange={(e) => setServiceFormData({...serviceFormData, validityDate: e.target.value})}
+                        className={inputStyle}
+                      />
+                    </div>
                   </div>
                 </div>
 
