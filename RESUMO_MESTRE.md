@@ -2,6 +2,53 @@
 
 ---
 
+## Alterações — Sessão 03/07/2026
+
+* **Correção: Distribuição de Leads Round-Robin (Prompt 7):**
+  * *O que foi feito:*
+    1. **Auditoria** da função `getRoundRobinVendedor` em `api/index.ts`.
+    2. **Problema identificado:** A função dependia exclusivamente da coluna `recebe_leads` no Supabase. Como a migration poderia estar incompleta para alguns vendedores (ex: Manoel Jordão sem a flag ou sem a coluna), a query falhava silenciosamente e retornava apenas a Soraia.
+    3. **Correções aplicadas:**
+       - Adicionada verificação de erro na query do Supabase para fazer fallback e buscar sem a coluna `recebe_leads` caso ela não exista.
+       - Implementada lógica de segurança que verifica se há pelo menos dois vendedores elegíveis com a flag `recebe_leads=true`. Se houver menos de dois, aplica um fallback hardcoded filtrando especificamente por 'Soraia' e 'Manoel', garantindo a distribuição dos leads entre eles.
+       - Incluído no topo da função (comentário) o SQL necessário para o administrador executar no Supabase e corrigir definitivamente a migration.
+    4. **Validação:** A contagem de conversas em andamento por vendedor para balancear o Round-Robin foi mantida intacta, e a validação TypeScript não acusou novos erros em `api/index.ts`.
+  * *Data e hora da alteração:* 03/07/2026 às 08:18 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`
+
+* **Correção: Renomear Contato no Atendimento — Web e APK (Prompt 6):**
+  * *O que foi feito:*
+    1. **Auditoria completa** das duas partes: backend (`api/index.ts`) e frontend (`src/pages/WhatsApp.tsx`).
+    2. **Backend:** Rota `PUT /api/conversations/:id/rename` confirmada íntegra — autenticação JWT, isolamento `company_id`, limite de 100 caracteres e registro de mensagem interna de auditoria (`✏️ Contato renomeado para "X" por Fulano`). **Nenhuma alteração necessária.**
+    3. **Bug 1 — APK/Mobile (ícone invisível):** O botão com o `Pencil` no cabeçalho usava `opacity-0 group-hover/rename:opacity-100`, que depende de hover CSS — inexistente em dispositivos touch. Corrigido para `sm:opacity-0 sm:group-hover/rename:opacity-100 opacity-60`, garantindo que o ícone fique **visível (60% opacidade) em telas pequenas/touch** e apareça ao hover apenas no desktop.
+    4. **Bug 2 — Painel lateral (input sem atalhos de teclado):** O `<input>` de edição no painel direito (desktop) não tinha `onKeyDown` nem `onBlur`, impossibilitando salvar via Enter ou ao perder o foco. Adicionados `onKeyDown` (Enter salva, Escape cancela), `onBlur` (salva) e `maxLength={100}`.
+    5. **Mesma correção de visibilidade** aplicada ao ícone `Pencil` do painel lateral (`opacity-60 sm:opacity-0 sm:group-hover:opacity-100`), com `class="group"` adicionado ao `<h3>` pai para ativar o hover corretamente.
+    6. **Comportamento final confirmado (web e APK):**
+       - Cabeçalho mobile: ícone lápis sempre visível (60%) — tap abre edição
+       - Cabeçalho desktop: ícone aparece ao hover — click abre edição
+       - Painel lateral desktop: click no nome ou no lápis abre edição — Enter salva, Escape cancela, blur salva
+       - Cancelar (X): fecha sem salvar
+  * *Data e hora da alteração:* 03/07/2026 às 08:16 (Horário Local)
+  * *Arquivos modificados:* `src/pages/WhatsApp.tsx`
+
+* **Correção do Webhook WhatsApp — Leads Externos não aparecendo no Atendimento (Prompt 5):**
+  * *O que foi feito:*
+    1. **Auditoria completa** do handler `POST /api/webhooks/whatsapp` em `api/index.ts`.
+    2. **Bug identificado:** O filtro de status de confirmação (`DELIVERY_ACK`, `READ`, `PLAYED`, `SERVER_ACK`) estava posicionado **globalmente**, antes do check de `body.event === 'messages.upsert'`. A Evolution API v2 pode incluir o campo `data.status` preenchido em alguns payloads `messages.upsert`, fazendo o webhook retornar prematuramente antes de chegar na lógica de criação de conversa para leads externos.
+    3. **Correção aplicada (duas partes):**
+       - O filtro de status foi envolvido em um `if (body.event !== 'messages.upsert')`. Assim, ele só atua em eventos que **não** sejam `messages.upsert` (como `messages.update` ou outros tipos de eventos de atualização).
+       - Um segundo filtro foi adicionado **dentro** do bloco `messages.upsert`, condicionado também a `fromMe === true`, garantindo que confirmações de entrega de mensagens enviadas pelo atendente não gerem processamento desnecessário — sem jamais descartar uma mensagem recebida de lead externo.
+    4. **Confirmados como corretos (sem alteração):**
+       - Filtro de grupos `@g.us` — permanece no topo ✅
+       - Lógica de criação de nova conversa (INSERT em `whatsapp_conversations`) quando não existe conversa para `phone + company_id + instance` ✅
+       - Lógica de atualização de conversa existente ✅
+       - Nenhum filtro por `kommo_lead_id` ou flag de origem foi encontrado ✅
+    5. **Validação TypeScript:** Nenhum erro novo introduzido no `api/index.ts`.
+  * *Data e hora da alteração:* 03/07/2026 às 08:10 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`
+
+---
+
 ## Alterações — Sessão 02/07/2026
 
 * **Correção Definitiva da Logomarca e Fontes do Bloco Institucional (Prompt 9):**

@@ -2431,11 +2431,15 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
     return;
   }
 
-  const messageStatus: string = payload?.data?.status ?? '';
-  const statusesParaIgnorar = ['DELIVERY_ACK', 'READ', 'PLAYED', 'SERVER_ACK'];
-  if (statusesParaIgnorar.includes(messageStatus)) {
-    console.log('[WA-WEBHOOK] Status de confirmação ignorado:', messageStatus);
-    return;
+  // Filtro de status de confirmação aplicado APENAS fora de messages.upsert
+  // (para não descartar mensagens de leads externos recebidas via messages.upsert)
+  if (body.event !== 'messages.upsert') {
+    const messageStatus: string = payload?.data?.status ?? '';
+    const statusesParaIgnorar = ['DELIVERY_ACK', 'READ', 'PLAYED', 'SERVER_ACK'];
+    if (statusesParaIgnorar.includes(messageStatus)) {
+      console.log('[WA-WEBHOOK] Status de confirmação ignorado (evento não é messages.upsert):', messageStatus);
+      return;
+    }
   }
 
   // 0. Atualização de Status da Mensagem (Event messages.update)
@@ -2544,13 +2548,22 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
     return res.status(200).json({ success: false, error: 'Company not found' }); // Return 200 to avoid Evolution API retries
   }
   
-  // Logic to handle incoming message from Evolution API
+  // Processa nova mensagem recebida/enviada pela Evolution API
   if (body.event === 'messages.upsert') {
     const message = body.data;
     const phone = message.key.remoteJid.split('@')[0];
     const fromMe = message.key.fromMe;
     const messageId = message.key.id;
     const pushName = message.pushName || null;
+
+    // Filtro de status de confirmação aplicado aqui dentro de messages.upsert
+    // Garante que apenas eventos de entrega/leitura sejam ignorados, nunca uma mensagem nova de lead externo
+    const msgStatus: string = message?.status ?? '';
+    const statusesDeConfirmacao = ['DELIVERY_ACK', 'READ', 'PLAYED', 'SERVER_ACK'];
+    if (statusesDeConfirmacao.includes(msgStatus) && fromMe) {
+      console.log('[WA-WEBHOOK] messages.upsert ignorado: status de confirmação de mensagem enviada:', msgStatus);
+      return;
+    }
 
     let mediaType = null;
     let mediaUrl = null;
@@ -4539,25 +4552,58 @@ async function kommoApi(endpoint: string, method: string = 'GET', body?: any, ti
   }
 }
 
+// SQL PARA EXECUTAR NO SUPABASE (MIGRATION PENDENTE):
+// ALTER TABLE users ADD COLUMN IF NOT EXISTS recebe_leads BOOLEAN DEFAULT false;
+// UPDATE users SET recebe_leads = true WHERE role = 'COMMERCIAL' AND name ILIKE '%Soraia%';
+// UPDATE users SET recebe_leads = true WHERE role = 'COMMERCIAL' AND name ILIKE '%Manoel%';
+
 // Helper: retorna o vendedor com menos atendimentos ativos entre os que recebem leads (Round-Robin)
 async function getRoundRobinVendedor(companyId: string): Promise<{ id: number; name: string } | null> {
-  // Busca apenas vendedores COMMERCIAL ativos E marcados para receber leads
-  const { data: vendedores, error } = await supabaseAdmin
+  let vendedores: any[] = [];
+  
+  // 1. Tenta buscar vendedores com a coluna recebe_leads
+  let { data, error } = await supabaseAdmin
     .from('users')
-    .select('id, name')
+    .select('id, name, recebe_leads')
     .eq('company_id', companyId)
     .eq('role', 'COMMERCIAL')
-    .eq('active', true)
-    .eq('recebe_leads', true); // ← único filtro adicional
+    .eq('active', true);
 
-  if (error || !vendedores || vendedores.length === 0) {
-    console.warn('[ROUND-ROBIN] Nenhum vendedor com recebe_leads=true encontrado.');
+  if (error) {
+    console.warn('[ROUND-ROBIN] Coluna recebe_leads pode não existir. Buscando sem ela. Erro:', error.message);
+    const retry = await supabaseAdmin
+      .from('users')
+      .select('id, name')
+      .eq('company_id', companyId)
+      .eq('role', 'COMMERCIAL')
+      .eq('active', true);
+    vendedores = retry.data || [];
+  } else {
+    vendedores = data || [];
+  }
+
+  if (!vendedores || vendedores.length === 0) {
+    console.warn('[ROUND-ROBIN] Nenhum vendedor COMMERCIAL ativo encontrado.');
     return null;
+  }
+
+  // 2. Filtra os elegíveis
+  let elegiveis = vendedores.filter(v => v.recebe_leads === true);
+
+  // 3. Fallback: Se só tiver 1 vendedor recebendo (ex: só a Soraia) ou nenhum, e Manoel Jordão estiver ativo
+  if (elegiveis.length < 2) {
+    console.warn('[ROUND-ROBIN] Fallback de segurança: Migration de recebe_leads pendente ou incompleta. Utilizando lista hardcoded (Soraia e Manoel).');
+    const fallbackList = vendedores.filter(v => v.name?.includes('Soraia') || v.name?.includes('Manoel'));
+    if (fallbackList.length > 0) {
+      elegiveis = fallbackList;
+    } else {
+      elegiveis = vendedores; // Último recurso: todos os comerciais ativos
+    }
   }
 
   // Conta atendimentos ativos por vendedor
   const counts = await Promise.all(
-    vendedores.map(async (v: any) => {
+    elegiveis.map(async (v: any) => {
       const { count } = await supabaseAdmin
         .from('whatsapp_conversations')
         .select('*', { count: 'exact', head: true })

@@ -1114,13 +1114,14 @@ export default function WhatsApp() {
                     ) : (
                       <h2 className="font-bold text-gray-800 text-sm lg:text-base truncate flex items-center gap-1.5 group/rename">
                         <span className="truncate">{selectedConversation.contact_name || selectedConversation.phone}</span>
+                        {/* Visível sempre no mobile/APK (touch não dispara hover); fade no desktop ao hover */}
                         <button
                           onClick={() => {
                             setTempName(selectedConversation.contact_name || '');
                             setIsEditingName(true);
                           }}
                           title="Renomear contato"
-                          className="opacity-0 group-hover/rename:opacity-100 transition-opacity text-gray-400 hover:text-blue-500 flex-shrink-0"
+                          className="sm:opacity-0 sm:group-hover/rename:opacity-100 opacity-60 transition-opacity text-gray-400 hover:text-blue-500 active:text-blue-500 flex-shrink-0"
                         >
                           <Pencil size={13} />
                         </button>
@@ -1493,26 +1494,33 @@ export default function WhatsApp() {
                   type="text" 
                   value={tempName} 
                   onChange={(e) => setTempName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') updateContactName();
+                    if (e.key === 'Escape') setIsEditingName(false);
+                  }}
+                  onBlur={updateContactName}
                   className="w-full text-sm font-bold border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   autoFocus
+                  maxLength={100}
                 />
-                <button onClick={updateContactName} className="text-green-600 hover:text-green-700">
+                <button onClick={updateContactName} className="text-green-600 hover:text-green-700" title="Salvar">
                   <Check size={16} />
                 </button>
-                <button onClick={() => setIsEditingName(false)} className="text-red-600 hover:text-red-700">
+                <button onClick={() => setIsEditingName(false)} className="text-red-600 hover:text-red-700" title="Cancelar">
                   <X size={16} />
                 </button>
               </div>
             ) : (
               <h3 
-                className="font-bold text-gray-800 text-lg mb-1 flex items-center justify-center gap-2 cursor-pointer hover:text-blue-600 transition-colors"
+                className="font-bold text-gray-800 text-lg mb-1 flex items-center justify-center gap-2 cursor-pointer hover:text-blue-600 transition-colors group"
                 onClick={() => {
                   setTempName(selectedConversation.contact_name || '');
                   setIsEditingName(true);
                 }}
+                title="Clique para renomear"
               >
                 {selectedConversation.contact_name || "Sem Nome"}
-                <Pencil size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                <Pencil size={14} className="opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" />
               </h3>
             )}
             {selectedConversation.phone?.startsWith('kommo-lead-') ? (
