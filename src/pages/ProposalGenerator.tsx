@@ -610,17 +610,27 @@ export default function ProposalGenerator() {
         img.src = logoBase64;
       });
 
-      const logoX = (pageWidth - 45) / 2;
-      const logoY = 6;
-      const logoWidth = 45;
-      const logoHeight = 18;
+      const imgNatural = new Image();
+      imgNatural.src = logoJpeg;
+      await new Promise(resolve => { imgNatural.onload = resolve; });
+
+      const maxLogoH = 18;
+      const rectX = (pageWidth - 45) / 2;
+      const rectW = 45;
+      
+      const aspectRatio = imgNatural.naturalWidth / imgNatural.naturalHeight;
+      const logoH = maxLogoH;
+      const logoW = logoH * aspectRatio;
+
+      const logoX = rectX + (rectW - logoW) / 2;
+      const logoY = 6 + (maxLogoH - logoH) / 2;
 
       // Fundo branco atrás da logo para que o PNG transparente fique visível sobre o azul
       doc.setFillColor(255, 255, 255);
-      doc.roundedRect(logoX - 3, logoY - 3, logoWidth + 6, logoHeight + 6, 2, 2, 'F');
+      doc.roundedRect(rectX - 3, 6 - 3, rectW + 6, maxLogoH + 6, 2, 2, 'F');
 
       // Insere como JPEG 100% opaco
-      doc.addImage(logoJpeg, 'JPEG', logoX, logoY, logoWidth, logoHeight);
+      doc.addImage(logoJpeg, 'JPEG', logoX, logoY, logoW, logoH);
 
       // Restaura a cor de fill para o azul do cabeçalho
       doc.setFillColor(30, 58, 95);
@@ -773,10 +783,10 @@ export default function ProposalGenerator() {
     doc.setTextColor(60, 60, 60);
     doc.text(linesPq, margemLateral + 5, yInst);
 
-    y += alturaBloco + 8;
+    y += alturaBloco + 6;
 
     // SERVIÇOS CONTRATADOS
-    checkPage(15);
+    checkPage(23);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(30, 58, 95);
@@ -806,7 +816,7 @@ export default function ProposalGenerator() {
       }
       
       let specLines: {text: string, font: string, size: number, isBold: boolean}[] = [];
-      const specLh = 9.5 * 0.4;
+      const specLh = 8.5 * 0.4;
       if (s.hasEquipment && serviceEquipmentData[s.id]) {
         const eq = serviceEquipmentData[s.id];
         const fields = [];
@@ -818,9 +828,9 @@ export default function ProposalGenerator() {
         if (eq.marcaInversor || eq.modeloInversor) fields.push(`• Marca/Modelo do Inversor: ${eq.marcaInversor} ${eq.modeloInversor}`.trim());
         
         if (fields.length > 0) {
-          specLines.push({ text: 'Especificações Técnicas:', font: 'helvetica', size: 10, isBold: true });
+          specLines.push({ text: 'Especificações Técnicas:', font: 'helvetica', size: 9, isBold: true });
           fields.forEach(f => {
-            specLines.push({ text: f, font: 'helvetica', size: 9.5, isBold: false });
+            specLines.push({ text: f, font: 'helvetica', size: 8.5, isBold: false });
           });
         }
       }
@@ -833,9 +843,9 @@ export default function ProposalGenerator() {
       const titleSpace = 8;
       const descSpace = descLines.length * descLh + 3;
       const obsSpace = obsLines.length > 0 ? obsLines.length * obsLh + 3 : 0;
-      const specSpace = specLines.length > 0 ? specLines.length * specLh + 4 : 0;
+      const specSpace = specLines.length > 0 ? 2 + specLines.length * specLh + 2 : 0;
       const normSpace = normLines.length * normLh + 4;
-      const bottomSpace = 6;
+      const bottomSpace = 4;
 
       const alturaServico = titleSpace + descSpace + obsSpace + specSpace + normSpace + bottomSpace;
       checkPage(alturaServico);
@@ -866,6 +876,7 @@ export default function ProposalGenerator() {
       }
 
       if (specLines.length > 0) {
+        y += 2;
         specLines.forEach((line, idx) => {
           doc.setFontSize(line.size);
           doc.setFont(line.font, line.isBold ? 'bold' : 'normal');
@@ -877,7 +888,7 @@ export default function ProposalGenerator() {
           doc.text(line.text, margemLateral + 6, y);
           y += specLh;
         });
-        y += 4;
+        y += 2;
       }
 
       doc.setTextColor(136, 136, 136);

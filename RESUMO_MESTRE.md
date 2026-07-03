@@ -4,6 +4,21 @@
 
 ## Alterações — Sessão 03/07/2026
 
+* **Correção: Abertura do campo de edição de nome no Atendimento (Prompt 8 e 9):**
+  * *O que foi feito:*
+    1. A funcionalidade de edição existia no código, mas o evento `onClick` do ícone (Pencil) e do nome do contato estava sendo consumido silenciosamente ou não disparava adequadamente.
+    2. Adicionado `e.preventDefault()` e `e.stopPropagation()` no evento de clique do lápis (no cabeçalho web/mobile) e no clique do nome (no painel lateral do desktop) no arquivo `src/pages/WhatsApp.tsx`. Isso garante que o clique registre e libere o `input` para digitação sem interferências.
+
+* **Otimização do PDF da Proposta de Serviços (Prompt 8):**
+  * *O que foi feito em `src/pages/ProposalGenerator.tsx` na função `generateServicePDF`:*
+    1. **Logomarca Dinâmica:** Em vez de forçar a imagem do logo a 45x18mm ignorando a proporção, a imagem agora calcula dinamicamente o `aspectRatio` do PNG antes da inserção no PDF. A imagem é renderizada respeitando a proporção real e é centralizada perfeitamente no bloco branco do cabeçalho.
+    2. **Quebra de Página Otimizada:** Alterado o `checkPage` da seção de "SERVIÇOS CONTRATADOS" de 15mm para 23mm, impedindo que o título da seção fique isolado na primeira página e o primeiro serviço caia na segunda.
+    3. **Ajuste de Espaçamentos (Institucional):** Reduzido o espaço excessivo entre o bloco institucional ("Sobre a MT Solar") e os Serviços Contratados (agora `6mm`).
+    4. **Ajuste de Espaçamentos (Serviços):** Reduzido o `bottomSpace` de cada bloco de serviço para 4mm.
+    5. **Ajuste de Espaçamentos (Especificações Técnicas):** Inseridos `2mm` de `topSpace` e `bottomSpace` nas "Especificações Técnicas", e reduzida a fonte para `8.5pt` (título em `9pt`), economizando área útil de página.
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`, `src/pages/WhatsApp.tsx`
+  * *Data e hora da alteração:* 03/07/2026 às 08:39 (Horário Local)
+
 * **Correção: Distribuição de Leads Round-Robin (Prompt 7):**
   * *O que foi feito:*
     1. **Auditoria** da função `getRoundRobinVendedor` em `api/index.ts`.

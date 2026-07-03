@@ -1116,7 +1116,9 @@ export default function WhatsApp() {
                         <span className="truncate">{selectedConversation.contact_name || selectedConversation.phone}</span>
                         {/* Visível sempre no mobile/APK (touch não dispara hover); fade no desktop ao hover */}
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
                             setTempName(selectedConversation.contact_name || '');
                             setIsEditingName(true);
                           }}
@@ -1513,7 +1515,9 @@ export default function WhatsApp() {
             ) : (
               <h3 
                 className="font-bold text-gray-800 text-lg mb-1 flex items-center justify-center gap-2 cursor-pointer hover:text-blue-600 transition-colors group"
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   setTempName(selectedConversation.contact_name || '');
                   setIsEditingName(true);
                 }}
