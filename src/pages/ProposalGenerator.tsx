@@ -578,9 +578,7 @@ export default function ProposalGenerator() {
     };
 
     // PÁGINA 1 — Capa
-    doc.setFillColor(30, 58, 95);
-    doc.rect(0, 0, pageWidth, 58, 'F');
-
+    let afterLogoY = 15;
     try {
       const logoResponse = await fetch('/PNG_-_MT_SOLAR__1_.png');
       const logoBlob = await logoResponse.blob();
@@ -614,45 +612,35 @@ export default function ProposalGenerator() {
       imgNatural.src = logoJpeg;
       await new Promise(resolve => { imgNatural.onload = resolve; });
 
-      const maxLogoH = 18;
-      const rectX = (pageWidth - 45) / 2;
-      const rectW = 45;
-      
-      const aspectRatio = imgNatural.naturalWidth / imgNatural.naturalHeight;
-      const logoH = maxLogoH;
-      const logoW = logoH * aspectRatio;
-
-      const logoX = rectX + (rectW - logoW) / 2;
-      const logoY = 6 + (maxLogoH - logoH) / 2;
-
-      // Fundo branco atrás da logo para que o PNG transparente fique visível sobre o azul
-      doc.setFillColor(255, 255, 255);
-      doc.roundedRect(rectX - 3, 6 - 3, rectW + 6, maxLogoH + 6, 2, 2, 'F');
+      const logoW = 55; // mm
+      const logoH = logoW * (imgNatural.naturalHeight / imgNatural.naturalWidth);
+      const logoX = (pageWidth - logoW) / 2;
+      const logoY = 8; // mm do topo
 
       // Insere como JPEG 100% opaco
       doc.addImage(logoJpeg, 'JPEG', logoX, logoY, logoW, logoH);
-
-      // Restaura a cor de fill para o azul do cabeçalho
-      doc.setFillColor(30, 58, 95);
+      afterLogoY = logoY + logoH + 4;
     } catch (e) {
       console.warn('Erro ao carregar logo no PDF:', e);
+      afterLogoY = 25; // fallback caso dê erro
     }
 
-    doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(18);
-    doc.text('PROPOSTA DE SERVIÇOS', pageWidth / 2, 40, { align: 'center' });
+    doc.setTextColor(30, 58, 95);
+    doc.text('PROPOSTA DE SERVIÇOS', pageWidth / 2, afterLogoY, { align: 'center' });
 
-    doc.setTextColor(245, 166, 35);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    doc.text('ENERGIA SOLAR FOTOVOLTAICA', pageWidth / 2, 48, { align: 'center' });
+    doc.setTextColor(245, 166, 35);
+    doc.text('ENERGIA SOLAR FOTOVOLTAICA', pageWidth / 2, afterLogoY + 7, { align: 'center' });
 
+    const lineY = afterLogoY + 12;
     doc.setDrawColor(245, 166, 35);
-    doc.setLineWidth(1);
-    doc.line(0, 60, pageWidth, 60);
+    doc.setLineWidth(0.8);
+    doc.line(15, lineY, pageWidth - 15, lineY);
 
-    y = 70;
+    y = lineY + 8;
     doc.setFillColor(245, 245, 245);
     doc.rect(margemLateral, y, larguraUtil, 38, 'F');
 

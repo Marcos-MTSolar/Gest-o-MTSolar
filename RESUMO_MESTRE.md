@@ -4,6 +4,17 @@
 
 ## Alterações — Sessão 03/07/2026
 
+* **Redesign do Cabeçalho da Proposta de Serviços em PDF (Prompt 11):**
+  * *O que foi feito:*
+    1. Removido integralmente o design antigo do cabeçalho (que consistia em uma faixa azul sólida com a logomarca encaixada dentro de um retângulo branco).
+    2. Implementado um novo layout simplificado, totalmente branco.
+    3. A logomarca agora é centralizada, com largura fixa de 55mm e altura calculada dinamicamente pelo `aspectRatio` real do PNG, evitando distorções. Continua sendo convertida para JPEG via Canvas para evitar falhas de transparência no gerador de PDF.
+    4. Inseridos os textos "PROPOSTA DE SERVIÇOS" (18pt, negrito, azul) e "ENERGIA SOLAR FOTOVOLTAICA" (9pt, dourado) dinamicamente logo abaixo da imagem, também centralizados.
+    5. Adicionada uma linha separadora horizontal dourada (1pt) separando o novo cabeçalho do restante do documento.
+    6. A coordenada inicial `y` para os blocos subsequentes (Nº Proposta, Data, Cliente, etc.) foi tornada dinâmica com base na altura real da imagem carregada.
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
+  * *Data e hora da alteração:* 03/07/2026 às 09:00 (Horário Local)
+
 * **Correção Definitiva: Abertura do campo de edição de nome no Atendimento (Prompts 8, 9 e 10):**
   * *O que foi feito:*
     1. **Problema identificado no Desktop:** O evento `onClick` do ícone (Pencil) e do nome do contato estava sendo consumido silenciosamente ou não disparava no navegador (mouse) porque o elemento não era um botão real com o devido controle de propagação.
