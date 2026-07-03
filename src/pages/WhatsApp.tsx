@@ -1099,6 +1099,7 @@ export default function WhatsApp() {
                           value={tempName}
                           onChange={(e) => setTempName(e.target.value)}
                           onKeyDown={(e) => {
+                            e.stopPropagation();
                             if (e.key === 'Enter') updateContactName();
                             if (e.key === 'Escape') setIsEditingName(false);
                           }}
@@ -1116,6 +1117,7 @@ export default function WhatsApp() {
                         <span className="truncate">{selectedConversation.contact_name || selectedConversation.phone}</span>
                         {/* Visível sempre no mobile/APK (touch não dispara hover); fade no desktop ao hover */}
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -1123,7 +1125,7 @@ export default function WhatsApp() {
                             setIsEditingName(true);
                           }}
                           title="Renomear contato"
-                          className="sm:opacity-0 sm:group-hover/rename:opacity-100 opacity-60 transition-opacity text-gray-400 hover:text-blue-500 active:text-blue-500 flex-shrink-0"
+                          className="relative z-10 cursor-pointer sm:opacity-0 sm:group-hover/rename:opacity-100 opacity-60 transition-opacity text-gray-400 hover:text-blue-500 active:text-blue-500 flex-shrink-0"
                         >
                           <Pencil size={13} />
                         </button>
@@ -1497,6 +1499,7 @@ export default function WhatsApp() {
                   value={tempName} 
                   onChange={(e) => setTempName(e.target.value)}
                   onKeyDown={(e) => {
+                    e.stopPropagation();
                     if (e.key === 'Enter') updateContactName();
                     if (e.key === 'Escape') setIsEditingName(false);
                   }}
@@ -1514,17 +1517,22 @@ export default function WhatsApp() {
               </div>
             ) : (
               <h3 
-                className="font-bold text-gray-800 text-lg mb-1 flex items-center justify-center gap-2 cursor-pointer hover:text-blue-600 transition-colors group"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setTempName(selectedConversation.contact_name || '');
-                  setIsEditingName(true);
-                }}
-                title="Clique para renomear"
+                className="font-bold text-gray-800 text-lg mb-1 flex items-center justify-center gap-2 transition-colors group"
+                title="Clique no lápis para renomear"
               >
                 {selectedConversation.contact_name || "Sem Nome"}
-                <Pencil size={14} className="opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" />
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setTempName(selectedConversation.contact_name || '');
+                    setIsEditingName(true);
+                  }}
+                  className="relative z-10 cursor-pointer opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-gray-400 hover:text-blue-600 active:text-blue-600 flex-shrink-0"
+                >
+                  <Pencil size={14} />
+                </button>
               </h3>
             )}
             {selectedConversation.phone?.startsWith('kommo-lead-') ? (

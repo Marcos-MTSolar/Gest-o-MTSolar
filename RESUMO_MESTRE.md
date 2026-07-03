@@ -4,10 +4,12 @@
 
 ## Alterações — Sessão 03/07/2026
 
-* **Correção: Abertura do campo de edição de nome no Atendimento (Prompt 8 e 9):**
+* **Correção Definitiva: Abertura do campo de edição de nome no Atendimento (Prompts 8, 9 e 10):**
   * *O que foi feito:*
-    1. A funcionalidade de edição existia no código, mas o evento `onClick` do ícone (Pencil) e do nome do contato estava sendo consumido silenciosamente ou não disparava adequadamente.
-    2. Adicionado `e.preventDefault()` e `e.stopPropagation()` no evento de clique do lápis (no cabeçalho web/mobile) e no clique do nome (no painel lateral do desktop) no arquivo `src/pages/WhatsApp.tsx`. Isso garante que o clique registre e libere o `input` para digitação sem interferências.
+    1. **Problema identificado no Desktop:** O evento `onClick` do ícone (Pencil) e do nome do contato estava sendo consumido silenciosamente ou não disparava no navegador (mouse) porque o elemento não era um botão real com o devido controle de propagação.
+    2. **Cabeçalho (Ponto A):** O botão do lápis foi convertido explicitamente para `<button type="button">`, recebeu a classe `relative z-10 cursor-pointer` (para garantir que fique sobreposto a qualquer overlay oculto), e adicionados `e.preventDefault()` e `e.stopPropagation()` no clique.
+    3. **Painel Lateral (Ponto B):** O evento `onClick` problemático que ficava no elemento `<h3>` (o nome do contato) foi removido. Em vez disso, o ícone `Pencil` foi isolado dentro de um `<button type="button">` próprio com o mesmo tratamento de propagação e `z-index`.
+    4. **Input seguro:** No `<input>` que aparece em ambos os locais, foi garantido o `autoFocus` (já existia) e adicionado `e.stopPropagation()` no evento `onKeyDown`, impedindo que pressionar `Enter` dispare ações globais do chat (como enviar mensagem).
 
 * **Otimização do PDF da Proposta de Serviços (Prompt 8):**
   * *O que foi feito em `src/pages/ProposalGenerator.tsx` na função `generateServicePDF`:*
