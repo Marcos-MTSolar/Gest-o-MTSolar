@@ -4809,13 +4809,27 @@ app.post('/api/kommo/webhook', async (req, res) => {
 
     // 2. EXTRAIR LEADS APLICÁVEIS (já existente — manter lógica atual)
     const body = req.body;
-    console.log(`[KOMMO WEBHOOK] Payload recebido: ${JSON.stringify(body).substring(0, 300)}`);
+
+    // PONTO 3: Log de estrutura do payload recebido — essencial para confirmar que o Kommo
+    // está enviando webhook e em qual formato (leads.add / leads.status / leads.update)
+    console.log(`[KOMMO WEBHOOK] ==== PAYLOAD RECEBIDO ====`);
+    console.log(`[KOMMO WEBHOOK] Chaves do body: ${JSON.stringify(Object.keys(body))}`);
+    console.log(`[KOMMO WEBHOOK] Chaves de body.leads: ${JSON.stringify(body.leads ? Object.keys(body.leads) : 'sem leads')}`);
+    console.log(`[KOMMO WEBHOOK] Payload (500 chars): ${JSON.stringify(body).substring(0, 500)}`);
 
     const leadsAdd: any[] = body?.leads?.add || [];
     const leadsStatus: any[] = body?.leads?.status || [];
     const leadsUpdate: any[] = body?.leads?.update || [];
 
     const targetStatusId = kommoStatusIdLead ? parseInt(kommoStatusIdLead) : null;
+
+    // PONTO 1: Log de todos os leads recebidos ANTES do filtro de status_id
+    // Isso permite comparar os status_id brutos com KOMMO_STATUS_ID_LEAD nas Vercel Logs
+    console.log(`[KOMMO WEBHOOK] ==== LEADS BRUTOS RECEBIDOS ====`);
+    console.log(`[KOMMO WEBHOOK] KOMMO_STATUS_ID_LEAD configurado: ${kommoStatusIdLead} (parsed: ${targetStatusId})`);
+    console.log(`[KOMMO WEBHOOK] leads.add (${leadsAdd.length}): ${JSON.stringify(leadsAdd.map((l: any) => ({ id: l.id, status_id: l.status_id, status_id_type: typeof l.status_id })))}`);
+    console.log(`[KOMMO WEBHOOK] leads.status (${leadsStatus.length}): ${JSON.stringify(leadsStatus.map((l: any) => ({ id: l.id, status_id: l.status_id, status_id_type: typeof l.status_id, match: Number(l.status_id) === targetStatusId })))}`);
+    console.log(`[KOMMO WEBHOOK] leads.update (${leadsUpdate.length}): ${JSON.stringify(leadsUpdate.map((l: any) => ({ id: l.id, status_id: l.status_id, status_id_type: typeof l.status_id, match: Number(l.status_id) === targetStatusId })))}`);
 
     const leadsToProcess = [
       ...leadsAdd,
@@ -4826,6 +4840,8 @@ app.post('/api/kommo/webhook', async (req, res) => {
         ? leadsUpdate.filter((l: any) => Number(l.status_id) === targetStatusId)
         : []),
     ];
+
+    console.log(`[KOMMO WEBHOOK] Leads que passaram pelo filtro: ${leadsToProcess.length} (de add: ${leadsAdd.length}, status filtrados: ${leadsStatus.filter((l:any) => Number(l.status_id) === targetStatusId).length}, update filtrados: ${leadsUpdate.filter((l:any) => Number(l.status_id) === targetStatusId).length})`);
 
     if (leadsToProcess.length === 0) {
       console.log('[KOMMO WEBHOOK] Nenhum lead aplicável no payload — ignorando.');
@@ -5187,6 +5203,87 @@ app.get('/api/kommo/pipeline-stages', authenticateToken, async (req: any, res) =
   } catch (err: any) {
     console.error('[KOMMO PIPELINES] Erro ao buscar pipelines:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Rota: diagnóstico manual de lead específico do Kommo (apenas CEO)
+// Permite inspecionar por que um lead específico não entrou no sistema
+app.get('/api/kommo/check-lead/:leadId', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'CEO') return res.status(403).json({ error: 'Apenas CEO.' });
+
+  const { leadId } = req.params;
+  const companyId = req.user.company_id;
+
+  const diagnostico: any = {
+    leadId,
+    etapa_falha: null,
+    lead_kommo: null,
+    conversa_existente: null,
+    simulacao: []
+  };
+
+  try {
+    // (a) Dados brutos do lead no Kommo
+    diagnostico.simulacao.push('Buscando lead na API do Kommo...');
+    const leadData = await kommoApi(`/leads/${leadId}?with=contacts`);
+    if (!leadData) {
+      diagnostico.etapa_falha = 'kommo_api_retornou_null';
+      diagnostico.simulacao.push('FALHA: kommoApi retornou null para o lead. Token expirado ou lead inválido.');
+      return res.json(diagnostico);
+    }
+    diagnostico.lead_kommo = {
+      id: leadData.id,
+      name: leadData.name,
+      status_id: leadData.status_id,
+      pipeline_id: leadData.pipeline_id,
+      contacts_embedded: leadData._embedded?.contacts?.map((c: any) => ({ id: c.id, name: c.name })) || []
+    };
+    diagnostico.simulacao.push(`Lead encontrado: "${leadData.name}" (status_id: ${leadData.status_id})`);
+
+    // Verificar se status_id bate com o filtro configurado
+    const kommoStatusIdLead = process.env.KOMMO_STATUS_ID_LEAD;
+    const targetStatusId = kommoStatusIdLead ? parseInt(kommoStatusIdLead) : null;
+    const statusMatch = targetStatusId ? Number(leadData.status_id) === targetStatusId : false;
+    diagnostico.simulacao.push(`KOMMO_STATUS_ID_LEAD=${kommoStatusIdLead} | status_id do lead=${leadData.status_id} | bate com filtro: ${statusMatch}`);
+    if (!statusMatch) {
+      diagnostico.simulacao.push(`ATENÇÃO: Este lead NÃO passaria pelo filtro de status_id do webhook. Ele só seria processado se viesse em leads.add (novo lead), ou se seu status_id (${leadData.status_id}) fosse igual a KOMMO_STATUS_ID_LEAD (${kommoStatusIdLead}).`);
+    }
+
+    // (b) Buscar contato e telefone via getKommoLeadContact
+    diagnostico.simulacao.push('Buscando contato via getKommoLeadContact...');
+    const contactResult = await getKommoLeadContact(leadId);
+    diagnostico.simulacao.push(`Resultado de getKommoLeadContact: ${JSON.stringify(contactResult)}`);
+
+    const contactPhone = contactResult?.phone || `kommo-lead-${leadId}`;
+    const contactName = contactResult?.name || `Lead Kommo #${leadId}`;
+    diagnostico.simulacao.push(`Telefone que seria usado: ${contactPhone} | Nome: ${contactName}`);
+
+    // (c) Verificar se já existe conversa com esse telefone
+    diagnostico.simulacao.push('Verificando conversa existente no banco...');
+    const { data: existingConv } = await supabaseAdmin
+      .from('whatsapp_conversations')
+      .select('id, contact_name, status, assigned_to, created_at')
+      .eq('phone', contactPhone)
+      .eq('company_id', companyId)
+      .maybeSingle();
+
+    if (existingConv) {
+      diagnostico.conversa_existente = existingConv;
+      diagnostico.simulacao.push(`Conversa já existe: ID ${existingConv.id} (status: ${existingConv.status}). O webhook atualizaria apenas o nome se necessário.`);
+    } else {
+      diagnostico.conversa_existente = null;
+      diagnostico.simulacao.push(`Nenhuma conversa encontrada para phone="${contactPhone}". O webhook criaria uma nova conversa.`);
+
+      // Simular o round-robin para ver qual vendedor seria escolhido
+      const vendedor = await getRoundRobinVendedor(companyId);
+      diagnostico.simulacao.push(`Round-Robin escolheria: ${vendedor ? `${vendedor.name} (id: ${vendedor.id})` : 'nenhum vendedor elegível — fila de espera'}`);
+    }
+
+    return res.json(diagnostico);
+  } catch (err: any) {
+    diagnostico.etapa_falha = 'excecao_inesperada';
+    diagnostico.simulacao.push(`ERRO: ${err.message}`);
+    return res.status(500).json(diagnostico);
   }
 });
 

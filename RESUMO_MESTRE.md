@@ -9,6 +9,11 @@
   * *Arquivos modificados:* `api/index.ts`, `supabase/migrations/20260707_create_webhook_failures.sql`
   * *Data e hora da alteração:* 07/07/2026 às 19:50 (Horário Local)
 
+* **Diagnóstico e Resiliência do Webhook do Kommo CRM:**
+  * *O que foi feito:* (1) Adicionados logs detalhados ANTES do filtro de `status_id` no webhook `POST /api/kommo/webhook`, exibindo todos os leads recebidos com seus `status_id` brutos (e se bate com `KOMMO_STATUS_ID_LEAD`), e os arrays de chaves do payload para confirmar o formato enviado pelo Kommo. (2) Confirmado que o fluxo quando `getKommoLeadContact` retorna null não tem `continue`/`return` oculto — o lead prossegue com `contactPhone = kommo-lead-${leadId}`. (3) Criada rota de diagnóstico `GET /api/kommo/check-lead/:leadId` (apenas CEO) que inspeciona um lead pelo ID e retorna: dados brutos da API Kommo, se o `status_id` passaria pelo filtro do webhook, resultado da busca de contato, se já existe conversa no banco, e qual vendedor seria escolhido via Round-Robin.
+  * *Arquivos modificados:* `api/index.ts`
+  * *Data e hora da alteração:* 07/07/2026 às 19:55 (Horário Local)
+
 * **Prevenção de Falhas no Envio de Mídias (R2):**
   * *O que foi feito:* (1) Adicionada validação estrita no frontend (`WhatsApp.tsx`) verificando se `uploadData.filePath` foi retornado corretamente da API antes de chamar `send-media`, estourando um `alert` imediato em caso de falha (ajudando no diagnóstico mobile com Capacitor). (2) No backend (`api/index.ts`), adicionada validação `if (!filePath)` na rota `send-media`, retornando Erro 400 antes de tentar manipular a string e estourar erro 500, com log detalhado da URL que será acessada pela Evolution API.
   * *Arquivos modificados:* `api/index.ts`, `src/pages/WhatsApp.tsx`
