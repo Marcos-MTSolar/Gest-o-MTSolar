@@ -936,6 +936,7 @@ export default function WhatsApp() {
               ))}
             </div>
           </div>
+          </div>
           <span className="text-[10px] text-gray-400">
             {format(new Date(conv.last_message_at), 'HH:mm', { locale: ptBR })}
           </span>
