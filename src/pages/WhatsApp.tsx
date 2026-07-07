@@ -401,6 +401,12 @@ export default function WhatsApp() {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
 
+        if (!uploadData || !uploadData.filePath) {
+          console.error("[WA MEDIA UPLOAD] Falha: filePath não retornado pelo servidor.", uploadData);
+          alert("Falha no upload do arquivo. O servidor não retornou o caminho do arquivo (filePath). Se você estiver usando o aplicativo no celular, tente selecionar o arquivo novamente.");
+          throw new Error("filePath ausente após upload-media.");
+        }
+
         // 2. Enviar a URL assinada para o backend para disparo via Evolution API
         await api.post('/api/whatsapp/send-media', {
           phone: selectedConversation.phone,

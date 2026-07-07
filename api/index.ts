@@ -2134,6 +2134,11 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
   const { phone, mediaUrl, mimetype, filename, caption, conversationId, filePath } = req.body;
   console.log(`[WA MEDIA] Media request received: phone=${phone}, mimetype=${mimetype}, url=${mediaUrl}`);
 
+  if (!filePath) {
+    console.error('[WA MEDIA ERROR] filePath ausente no payload.');
+    return res.status(400).json({ error: 'filePath ausente no payload' });
+  }
+
   try {
     let instance = null;
     if (conversationId) {
@@ -2158,6 +2163,8 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
     console.log(`[WA SEND] Enviando mídia na instância: ${creds.instanceName} para ${phone}`);
 
     const mediatype = resolveMediaType(mimetype, filename);
+
+    console.log(`[WA SEND] URL que será enviada para a Evolution API fazer o download: ${mediaUrl}`);
 
     const response = await fetch(`${creds.baseUrl}/message/sendMedia/${creds.instanceName}`, {
       method: 'POST',
@@ -2420,12 +2427,12 @@ app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
 
 
 app.post('/api/webhooks/whatsapp', async (req, res) => {
-  res.status(200).json({ status: 'ok' });
   const body = req.body;
   const payload = body;
   console.log('[WA-WEBHOOK] payload recebido:', JSON.stringify(req.body).slice(0, 500));
 
-  const remoteJid: string = payload?.data?.key?.remoteJid ?? '';
+  try {
+    const remoteJid: string = payload?.data?.key?.remoteJid ?? '';
   if (remoteJid.endsWith('@g.us')) {
     console.log('[WA-WEBHOOK] Mensagem de grupo ignorada:', remoteJid);
     return;
@@ -2533,11 +2540,17 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
     }
   }
 
-  // 4. Fallback final (MT Solar) se nada funcionar
+  // 4. Fallback final se nada funcionar
   if (!companyId) {
     console.error('[WEBHOOK FALLBACK] ATENÇÃO: instance_name não encontrado em company_instances nem em companies:', instanceName);
     console.error('[WEBHOOK FALLBACK] Verifique se a instância está cadastrada na tabela company_instances.');
-    // NÃO processar mensagem de instância desconhecida — retornar 200 para não gerar retries
+    
+    await supabaseAdmin.from('webhook_failures').insert({
+      payload_raw: body,
+      error_message: `Company not found for instance: ${instanceName}`,
+      company_id: null  // empresa não foi resolvida neste ponto
+    });
+
     return res.status(200).json({ success: false, error: 'Instance not mapped to any company' });
   }
 
@@ -2545,7 +2558,14 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
 
   if (!companyId) {
     console.error('[WEBHOOK] Erro: Não foi possível resolver o company_id para a instância:', instanceName);
-    return res.status(200).json({ success: false, error: 'Company not found' }); // Return 200 to avoid Evolution API retries
+    
+    await supabaseAdmin.from('webhook_failures').insert({
+      payload_raw: body,
+      error_message: `Company not found for instance: ${instanceName}`,
+      company_id: null  // empresa não foi resolvida neste ponto
+    });
+    
+    return res.status(200).json({ success: false, error: 'Company not found' });
   }
   
   // Processa nova mensagem recebida/enviada pela Evolution API
@@ -2793,6 +2813,11 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
 
           if (insertError) {
             console.error('[WEBHOOK ERROR] Falha ao criar conversa:', insertError.message);
+            await supabaseAdmin.from('webhook_failures').insert({
+              payload_raw: body,
+              error_message: `Falha ao criar conversa: ${insertError.message}`,
+              company_id: companyId  // empresa já estava resolvida neste ponto
+            });
           } else {
             conv = inserted;
             conversationId = inserted.id;
@@ -2840,6 +2865,11 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
 
           if (msgError) {
             console.error('[WEBHOOK ERROR] Falha ao salvar mensagem:', msgError.message, msgError.details);
+            await supabaseAdmin.from('webhook_failures').insert({
+              payload_raw: body,
+              error_message: `Falha ao salvar mensagem: ${msgError.message}`,
+              company_id: companyId  // empresa já estava resolvida neste ponto
+            });
           } else {
             console.log('[WEBHOOK] Mensagem salva com sucesso');
           }
@@ -2874,7 +2904,39 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
     }
   }
 
-  res.json({ success: true });
+    // Retorna 200 apenas no final do processamento
+    res.status(200).json({ status: 'ok', success: true });
+  } catch (err: any) {
+    console.error('[WEBHOOK FATAL ERROR] Exceção não tratada no webhook:', err);
+    try {
+      // companyId pode estar resolvido ou não dependendo do ponto em que a exceção ocorreu
+      await supabaseAdmin.from('webhook_failures').insert({
+        payload_raw: req.body,
+        error_message: `Fatal error: ${err.message || String(err)}`,
+        company_id: typeof companyId !== 'undefined' ? companyId : null
+      });
+    } catch (dbErr) {
+      console.error('[WEBHOOK FATAL ERROR] Falha ao salvar na dead letter queue:', dbErr);
+    }
+    // Retornar 200 mesmo em caso de falha fatal para evitar retries infinitos
+    res.status(200).json({ status: 'error', message: err.message });
+  }
+});
+
+// Rota para diagnosticar falhas de webhook (Apenas CEO/ADMIN)
+app.get('/api/webhook-failures', authenticateToken, async (req: any, res) => {
+  if (req.user.role !== 'CEO' && req.user.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Acesso negado' });
+  }
+  
+  const { data, error } = await supabaseAdmin
+    .from('webhook_failures')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(50);
+    
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
 });
 
 // Documents

@@ -4,6 +4,16 @@
 
 ## Alterações — Sessão 07/07/2026
 
+* **Resiliência e Dead Letter Queue no Webhook do WhatsApp:**
+  * *O que foi feito:* A rota `POST /api/webhooks/whatsapp` foi refatorada. (1) O `res.status(200)` foi movido do início para o final da função para evitar o encerramento prematuro (Race Condition) na Vercel Serverless. (2) Foi implementada a tabela `webhook_failures` (Dead Letter Queue) para registrar payloads brutos sempre que houver falha não-tratada, impossibilidade de resolver o `company_id` da instância ou falhas no `upsert` do Supabase. (3) Todos os inserts na `webhook_failures` gravam `company_id`: `null` quando a empresa ainda não foi identificada (ex: instância desconhecida), ou o valor real quando a falha ocorreu após a resolução da empresa. (4) Criada a rota de diagnóstico `GET /api/webhook-failures` exclusiva para CEO/ADMIN.
+  * *Arquivos modificados:* `api/index.ts`, `supabase/migrations/20260707_create_webhook_failures.sql`
+  * *Data e hora da alteração:* 07/07/2026 às 19:50 (Horário Local)
+
+* **Prevenção de Falhas no Envio de Mídias (R2):**
+  * *O que foi feito:* (1) Adicionada validação estrita no frontend (`WhatsApp.tsx`) verificando se `uploadData.filePath` foi retornado corretamente da API antes de chamar `send-media`, estourando um `alert` imediato em caso de falha (ajudando no diagnóstico mobile com Capacitor). (2) No backend (`api/index.ts`), adicionada validação `if (!filePath)` na rota `send-media`, retornando Erro 400 antes de tentar manipular a string e estourar erro 500, com log detalhado da URL que será acessada pela Evolution API.
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/WhatsApp.tsx`
+  * *Data e hora da alteração:* 07/07/2026 às 19:40 (Horário Local)
+
 * **Atualização do prazo de Propostas Ativas:**
   * *O que foi feito:* A rota `GET /api/proposals-active` foi modificada para retornar propostas dos últimos 30 dias (variável `thirtyDaysAgo`), em vez de 7 dias, adequando-se à nova regra de negócio do banco (onde as propostas são deletadas fisicamente pelo pg_cron apenas após 30 dias).
   * *Arquivos modificados:* `api/index.ts`
