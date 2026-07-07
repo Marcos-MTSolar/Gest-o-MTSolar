@@ -2,6 +2,15 @@
 
 ---
 
+## Alterações — Sessão 07/07/2026
+
+* **Atualização do prazo de Propostas Ativas:**
+  * *O que foi feito:* A rota `GET /api/proposals-active` foi modificada para retornar propostas dos últimos 30 dias (variável `thirtyDaysAgo`), em vez de 7 dias, adequando-se à nova regra de negócio do banco (onde as propostas são deletadas fisicamente pelo pg_cron apenas após 30 dias).
+  * *Arquivos modificados:* `api/index.ts`
+  * *Data e hora da alteração:* 07/07/2026 às 19:27 (Horário Local)
+
+---
+
 ## Alterações — Sessão 03/07/2026
 
 * **Redesign do Cabeçalho da Proposta de Serviços em PDF (Prompt 11):**

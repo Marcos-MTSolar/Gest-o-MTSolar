@@ -2998,13 +2998,13 @@ app.get('/api/proposal-history', authenticateToken, async (req: any, res) => {
 
 // Propostas Ativas (7 dias)
 app.get('/api/proposals-active', authenticateToken, async (req: any, res) => {
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
   const { data, error } = await supabase
     .from('proposals')
     .select('*')
     .eq('company_id', req.user.company_id)
-    .gte('created_at', sevenDaysAgo)
+    .gte('created_at', thirtyDaysAgo)
     .order('created_at', { ascending: false });
 
   if (error) return res.status(500).json({ error: error.message });
