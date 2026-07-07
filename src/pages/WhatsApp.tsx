@@ -20,6 +20,7 @@ import {
   RefreshCcw,
   Repeat,
   Check,
+  CheckCheck,
   Pencil,
   X,
   Mic,
@@ -74,6 +75,7 @@ interface Conversation {
   token?: string;
   instance?: string;
   tags?: string[] | null; // coluna TEXT[] no Supabase
+  profile_pic_url?: string | null;
 }
 
 const WHATSAPP_TAGS = [
@@ -86,6 +88,9 @@ const WHATSAPP_TAGS = [
   { id: 'Orçamento Enviado', label: 'Orçamento Enviado', color: '#9333EA' },
   { id: 'Visita Agendada', label: 'Visita Agendada', color: '#EAB308' },
   { id: 'Transferido', label: 'Transferido', color: '#1D4ED8' },
+  { id: 'Veio da Rua', label: 'Veio da Rua', color: '#8B5CF6' },
+  { id: 'Prospecção Ativa', label: 'Prospecção Ativa', color: '#0EA5E9' },
+  { id: 'Indicação', label: 'Indicação', color: '#F43F5E' },
 ];
 
 async function compressImage(file: File): Promise<File> {
@@ -107,6 +112,69 @@ async function compressImage(file: File): Promise<File> {
     };
     img.src = url;
   });
+}
+
+function ProfileAvatar({ conversation, className = "" }: { conversation: Conversation; className?: string }) {
+  const [picUrl, setPicUrl] = useState<string | null>(conversation.profile_pic_url || null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    // Se já temos a URL (mesmo nula validada) no estado, ou se falhou, não fazemos fetch.
+    if (picUrl !== undefined && picUrl !== null) return;
+    if (error) return;
+    
+    // Se a conversa for um lead do kommo sem telefone real
+    if (conversation.phone?.startsWith('kommo-lead-')) {
+      setPicUrl(null);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchPic = async () => {
+      try {
+        setLoading(true);
+        const res = await api.get(`/api/whatsapp/profile-picture/${conversation.id}`);
+        if (isMounted) {
+          setPicUrl(res.data.profilePicUrl || null);
+          if (!res.data.profilePicUrl) setError(true);
+        }
+      } catch (err) {
+        if (isMounted) setError(true);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    fetchPic();
+
+    return () => { isMounted = false; };
+  }, [conversation.id, conversation.phone, picUrl, error]);
+
+  if (loading) {
+    return (
+      <div className={cn("rounded-full bg-gray-200 animate-pulse flex-shrink-0", className)}></div>
+    );
+  }
+
+  if (picUrl && !error) {
+    return (
+      <img
+        src={picUrl}
+        alt={conversation.contact_name || 'Contato'}
+        className={cn("rounded-full object-cover flex-shrink-0", className)}
+        onError={() => {
+          setError(true);
+          setPicUrl(null);
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className={cn("rounded-full bg-blue-100 flex-shrink-0 flex items-center justify-center text-blue-700", className)}>
+      <User size={18} />
+    </div>
+  );
 }
 
 export default function WhatsApp() {
@@ -840,10 +908,12 @@ export default function WhatsApp() {
         )}
       >
         <div className="flex justify-between items-start mb-1">
-          <div className="flex flex-col gap-1">
-            <span className="font-bold text-gray-800 truncate">
-              {conv.contact_name || conv.phone}
-            </span>
+          <div className="flex gap-2 min-w-0">
+            <ProfileAvatar conversation={conv} className="w-8 h-8 lg:w-10 lg:h-10 mt-1" />
+            <div className="flex flex-col gap-1 min-w-0">
+              <span className="font-bold text-gray-800 truncate">
+                {conv.contact_name || conv.phone}
+              </span>
             <div className="flex flex-wrap gap-1">
               {conv.instance === 'atendimento-cliente' ? (
                 <span className="text-[9px] font-bold text-green-700 bg-green-100 px-1.5 py-0.5 rounded border border-green-200 w-fit uppercase tracking-tighter">
@@ -1094,9 +1164,7 @@ export default function WhatsApp() {
                   >
                     <ArrowLeft size={24} />
                   </button>
-                  <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-full bg-blue-100 flex-shrink-0 flex items-center justify-center text-blue-700">
-                    <User size={18} />
-                  </div>
+                  <ProfileAvatar conversation={selectedConversation} className="w-9 h-9 lg:w-10 lg:h-10" />
                   <div className="min-w-0 flex-1">
                     {isEditingName ? (
                       <div className="flex items-center gap-1">
@@ -1137,11 +1205,11 @@ export default function WhatsApp() {
                         </button>
                       </h2>
                     )}
-                    <p className="text-[10px] lg:text-xs text-gray-400 truncate flex items-center gap-1">
+                    <p className="text-sm lg:text-base text-gray-500 truncate flex items-center gap-1.5 mt-0.5">
                       {selectedConversation.phone?.startsWith('kommo-lead-') ? (
                         <span className="italic">📋 Sem telefone</span>
                       ) : (
-                        <><Phone size={10} /> {selectedConversation.phone}</>
+                        <><Phone size={14} /> {selectedConversation.phone}</>
                       )}
                     </p>
                   </div>
@@ -1345,12 +1413,12 @@ export default function WhatsApp() {
                       </span>
                       {msg.from_me && !msg.is_internal && (
                         <span className={cn(
-                          "text-[10px] font-bold",
+                          "flex items-center",
                           msg.status === 'read' ? "text-blue-500" : "text-gray-400"
                         )}>
-                          {msg.status === 'read' ? '✓✓' : 
-                           msg.status === 'delivered' ? '✓✓' : 
-                           msg.status === 'sent' ? '✓' : '🕐'}
+                          {msg.status === 'read' ? <CheckCheck size={14} /> : 
+                           msg.status === 'delivered' ? <CheckCheck size={14} /> : 
+                           msg.status === 'sent' ? <Check size={14} /> : <span className="text-[10px]">🕐</span>}
                         </span>
                       )}
                     </div>

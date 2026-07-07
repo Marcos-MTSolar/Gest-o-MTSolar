@@ -14,6 +14,21 @@
   * *Arquivos modificados:* `api/index.ts`
   * *Data e hora da alteração:* 07/07/2026 às 19:55 (Horário Local)
 
+* **Avatar e Foto de Perfil no Atendimento (WhatsApp):**
+  * *O que foi feito:* (1) Adicionadas colunas `profile_pic_url` (TEXT) e `profile_pic_updated_at` (TIMESTAMPTZ) à tabela `whatsapp_conversations` para cache. (2) Criada rota `GET /api/whatsapp/profile-picture/:conversationId` no backend que busca a foto de perfil via Evolution API (endpoint `/chat/fetchProfilePictureUrl/{instance}`) com cache de 24h para evitar requisições excessivas. (3) Criado o componente `ProfileAvatar` no `WhatsApp.tsx` para exibir a foto de perfil (com esqueleto de carregamento animado) ou fallback para o ícone genérico em caso de erro, ausência ou privacidade do contato. Inserido no cabeçalho do chat e na lista de conversas.
+  * *Arquivos modificados:* `api/index.ts`, `src/pages/WhatsApp.tsx`, `supabase/migrations/20260707_add_profile_pic_to_conversations.sql`
+  * *Data e hora da alteração:* 07/07/2026 às 20:05 (Horário Local)
+
+* **Melhorias Visuais no Painel de Atendimento (WhatsApp):**
+  * *O que foi feito:* (1) Aumentado o tamanho da fonte do número de telefone no cabeçalho do chat de `text-[10px]/text-xs` para `text-sm/text-base` e o ícone do telefone. (2) Atualizados os indicadores de leitura de mensagens enviadas (from_me: true) para utilizar os ícones originais do WhatsApp (✓ e ✓✓) importados da biblioteca `lucide-react` (`Check`, `CheckCheck`), com o azul característico para status 'read'.
+  * *Arquivos modificados:* `src/pages/WhatsApp.tsx`
+  * *Data e hora da alteração:* 07/07/2026 às 20:05 (Horário Local)
+
+* **Novas Etiquetas de Origem do Lead:**
+  * *O que foi feito:* Adicionadas as etiquetas "Veio da Rua", "Prospecção Ativa" e "Indicação" ao array `WHATSAPP_TAGS` do frontend, mantendo a coerência visual e integração com o sistema de filtragem de conversas.
+  * *Arquivos modificados:* `src/pages/WhatsApp.tsx`
+  * *Data e hora da alteração:* 07/07/2026 às 20:05 (Horário Local)
+
 * **Prevenção de Falhas no Envio de Mídias (R2):**
   * *O que foi feito:* (1) Adicionada validação estrita no frontend (`WhatsApp.tsx`) verificando se `uploadData.filePath` foi retornado corretamente da API antes de chamar `send-media`, estourando um `alert` imediato em caso de falha (ajudando no diagnóstico mobile com Capacitor). (2) No backend (`api/index.ts`), adicionada validação `if (!filePath)` na rota `send-media`, retornando Erro 400 antes de tentar manipular a string e estourar erro 500, com log detalhado da URL que será acessada pela Evolution API.
   * *Arquivos modificados:* `api/index.ts`, `src/pages/WhatsApp.tsx`

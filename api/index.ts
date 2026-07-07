@@ -2105,6 +2105,89 @@ app.post('/api/whatsapp/send-audio', authenticateToken, async (req: any, res) =>
   }
 });
 
+// WhatsApp - Fetch Profile Picture
+app.get('/api/whatsapp/profile-picture/:conversationId', authenticateToken, async (req: any, res) => {
+  const { conversationId } = req.params;
+  const companyId = req.user.company_id;
+
+  try {
+    // 1. Get conversation from DB
+    const { data: conv, error: convError } = await supabaseAdmin
+      .from('whatsapp_conversations')
+      .select('phone, instance, profile_pic_url, profile_pic_updated_at')
+      .eq('id', conversationId)
+      .eq('company_id', companyId)
+      .single();
+
+    if (convError || !conv) {
+      return res.status(404).json({ error: 'Conversa não encontrada' });
+    }
+
+    // 2. Check if cache is valid (less than 24 hours old)
+    if (conv.profile_pic_updated_at) {
+      const updatedAt = new Date(conv.profile_pic_updated_at).getTime();
+      const now = new Date().getTime();
+      const hoursDiff = (now - updatedAt) / (1000 * 60 * 60);
+
+      if (hoursDiff < 24) {
+        return res.json({ profilePicUrl: conv.profile_pic_url });
+      }
+    }
+
+    // 3. Fetch from Evolution API
+    const instance = conv.instance || process.env.VITE_EVOLUTION_INSTANCE_ATENDIMENTO || 'atendimento-cliente';
+    const creds = await getEvolutionApiCredentials(companyId, instance);
+    
+    // Formatting the phone number according to Evolution API specs
+    // Generally just the phone number, sometimes requires @s.whatsapp.net, but the API handles the number format.
+    const number = conv.phone;
+    
+    let profilePicUrl = null;
+    
+    try {
+      const fetchUrl = `${creds.baseUrl}/chat/fetchProfilePictureUrl/${instance}`;
+      console.log(`[WA PROFILE PIC] Solicitando avatar em: ${fetchUrl}`);
+      
+      const response = await fetch(fetchUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': creds.apiKey
+        },
+        body: JSON.stringify({ number })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.picture) {
+           profilePicUrl = data.picture;
+        } else if (data && data.profilePictureUrl) {
+           profilePicUrl = data.profilePictureUrl;
+        }
+      } else {
+        // Log the error but don't fail, maybe the contact doesn't have a picture or privacy settings prevent it
+        console.warn(`[WA PROFILE PIC] Failed to fetch picture for ${number}: ${response.status} ${response.statusText}`);
+      }
+    } catch (apiErr) {
+       console.error(`[WA PROFILE PIC] API request error:`, apiErr);
+    }
+
+    // 4. Update Database cache
+    await supabaseAdmin
+      .from('whatsapp_conversations')
+      .update({
+        profile_pic_url: profilePicUrl,
+        profile_pic_updated_at: new Date().toISOString()
+      })
+      .eq('id', conversationId);
+
+    res.json({ profilePicUrl });
+  } catch (err: any) {
+    console.error("[WA PROFILE PIC ERROR]", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // WhatsApp - Upload Media (Backend bypass for RLS)
 app.post('/api/whatsapp/upload-media', authenticateToken, upload.single('file'), async (req: any, res) => {
   if (!req.file) return res.status(400).json({ error: 'Arquivo ausente' });
