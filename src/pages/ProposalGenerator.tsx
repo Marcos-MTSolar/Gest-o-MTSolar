@@ -106,6 +106,7 @@ interface FormData {
   includePhotos: boolean;
   photos: string[];
   kitSupplier: string;
+  selectedSupplierData?: Supplier | null;
   financeGracePeriod: string;
   financeDownPayment: string;
   financeBanco: string;
@@ -273,7 +274,7 @@ export default function ProposalGenerator() {
     includePhotos: false,
     photos: [],
     kitSupplier: '',
-  selectedSupplierData: null,
+    selectedSupplierData: null,
     financeGracePeriod: '3',
     financeDownPayment: '',
     financeBanco: 'BV',
@@ -1616,10 +1617,36 @@ export default function ProposalGenerator() {
               ☀️ ${formData.kitName}
             </div>` : ''}
 
-            ${formData.kitSupplier ? `
-            <div style="text-align:right; font-size:9pt; color:#1e3a5f; font-weight:bold; margin-bottom:2mm;">
-              Distribuidor: ${formData.kitSupplier}
-            </div>` : ''}
+            ${formData.kitSupplier ? (() => {
+              const sup = formData.selectedSupplierData;
+              const titleName = formData.kitSupplier;
+              if (sup) {
+                const linhasExtras = [
+                  (sup.razao_social && sup.razao_social !== sup.nome_fantasia) ? `Razão Social: ${sup.razao_social}` : null,
+                  sup.cnpj ? `CNPJ: ${sup.cnpj}` : null,
+                  sup.endereco ? `Endereço: ${sup.endereco}` : null,
+                  (sup.telefone || sup.email) ? `Contato: ${sup.telefone || ''} ${(sup.telefone && sup.email) ? '|' : ''} ${sup.email || ''}`.trim() : null
+                ].filter(Boolean);
+
+                const renderLinhas = linhasExtras.map(l => 
+                  `<div style="font-size:7.5pt;color:#6b7280;margin-top:1mm;">${l}</div>`
+                ).join('');
+
+                return `
+                  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px; padding:3mm 5mm;margin-bottom:4mm; text-align:right;">
+                    <div style="font-size:9pt; color:#1e3a5f; font-weight:bold;">
+                      Distribuidor: ${titleName}
+                    </div>
+                    ${renderLinhas}
+                  </div>
+                `;
+              }
+              
+              return `
+              <div style="text-align:right; font-size:9pt; color:#1e3a5f; font-weight:bold; margin-bottom:2mm;">
+                Distribuidor: ${titleName}
+              </div>`;
+            })() : ''}
 
             <!-- GRID MÓDULO + INVERSOR -->
             <table style="width:100%;border-collapse:separate;border-spacing:4mm 0;margin-bottom:4mm;">
@@ -3442,7 +3469,15 @@ export default function ProposalGenerator() {
                 <div className="flex gap-2">
                   <select
                     value={formData.kitSupplier}
-                    onChange={(e) => updateForm('kitSupplier', e.target.value)}
+                    onChange={(e) => {
+                      const selectedName = e.target.value;
+                      const sup = suppliers.find(s => (s.nome_fantasia || s.razao_social) === selectedName);
+                      setFormData(prev => ({
+                        ...prev,
+                        kitSupplier: selectedName,
+                        selectedSupplierData: sup || null
+                      }));
+                    }}
                     className={inputStyle}
                   >
                     <option value="">— Selecione (Opcional) —</option>
