@@ -15,6 +15,13 @@
   * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`, `package.json`
   * *Data e hora da alteração:* 14/07/2026 às 13:45 (Horário Local)
 
+* **Correção: PDF do Histórico corrompido — 2 bugs encontrados na uploadFullPDF:**
+  * *O que foi feito:*
+    * **Bug 1 — Seletor de páginas errado:** A função `uploadFullPDF` usava `querySelectorAll('div[style*="210mm"]')` para encontrar as páginas do documento. Porém, as páginas principais do template HTML usam a classe CSS `.page` (sem atributo `style` inline), definida no bloco `<style>` embutido no próprio HTML. O seletor por style inline nunca encontrava essas divs, resultando em `pageDivs = []` e o PDF gerado ficava vazio ou com uma única página em branco. **Correção:** seletor trocado para `'.page, div[style*="min-height:297mm"]'`, que captura tanto as páginas principais (via classe) quanto a página de fotos (via style inline).
+    * **Bug 2 — Fotos ausentes no PDF do Storage:** `uploadFullPDF` recebia `htmlContent` como argumento, que não inclui a página de fotos de vistoria. Apenas o `htmlParaNavegador` (montado com `htmlContent + photosHtml`) continha as fotos. **Correção:** o argumento foi trocado de `htmlContent` para `htmlParaNavegador`, garantindo que o PDF salvo no Storage é 100% idêntico ao preview exibido para impressão no navegador.
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
+  * *Data e hora da alteração:* 14/07/2026 às 14:34 (Horário Local)
+
 * **Correção: Dados completos do Distribuidor no PDF (reaplica correção perdida):**
   * *O que foi feito:*
     1. **Diagnóstico pós-auditoria:** A correção anterior (`selectedSupplierData`) foi perdida acidentalmente via `git checkout` durante uma tentativa de reverter uma falha de sintaxe. Auditoria confirmou que o `onChange` do `<select>` ainda usava `updateForm('kitSupplier', e.target.value)` simples e o bloco do PDF interpolava apenas `formData.kitSupplier`.
