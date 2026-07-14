@@ -15,6 +15,16 @@
   * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`, `package.json`
   * *Data e hora da alteração:* 14/07/2026 às 13:45 (Horário Local)
 
+* **Correção: Dados completos do Distribuidor no PDF (reaplica correção perdida):**
+  * *O que foi feito:*
+    1. **Diagnóstico pós-auditoria:** A correção anterior (`selectedSupplierData`) foi perdida acidentalmente via `git checkout` durante uma tentativa de reverter uma falha de sintaxe. Auditoria confirmou que o `onChange` do `<select>` ainda usava `updateForm('kitSupplier', e.target.value)` simples e o bloco do PDF interpolava apenas `formData.kitSupplier`.
+    2. **Interface `FormData`:** Adicionado `selectedSupplierData?: Supplier | null` (tipado com a interface `Supplier` já existente).
+    3. **Estado inicial:** `selectedSupplierData: null` corretamente indentado dentro do objeto `useState<FormData>`.
+    4. **`onChange` do `<select>`:** Atualizado para buscar o objeto completo na array `suppliers` pelo `nome_fantasia/razao_social` e chamar `setFormData` atualizando `kitSupplier` e `selectedSupplierData` simultaneamente.
+    5. **Bloco PDF:** O trecho `Distribuidor: {kitSupplier}` foi substituído por uma IIFE que, quando `selectedSupplierData` existe, renderiza Razão Social, CNPJ, Endereço e Contato em fonte discreta (7.5pt/cinza) — omitindo linhas vazias. Para propostas sem `selectedSupplierData` (legado), exibe apenas o nome sem quebrar o layout.
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
+  * *Data e hora da alteração:* 14/07/2026 às 14:19 (Horário Local)
+
 * **Correção do Bug: Dados do Distribuidor ausentes no PDF da Proposta Comercial:**
   * *O que foi feito:*
     1. **Diagnóstico:** O `<select>` de "Fornecedor do Kit" salvava apenas `sup.nome_fantasia || sup.razao_social` como string simples em `formData.kitSupplier`. O bloco do PDF apenas interpolava essa string, ignorando os demais campos cadastrados (Razão Social, CNPJ, Endereço, Telefone, E-mail).
