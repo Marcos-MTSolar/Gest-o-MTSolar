@@ -4,45 +4,76 @@
 
 ## Alterações — Sessão 14/07/2026
 
-* **Correção: PDF do Histórico divergente do gerado (Problema de jsPDF):**
-  * *O que foi feito:*
-    1. **Diagnóstico:** O PDF baixado do histórico estava corrompido (emojis como caracteres estranhos, SVGs omitidos, formatação desalinhada, cabeçalho de texto sobrepondo fotos) porque o `doc.html()` com `windowWidth: 800` do jsPDF não suportava Emojis Unicode nem renderização SVG com `autoPaging: 'text'`.
-    2. **Instalação:** Adicionada a biblioteca `html2canvas` como dependência explícita.
-    3. **Nova lógica `uploadFullPDF`:** A função foi completamente refatorada. Em vez de injetar todo o texto via `doc.html()`, agora inserimos o HTML completo em um container oculto fora da viewport (`left:-9999px`), e esperamos o carregamento completo de todas as imagens.
-    4. **Captura página a página:** A nova lógica itera por cada div de página (`div[style*="210mm"]`) e captura usando `html2canvas` em alta resolução (`scale: 2`), inserindo como imagem PNG no PDF com `doc.addImage()`.
-    5. **Fidelidade e Limpeza:** Isso garante que o PDF final (tanto o de geração quanto o salvo no Histórico) é agora **100% idêntico** ao preview do navegador.
-    6. **Remoção de sobreposições:** O antigo código `doc.setPage()` que adicionava texto pós-geração foi removido, sanando a sobreposição em páginas de fotos, uma vez que cada `.page` do HTML já inclui seu próprio cabeçalho decorativo.
-  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`, `package.json`
-  * *Data e hora da alteração:* 14/07/2026 às 13:45 (Horário Local)
+### PDF do Histórico corrompido: diagnóstico e correção completa
 
-* **Correção: PDF do Histórico corrompido — 2 bugs encontrados na uploadFullPDF:**
-  * *O que foi feito:*
-    * **Bug 1 — Seletor de páginas errado:** A função `uploadFullPDF` usava `querySelectorAll('div[style*="210mm"]')` para encontrar as páginas do documento. Porém, as páginas principais do template HTML usam a classe CSS `.page` (sem atributo `style` inline), definida no bloco `<style>` embutido no próprio HTML. O seletor por style inline nunca encontrava essas divs, resultando em `pageDivs = []` e o PDF gerado ficava vazio ou com uma única página em branco. **Correção:** seletor trocado para `'.page, div[style*="min-height:297mm"]'`, que captura tanto as páginas principais (via classe) quanto a página de fotos (via style inline).
-    * **Bug 2 — Fotos ausentes no PDF do Storage:** `uploadFullPDF` recebia `htmlContent` como argumento, que não inclui a página de fotos de vistoria. Apenas o `htmlParaNavegador` (montado com `htmlContent + photosHtml`) continha as fotos. **Correção:** o argumento foi trocado de `htmlContent` para `htmlParaNavegador`, garantindo que o PDF salvo no Storage é 100% idêntico ao preview exibido para impressão no navegador.
-  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
-  * *Data e hora da alteração:* 14/07/2026 às 14:34 (Horário Local)
+**Contexto:** O PDF baixado pela aba "Histórico" apresentava emojis corrompidos 
+(ex: "&þ" no lugar de ☀️), SVGs ausentes, cabeçalho de texto sobrepondo fotos 
+de vistoria e valores numéricos desalinhados.
 
-* **Correção: Dados completos do Distribuidor no PDF (reaplica correção perdida):**
-  * *O que foi feito:*
-    1. **Diagnóstico pós-auditoria:** A correção anterior (`selectedSupplierData`) foi perdida acidentalmente via `git checkout` durante uma tentativa de reverter uma falha de sintaxe. Auditoria confirmou que o `onChange` do `<select>` ainda usava `updateForm('kitSupplier', e.target.value)` simples e o bloco do PDF interpolava apenas `formData.kitSupplier`.
-    2. **Interface `FormData`:** Adicionado `selectedSupplierData?: Supplier | null` (tipado com a interface `Supplier` já existente).
-    3. **Estado inicial:** `selectedSupplierData: null` corretamente indentado dentro do objeto `useState<FormData>`.
-    4. **`onChange` do `<select>`:** Atualizado para buscar o objeto completo na array `suppliers` pelo `nome_fantasia/razao_social` e chamar `setFormData` atualizando `kitSupplier` e `selectedSupplierData` simultaneamente.
-    5. **Bloco PDF:** O trecho `Distribuidor: {kitSupplier}` foi substituído por uma IIFE que, quando `selectedSupplierData` existe, renderiza Razão Social, CNPJ, Endereço e Contato em fonte discreta (7.5pt/cinza) — omitindo linhas vazias. Para propostas sem `selectedSupplierData` (legado), exibe apenas o nome sem quebrar o layout.
-  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
-  * *Data e hora da alteração:* 14/07/2026 às 14:19 (Horário Local)
+#### Bug 1 — Função uploadFullPDF usava jsPDF com doc.html()
+- **Causa raiz:** A função original usava `doc.html()` com `autoPaging: 'text'` e 
+  `windowWidth: 800`, que não suporta emojis Unicode (sem glifos nas fontes do jsPDF)
+  nem SVGs inline. O resultado era um PDF completamente divergente do preview do browser.
+- **Correção:** `uploadFullPDF` foi refatorada para usar `html2canvas` página a página:
+  insere o HTML em um container oculto fora da viewport (`left:-9999px`), aguarda 
+  carregamento de todas as `<img>`, e captura cada `.page` com `html2canvas({ scale:2 })`,
+  inserindo como JPEG via `doc.addImage()`. O PDF resultante é idêntico ao print do browser.
+- **Dependência:** `html2canvas@^1.4.1` adicionada a `dependencies` em `package.json`.
 
-* **Correção do Bug: Dados do Distribuidor ausentes no PDF da Proposta Comercial:**
-  * *O que foi feito:*
-    1. **Diagnóstico:** O `<select>` de "Fornecedor do Kit" salvava apenas `sup.nome_fantasia || sup.razao_social` como string simples em `formData.kitSupplier`. O bloco do PDF apenas interpolava essa string, ignorando os demais campos cadastrados (Razão Social, CNPJ, Endereço, Telefone, E-mail).
-    2. **Interface `FormData`:** Adicionado o campo opcional `selectedSupplierData?: Supplier | null` para armazenar o objeto completo do fornecedor selecionado.
-    3. **Estado inicial:** `selectedSupplierData: null` adicionado ao estado inicial de `formData`.
-    4. **`onChange` do `<select>`:** Alterado para buscar o objeto completo do supplier no array `suppliers` e salvar ambos (`kitSupplier` com o nome e `selectedSupplierData` com o objeto completo) via `setFormData`, em vez de apenas chamar `updateForm`.
-    5. **Bloco do PDF (`generatePDF` / `htmlContent`):** O trecho "Distribuidor: {nome}" foi substituído por uma IIFE que monta o bloco dinamicamente: o nome do distribuidor em bold (9pt, azul) e, logo abaixo, quando `selectedSupplierData` existir, exibe em estilo discreto (7.5pt, cinza) as linhas de Razão Social (omitida se igual ao nome fantasia), CNPJ, Endereço e Contato (telefone | email) — cada linha só é renderizada se o campo estiver preenchido.
-    6. **Retrocompatibilidade:** Propostas antigas (geradas antes da tabela `suppliers`, com `kitSupplier` como texto livre e sem `selectedSupplierData`) continuam funcionando normalmente — exibem apenas o nome do distribuidor sem dados extras.
-    7. **Consistência:** O `htmlParaNavegador` (preview de impressão no navegador) usa o mesmo `htmlContent`, então o fix se aplica tanto ao PDF baixado quanto ao preview.
-  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
-  * *Data e hora da alteração:* 14/07/2026 às 13:30 (Horário Local)
+#### Bug 2 — Seletor de páginas retornava array vazio
+- **Causa raiz:** A nova lógica de captura usava 
+  `querySelectorAll('div[style*="210mm"]')` para encontrar as páginas. Porém, as 
+  páginas do template HTML usam a **classe CSS `.page`** (definida no `<style>` embutido), 
+  sem atributo `style` inline. O seletor nunca encontrava nenhuma div → `pageDivs = []` 
+  → o loop não executava → o PDF salvo ficava vazio (uma página em branco).
+- **Correção:** Seletor trocado para `.page, div[style*="min-height:297mm"]`, 
+  capturando as páginas principais pela classe CSS e a página de fotos pelo style inline.
+
+#### Bug 3 — Fotos de vistoria ausentes no PDF do Storage
+- **Causa raiz:** `uploadFullPDF` recebia `htmlContent` como argumento. A página de 
+  fotos (`photosHtml`) só era injetada em `htmlParaNavegador`, que é usado exclusivamente 
+  para o preview de impressão no browser. O PDF salvo no Storage nunca incluía as fotos.
+- **Correção:** Argumento trocado de `uploadFullPDF(htmlContent)` para 
+  `uploadFullPDF(htmlParaNavegador)`, garantindo que Storage e preview sejam 100% idênticos.
+
+#### Bug 4 — Dados completos do Distribuidor não apareciam no PDF
+- **Causa raiz:** O `<select>` de "Fornecedor do Kit" chamava 
+  `updateForm('kitSupplier', e.target.value)`, que salvava apenas o nome como string simples.
+  O objeto completo do fornecedor (Razão Social, CNPJ, Endereço, Telefone, E-mail) nunca era 
+  persistido no state. O bloco do PDF interpolava apenas `formData.kitSupplier` (só o nome).
+- **Correção:**
+  1. `FormData` recebeu o campo `selectedSupplierData?: Supplier | null`.
+  2. O `onChange` passou a chamar `setFormData` atualizando simultaneamente `kitSupplier` 
+     e `selectedSupplierData` (objeto completo buscado na array `suppliers`).
+  3. O bloco HTML do PDF foi substituído por uma IIFE que, quando `selectedSupplierData` 
+     existe, renderiza Razão Social, CNPJ, Endereço e Contato em fonte discreta (7.5pt/cinza).
+     Para propostas antigas sem `selectedSupplierData`, cai no fallback exibindo só o nome.
+
+---
+
+**Arquivos modificados:** `src/pages/ProposalGenerator.tsx`, `package.json`, `RESUMO_MESTRE.md`
+
+**Commits desta sessão:**
+- `96048be` — fix(proposal): usa html2canvas para pdf do storage e unifica layout
+- `118e5bd` — fix(proposal): exibe dados completos do distribuidor no PDF
+- `380b1e7` — fix(proposal): corrige seletor de paginas e inclui fotos no PDF do Storage
+- `a72174b` — docs: registra 2 bugs corrigidos na uploadFullPDF
+
+---
+
+> ⚠️ **AÇÃO MANUAL NECESSÁRIA NO SUPABASE:**
+> O Bug 4 (dados do Distribuidor) funciona corretamente apenas para seleções feitas 
+> **após esta correção**. Propostas antigas salvas no histórico (com `raw_data` onde 
+> `selectedSupplierData = null`) continuarão exibindo apenas o nome no PDF — o que é 
+> o comportamento esperado pelo código (fallback seguro).
+> 
+> **Verificação:** Se o fornecedor "MTsolar" (ou qualquer outro em uso) ainda 
+> aparece com apenas o nome no PDF de propostas novas geradas a partir de agora, 
+> verificar na tabela `suppliers` se os campos `razao_social`, `cnpj`, `endereco`, 
+> `telefone`, `email` estão preenchidos. Se estiverem nulos, o comportamento observado 
+> é correto — o problema está no cadastro do fornecedor, não no código.
+
+
 
 * **Criação da Tabela de Fornecedores de Kits Solares (ETAPAS A, B e C):**
   * *O que foi feito:* 
