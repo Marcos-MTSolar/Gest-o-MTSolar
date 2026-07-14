@@ -4,6 +4,29 @@
 
 ## Alterações — Sessão 14/07/2026
 
+* **Correção: PDF do Histórico divergente do gerado (Problema de jsPDF):**
+  * *O que foi feito:*
+    1. **Diagnóstico:** O PDF baixado do histórico estava corrompido (emojis como caracteres estranhos, SVGs omitidos, formatação desalinhada, cabeçalho de texto sobrepondo fotos) porque o `doc.html()` com `windowWidth: 800` do jsPDF não suportava Emojis Unicode nem renderização SVG com `autoPaging: 'text'`.
+    2. **Instalação:** Adicionada a biblioteca `html2canvas` como dependência explícita.
+    3. **Nova lógica `uploadFullPDF`:** A função foi completamente refatorada. Em vez de injetar todo o texto via `doc.html()`, agora inserimos o HTML completo em um container oculto fora da viewport (`left:-9999px`), e esperamos o carregamento completo de todas as imagens.
+    4. **Captura página a página:** A nova lógica itera por cada div de página (`div[style*="210mm"]`) e captura usando `html2canvas` em alta resolução (`scale: 2`), inserindo como imagem PNG no PDF com `doc.addImage()`.
+    5. **Fidelidade e Limpeza:** Isso garante que o PDF final (tanto o de geração quanto o salvo no Histórico) é agora **100% idêntico** ao preview do navegador.
+    6. **Remoção de sobreposições:** O antigo código `doc.setPage()` que adicionava texto pós-geração foi removido, sanando a sobreposição em páginas de fotos, uma vez que cada `.page` do HTML já inclui seu próprio cabeçalho decorativo.
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`, `package.json`
+  * *Data e hora da alteração:* 14/07/2026 às 13:45 (Horário Local)
+
+* **Correção do Bug: Dados do Distribuidor ausentes no PDF da Proposta Comercial:**
+  * *O que foi feito:*
+    1. **Diagnóstico:** O `<select>` de "Fornecedor do Kit" salvava apenas `sup.nome_fantasia || sup.razao_social` como string simples em `formData.kitSupplier`. O bloco do PDF apenas interpolava essa string, ignorando os demais campos cadastrados (Razão Social, CNPJ, Endereço, Telefone, E-mail).
+    2. **Interface `FormData`:** Adicionado o campo opcional `selectedSupplierData?: Supplier | null` para armazenar o objeto completo do fornecedor selecionado.
+    3. **Estado inicial:** `selectedSupplierData: null` adicionado ao estado inicial de `formData`.
+    4. **`onChange` do `<select>`:** Alterado para buscar o objeto completo do supplier no array `suppliers` e salvar ambos (`kitSupplier` com o nome e `selectedSupplierData` com o objeto completo) via `setFormData`, em vez de apenas chamar `updateForm`.
+    5. **Bloco do PDF (`generatePDF` / `htmlContent`):** O trecho "Distribuidor: {nome}" foi substituído por uma IIFE que monta o bloco dinamicamente: o nome do distribuidor em bold (9pt, azul) e, logo abaixo, quando `selectedSupplierData` existir, exibe em estilo discreto (7.5pt, cinza) as linhas de Razão Social (omitida se igual ao nome fantasia), CNPJ, Endereço e Contato (telefone | email) — cada linha só é renderizada se o campo estiver preenchido.
+    6. **Retrocompatibilidade:** Propostas antigas (geradas antes da tabela `suppliers`, com `kitSupplier` como texto livre e sem `selectedSupplierData`) continuam funcionando normalmente — exibem apenas o nome do distribuidor sem dados extras.
+    7. **Consistência:** O `htmlParaNavegador` (preview de impressão no navegador) usa o mesmo `htmlContent`, então o fix se aplica tanto ao PDF baixado quanto ao preview.
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
+  * *Data e hora da alteração:* 14/07/2026 às 13:30 (Horário Local)
+
 * **Criação da Tabela de Fornecedores de Kits Solares (ETAPAS A, B e C):**
   * *O que foi feito:* 
     1. **Banco de Dados:** Criada a tabela `suppliers` no Supabase, incluindo colunas estruturadas (`razao_social`, `cnpj`, `nome_fantasia`, `endereco`, `telefone`, `email`), isolamento multi-tenant via `company_id`, e RLS onde leitura é pública para vendedores e edição é restrita a ADMIN/CEO.

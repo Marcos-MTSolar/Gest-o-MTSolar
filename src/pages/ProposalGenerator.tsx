@@ -273,6 +273,7 @@ export default function ProposalGenerator() {
     includePhotos: false,
     photos: [],
     kitSupplier: '',
+  selectedSupplierData: null,
     financeGracePeriod: '3',
     financeDownPayment: '',
     financeBanco: 'BV',
@@ -2430,261 +2431,94 @@ export default function ProposalGenerator() {
     const uploadFullPDF = async (html: string) => {
       try {
         const { jsPDF } = await import('jspdf');
+        const html2canvas = (await import('html2canvas')).default;
         const doc = new jsPDF('p', 'mm', 'a4');
         
-        const pageWidth = 210;
-        const pageHeight = 297;
+        const pageWidth  = 210; // mm
+        const pageHeight = 297; // mm
 
-        // Extrair apenas o conteúdo do body para o jsPDF.html (sem as fotos HTML)
-        const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-        const content = bodyMatch ? bodyMatch[1] : html;
+        // ETAPA 1: Criar container oculto fora da viewport
+        const container = document.createElement('div');
+        container.style.cssText = [
+          'position:fixed',
+          'top:0',
+          'left:-9999px',
+          'width:210mm',
+          'visibility:hidden',
+          'z-index:-1',
+          'pointer-events:none',
+          'overflow:visible',
+        ].join(';');
+        container.innerHTML = html;
+        document.body.appendChild(container);
 
-        await doc.html(content, {
-          x: 0,
-          y: 0,
-          width: 210,
-          windowWidth: 800,
-          autoPaging: 'text'
-        });
+        try {
+          // ETAPA 2: Aguardar todas as <img> carregarem
+          const imgs = Array.from(container.querySelectorAll('img'));
+          await Promise.all(
+            imgs.map(img =>
+              new Promise<void>(resolve => {
+                if (img.complete && img.naturalHeight !== 0) {
+                  resolve();
+                  return;
+                }
+                const timeout = setTimeout(resolve, 15000);
+                img.onload  = () => { clearTimeout(timeout); resolve(); };
+                img.onerror = () => { clearTimeout(timeout); resolve(); };
+              })
+            )
+          );
 
-        // =========================================================
-        // ADICIONAR FOTOS MANUALMENTE COM jsPDF.addImage()
-        // =========================================================
-        if (formData.includePhotos && formData.photos && formData.photos.length > 0) {
-          doc.addPage();
-          
-          const margemEsquerda = 15;
-          const margemDireita  = 15;
-          const MARGEM_SUPERIOR_FOTO = 15;
-          const MARGEM_INFERIOR_FOTO = 20;
-          const LIMITE_Y_FOTO = pageHeight - MARGEM_INFERIOR_FOTO;
-          
-          let y = MARGEM_SUPERIOR_FOTO;
-          
-          doc.setTextColor(30, 58, 95);
-          doc.setFontSize(14);
-          doc.setFont('helvetica', 'bold');
-          doc.text("Fotos de Vistoria Técnica", margemEsquerda, y + 5);
-          
-          y += 15;
-          
-          const photoWidth  = pageWidth - margemEsquerda - margemDireita;
-          const photoHeight = 100;
-          const spacing     = 10;
-          
-          for (let i = 0; i < formData.photos.length; i++) {
-            const photoUrl = formData.photos[i];
-            try {
-              // 1. Fetch da imagem (URL pública/assinada do Supabase)
-              const response = await fetch(photoUrl);
-              if (!response.ok) throw new Error(`HTTP ${response.status}`);
-              const blob = await response.blob();
-              
-              // 2. Converter para base64 via FileReader
-              const base64 = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-              });
-              
-              // Verificar se a imagem cabe na página atual
-              if (y + photoHeight > LIMITE_Y_FOTO) {
-                doc.addPage();
-                y = MARGEM_SUPERIOR_FOTO;
-              }
-              
-              // 3. Inserir no PDF respeitando as margens horizontais e verticais
-              doc.addImage(base64, 'JPEG', margemEsquerda, y, photoWidth, photoHeight);
-              
-              // Borda decorativa leve em volta da foto
-              doc.setDrawColor(229, 231, 235); // gray-200
-              doc.setLineWidth(0.2);
-              doc.rect(margemEsquerda, y, photoWidth, photoHeight, 'S');
-
-              y += photoHeight + spacing; // Espaço para a próxima imagem
-              
-            } catch (err) {
-              console.error(`[PDF IMAGE ERROR] Falha ao carregar imagem ${i+1}:`, err);
-              // Feedback no PDF caso a imagem quebre
-              if (y + 15 > LIMITE_Y_FOTO) {
-                doc.addPage();
-                y = MARGEM_SUPERIOR_FOTO;
-              }
-              doc.setTextColor(239, 68, 68); // red-500
-              doc.setFontSize(10);
-              doc.setFont('helvetica', 'normal');
-              doc.text(`[Erro ao carregar a imagem da vistoria ${i+1}]`, margemEsquerda, y + 5);
-              y += 15;
-            }
-          }
-        }
-        // =========================================================
-
-        // =========================================================
-        // MELHORIA 4 — TABELA DE MATERIAIS COM PAGINAÇÃO CONTROLADA
-        // Antes de cada linha, verifica se y + alturaLinha ultrapassa
-        // pageHeight - margemInferior (35mm). Se sim: addPage() + redesenho
-        // do cabeçalho da tabela (Item, Descrição, Qtd, Valor Unit., Valor Total).
-        // =========================================================
-        if (itensEstrutura.length > 0) {
-          const mat_margEsq     = 15;
-          const mat_margSup     = 20;
-          const mat_margemInf   = 35; // espaço reservado para o rodapé
-          const mat_alturaLinha = 8;  // altura de cada linha em mm
-          const mat_larguraTab  = 180;
-
-          doc.addPage();
-          let mat_y = mat_margSup;
-
-          // Bloco de título da seção
-          doc.setFillColor(30, 58, 95);
-          doc.rect(mat_margEsq, mat_y, mat_larguraTab, 11, 'F');
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(11);
-          doc.setTextColor(245, 158, 11);
-          doc.text('Lista de Materiais — Estrutura de Fixação', mat_margEsq + 3, mat_y + 7.5);
-          doc.setTextColor(0, 0, 0);
-          mat_y += 15;
-
-          // Função que desenha o cabeçalho da tabela na posição atual de mat_y
-          const desenharCabecalhoTabMat = () => {
-            doc.setFillColor(30, 58, 95);
-            doc.rect(mat_margEsq, mat_y, mat_larguraTab, mat_alturaLinha, 'F');
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(8.5);
-            // Coluna Item
-            doc.setTextColor(245, 158, 11);
-            doc.text('Item', mat_margEsq + 2, mat_y + 5.5);
-            // Coluna Descrição
-            doc.text('Descrição', mat_margEsq + 14, mat_y + 5.5);
-            // Colunas numéricas
-            doc.setTextColor(255, 255, 255);
-            doc.text('Qtd',        mat_margEsq + 120, mat_y + 5.5, { align: 'right' });
-            doc.text('Valor Unit.', mat_margEsq + 147, mat_y + 5.5, { align: 'right' });
-            doc.text('Valor Total', mat_margEsq + 175, mat_y + 5.5, { align: 'right' });
-            doc.setTextColor(0, 0, 0);
-            mat_y += mat_alturaLinha;
-          };
-
-          // Desenha o primeiro cabeçalho
-          desenharCabecalhoTabMat();
-
-          // Renderiza cada linha com verificação de margem inferior
-          itensEstrutura.forEach((item, idx) => {
-            // VERIFICAÇÃO PRINCIPAL: se y + linha ultrapassa o limite inferior da página
-            if (mat_y + mat_alturaLinha > pageHeight - mat_margemInf) {
-              doc.addPage();
-              mat_y = mat_margSup;
-              desenharCabecalhoTabMat(); // Redesenha cabeçalho na nova página
-            }
-
-            // Zebra striping nas linhas
-            if (idx % 2 === 0) {
-              doc.setFillColor(248, 250, 252);
-              doc.rect(mat_margEsq, mat_y, mat_larguraTab, mat_alturaLinha, 'F');
-            }
-
-            // Linha divisória inferior
-            doc.setDrawColor(229, 231, 235);
-            doc.setLineWidth(0.1);
-            doc.line(mat_margEsq, mat_y + mat_alturaLinha, mat_margEsq + mat_larguraTab, mat_y + mat_alturaLinha);
-
-            // Texto das células
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(8.5);
-            doc.setTextColor(55, 65, 81);
-
-            // Nº do item
-            doc.text(`${idx + 1}`, mat_margEsq + 2, mat_y + 5.5);
-
-            // Descrição (truncar em 65 caracteres)
-            const descMax = 65;
-            const descricao = item.nome.length > descMax
-              ? item.nome.substring(0, descMax - 3) + '...'
-              : item.nome;
-            doc.text(descricao, mat_margEsq + 14, mat_y + 5.5);
-
-            // Qtd, Valor Unit., Valor Total (sem valores monetários nos itens de estrutura)
-            doc.setTextColor(100, 116, 139);
-            const matchQtd = item.nome.match(/Qtd:\s*(\d+)/);
-            const qtdStr = matchQtd ? matchQtd[1] : '1';
-            doc.text(qtdStr, mat_margEsq + 120, mat_y + 5.5, { align: 'right' });
-            doc.setFontSize(7.5);
-            doc.text('Incluso no Kit', mat_margEsq + 147, mat_y + 5.5, { align: 'right' });
-            doc.text('Incluso no Kit', mat_margEsq + 175, mat_y + 5.5, { align: 'right' });
-            doc.setFontSize(8.5);
-
-            mat_y += mat_alturaLinha;
+          // ETAPA 3: Capturar cada página com html2canvas
+          const pageDivs = Array.from(
+            container.querySelectorAll<HTMLElement>('div[style*="210mm"]')
+          ).filter(el => {
+            const style = el.getAttribute('style') || '';
+            return style.includes('height:297mm') || style.includes('min-height:297mm');
           });
 
-          // Linha de totais ao final da tabela
-          const LIMITE_Y_MAT = pageHeight - mat_margemInf;
-          if (mat_y + 12 > LIMITE_Y_MAT) {
-            doc.addPage();
-            mat_y = mat_margSup;
-          }
-          doc.setDrawColor(30, 58, 95);
-          doc.setLineWidth(0.5);
-          doc.line(mat_margEsq, mat_y + 1, mat_margEsq + mat_larguraTab, mat_y + 1);
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(9);
-          doc.setTextColor(30, 58, 95);
-          doc.text(`Total de itens: ${itensEstrutura.length}`, mat_margEsq + 2, mat_y + 7);
-          // Exibe o valor total do kit na linha de totais
-          const kitTotalFormatado = parseFloat(formData.kitCost || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-          if (parseFloat(formData.kitCost || '0') > 0) {
-            doc.text(`Valor Total do Kit: R$ ${kitTotalFormatado}`, mat_margEsq + mat_larguraTab, mat_y + 7, { align: 'right' });
-          }
-        }
-        // =========================================================
+          console.log(`[PDF html2canvas] Capturando ${pageDivs.length} páginas...`);
+          const t0 = performance.now();
 
-        // Loop pós-geração para cabeçalhos e rodapés em todas as páginas
-        const totalPages = (doc as any).internal.getNumberOfPages();
-        for (let i = 1; i <= totalPages; i++) {
-          doc.setPage(i);
-          
-          // 1. Cabeçalho nas páginas subsequentes (a partir da página 2)
-          if (i > 1) {
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(8);
-            doc.setTextColor(120, 120, 120);
+          let primeiraPage = true;
+          for (let i = 0; i < pageDivs.length; i++) {
+            const pageEl = pageDivs[i];
 
-            // Linha separadora discreta para o cabeçalho a 12mm do topo
-            doc.setDrawColor(220, 220, 220);
-            doc.setLineWidth(0.2);
-            doc.line(15, 12, 195, 12);
+            const canvas = await html2canvas(pageEl, {
+              scale: 2,
+              useCORS: true,
+              allowTaint: true,
+              logging: false,
+              width:  pageEl.scrollWidth,
+              height: pageEl.scrollHeight,
+              windowWidth:  pageEl.scrollWidth,
+              windowHeight: pageEl.scrollHeight,
+            });
 
-            // Conteúdo do cabeçalho
-            const headerLeft = `Proposta: ${propNumeroLimpo}`;
-            const headerRight = `Cliente: ${formData.clientName || 'Cliente'}`;
-            doc.text(headerLeft, 15, 9);
-            doc.text(headerRight, 195, 9, { align: 'right' });
+            const imgData = canvas.toDataURL('image/jpeg', 0.92);
+
+            if (!primeiraPage) {
+              doc.addPage();
+            }
+            primeiraPage = false;
+
+            doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+            console.log(`[PDF html2canvas] Página ${i + 1}/${pageDivs.length} capturada.`);
           }
 
-          // 2. Rodapé em todas as páginas (margem de 20mm a partir da base)
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(8);
-          doc.setTextColor(120, 120, 120);
+          const t1 = performance.now();
+          console.log(`[PDF html2canvas] Geração concluída em ${((t1 - t0) / 1000).toFixed(1)}s.`);
 
-          // Linha separadora discreta no rodapé (20mm a partir da base)
-          doc.setDrawColor(220, 220, 220);
-          doc.setLineWidth(0.2);
-          doc.line(15, pageHeight - 20, pageWidth - 15, pageHeight - 20);
-
-          // Informações da empresa no rodapé (dentro dos 20mm reservados)
-          const footerTextLine = "MT SOLAR — mtsolar.energia@gmail.com | (81) 99700-3260 | (81) 99951-7110";
-          doc.text(footerTextLine, pageWidth / 2, pageHeight - 14, { align: 'center' });
-
-          // Paginação
-          const pageText = `Página ${i} de ${totalPages}`;
-          doc.text(pageText, pageWidth - 15, pageHeight - 8, { align: 'right' });
+        } finally {
+          // ETAPA 4: Remover container do DOM
+          if (document.body.contains(container)) {
+            document.body.removeChild(container);
+          }
         }
 
         const pdfBlob = doc.output('blob');
         const fileName = `${proposalNumber}-${Date.now()}.pdf`;
 
-        // Se for aplicativo mobile, converte para base64 e compartilha nativamente
         if (Capacitor.isNativePlatform()) {
           try {
             const base64Data = await new Promise<string>((resolve, reject) => {
@@ -2736,7 +2570,6 @@ export default function ProposalGenerator() {
         return null;
       }
     };
-
     // O download do PDF (abertura da nova aba) já foi disparado via newWindow.open
     // O salvamento no histórico é feito de forma assíncrona, mas agora com feedback visual ao usuário.
     (async () => {
