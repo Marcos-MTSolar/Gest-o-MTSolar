@@ -2,7 +2,36 @@
 
 ---
 
+## Alterações — Sessão 14/07/2026
+
+* **Enriquecimento da Nota Interna de Leads do Kommo com Perfil de Qualificação:**
+  * *O que foi feito:* Diagnóstico completo confirmou que o Salesbot do Kommo (leads via Facebook Ads) não gera notas (`/notes`) nem talks de chat acessíveis via API REST — os campos de qualificação do cliente coletados pelo bot ficam armazenados apenas em `custom_fields_values` do lead e do contato. Solução implementada: (1) Criada a função `getKommoLeadFields(leadId, contactId)` em `api/index.ts`, logo após `getKommoLeadNotes()`. Ela busca `GET /leads/{id}` e `GET /contacts/{id}`, aplica whitelist de field_ids confirmados via teste real (Média de gastos, Forma de pagamento, Imóvel, Pretensão de investimento, Decisor, Melhor horário e a cidade via `Position` do contato), normaliza os values (remove underscores, remove ponto final solto, capitaliza). (2) No bloco de montagem de `notaInternaBase` dentro de `POST /api/kommo/webhook`, o `contactId` é extraído do payload do webhook em memória (`lead._embedded?.contacts?.[0]?.id`) sem nenhuma chamada extra à API, e a função `getKommoLeadFields()` é chamada. O resultado é inserido na nota entre o telefone e o campo de "Atribuído para". (3) Testado com dados reais do lead `12735628` (Marcos Aurélio, Jaboatão dos Guararapes): nota gerada confirmada visualmente com cidade e todos os 6 campos de qualificação formatados corretamente.
+  * *Nota interna resultante (exemplo real):*
+    ```
+    🤖 *Lead capturado automaticamente do Kommo CRM*
+    📌 Lead: Facebook №3289241711258405
+    👤 Nome: Marcos Aurélio
+    📱 Telefone: 5581984433272
+
+    📍 Cidade: Jaboatão dos Guararapes
+
+    📋 *Perfil do Lead (Kommo):*
+    • 💰 Média de gastos: Entre r$ 400 a r$ 1.000
+    • 💳 Forma de pagamento: Cartão de crédito/ financiamento
+    • 🏠 Imóvel: Próprio
+    • 🚀 Pretensão de investimento: Imediato
+    • ✅ Decisor: Sim, sou o decisor
+    • 🕐 Melhor horário: Tarde (12h às 18h)
+
+    👨‍💼 Atribuído para: Soraia
+    ```
+  * *Arquivos modificados:* `api/index.ts`
+  * *Data e hora da alteração:* 14/07/2026 às 12:25 (Horário Local)
+
+---
+
 ## Alterações — Sessão 07/07/2026
+
 
 * **Resiliência e Dead Letter Queue no Webhook do WhatsApp:**
   * *O que foi feito:* A rota `POST /api/webhooks/whatsapp` foi refatorada. (1) O `res.status(200)` foi movido do início para o final da função para evitar o encerramento prematuro (Race Condition) na Vercel Serverless. (2) Foi implementada a tabela `webhook_failures` (Dead Letter Queue) para registrar payloads brutos sempre que houver falha não-tratada, impossibilidade de resolver o `company_id` da instância ou falhas no `upsert` do Supabase. (3) Todos os inserts na `webhook_failures` gravam `company_id`: `null` quando a empresa ainda não foi identificada (ex: instância desconhecida), ou o valor real quando a falha ocorreu após a resolução da empresa. (4) Criada a rota de diagnóstico `GET /api/webhook-failures` exclusiva para CEO/ADMIN.

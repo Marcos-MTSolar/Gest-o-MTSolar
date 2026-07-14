@@ -4878,6 +4878,90 @@ async function getKommoLeadNotes(leadId: string): Promise<string> {
   }
 }
 
+// Helper: busca os campos customizados de qualificação do lead/contato no Kommo
+// e monta um bloco de texto estruturado para a nota interna do vendedor.
+// contactId é opcional — se fornecido, busca também a cidade do contato sem nova chamada duplicada.
+async function getKommoLeadFields(leadId: string, contactId: string | null): Promise<string> {
+  // Whitelist de field_ids do LEAD com emoji e label legível
+  const LEAD_FIELDS: Record<number, { label: string; emoji: string }> = {
+    465554: { label: 'Média de gastos',           emoji: '💰' },
+    465440: { label: 'Forma de pagamento',         emoji: '💳' },
+    801476: { label: 'Imóvel',                     emoji: '🏠' },
+    800400: { label: 'Pretensão de investimento',  emoji: '🚀' },
+    465556: { label: 'Decisor',                    emoji: '✅' },
+    801052: { label: 'Melhor horário',             emoji: '🕐' },
+  };
+
+  // field_id do campo "Position" no CONTATO (cidade)
+  const CONTACT_CITY_FIELD_ID = 445000;
+
+  // Normaliza o value: troca underscore por espaço, remove ponto final solto,
+  // capitaliza a primeira letra e corrige "r$" → "R$" (moeda brasileira)
+  function normalizeValue(val: string): string {
+    return val
+      .replace(/_/g, ' ')
+      .replace(/\.\s*$/, '')
+      .replace(/^./, (c) => c.toUpperCase())
+      .replace(/\br\$/gi, 'R$')
+      .trim();
+  }
+
+  try {
+    // --- 1. Busca dados do LEAD ---
+    const leadData = await kommoApi(`/leads/${leadId}`);
+    if (!leadData) {
+      console.warn(`[KOMMO FIELDS] Não foi possível buscar dados do lead ${leadId}`);
+      return '';
+    }
+
+    const leadFields: string[] = [];
+    const customFieldsLead: any[] = leadData.custom_fields_values || [];
+
+    for (const field of customFieldsLead) {
+      const config = LEAD_FIELDS[field.field_id as number];
+      if (!config) continue; // Ignora campos fora da whitelist (ex: Status do Lead)
+
+      const rawValue = field.values?.[0]?.value;
+      if (!rawValue) continue;
+
+      const normalized = normalizeValue(String(rawValue));
+      if (normalized) {
+        leadFields.push(`• ${config.emoji} ${config.label}: ${normalized}`);
+      }
+    }
+
+    // --- 2. Busca cidade no CONTATO (apenas se contactId disponível) ---
+    let cidadeLinha = '';
+    if (contactId) {
+      const contactData = await kommoApi(`/contacts/${contactId}`);
+      if (contactData) {
+        const customFieldsContact: any[] = contactData.custom_fields_values || [];
+        const cityField = customFieldsContact.find((f: any) => f.field_id === CONTACT_CITY_FIELD_ID);
+        const cityValue = cityField?.values?.[0]?.value;
+        if (cityValue) {
+          cidadeLinha = `📍 Cidade: ${normalizeValue(String(cityValue))}`;
+        }
+      }
+    }
+
+    // --- 3. Monta bloco de texto final ---
+    if (leadFields.length === 0 && !cidadeLinha) return '';
+
+    const linhas: string[] = [];
+    if (cidadeLinha) linhas.push(cidadeLinha);
+    if (leadFields.length > 0) {
+      linhas.push('');
+      linhas.push('📋 *Perfil do Lead (Kommo):*');
+      linhas.push(...leadFields);
+    }
+
+    return linhas.join('\n');
+  } catch (err) {
+    console.error('[KOMMO FIELDS] Erro ao buscar campos customizados do lead:', err);
+    return '';
+  }
+}
+
 // Webhook: recebe leads do Kommo CRM e distribui via Round-Robin
 app.post('/api/kommo/webhook', async (req, res) => {
   try {
@@ -5118,12 +5202,22 @@ app.post('/api/kommo/webhook', async (req, res) => {
       // 5. Busca histórico do bot e cria nota interna na conversa
       const notasBot = await getKommoLeadNotes(leadId);
 
+      // Extrai o contactId diretamente do payload do webhook (sem nova chamada à API)
+      const contactIdDoPayload: string | null =
+        lead._embedded?.contacts?.[0]?.id != null
+          ? String(lead._embedded.contacts[0].id)
+          : null;
+
+      // Busca campos de qualificação (custom_fields_values) do lead e cidade do contato
+      const perfilLead = await getKommoLeadFields(leadId, contactIdDoPayload);
+
       const notaInternaBase = [
         `🤖 *Lead capturado automaticamente do Kommo CRM*`,
         `📌 Lead: ${lead.name || 'Sem título'}`,
         contactName ? `👤 Nome: ${contactName}` : null,
         `📱 Telefone: ${contactPhone}`,
-        vendedor ? `👨‍💼 Atribuído para: ${vendedor.name}` : `⏳ Aguardando atendente na fila`,
+        perfilLead ? `\n${perfilLead}` : null,
+        `\n${vendedor ? `👨‍💼 Atribuído para: ${vendedor.name}` : `⏳ Aguardando atendente na fila`}`,
         notasBot ? `\n${notasBot}` : null
       ].filter(Boolean).join('\n');
 
