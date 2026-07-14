@@ -178,7 +178,7 @@ export default function Contracts() {
 
     addText(`Pelo presente instrumento particular de contrato de venda e instalação de sistema de geração de energia solar fotovoltaico, entre partes, a saber, de um lado, ${formData.nome_contratante || '{{ nome_contratante }}'}, ${g.portador} do CPF/CNPJ: ${formData.cpf_cnpj_contratante || '{{ cpf_cnpj_contratante }}'}, residente em ${formData.endereco_contratante || '{{ endereco_contratante }}'}, CEP ${formData.cep_contratante || '{{ cep_contratante }}'}, ${formData.cidade_estado_contratante || '{{ cidade_estado_contratante }}'}, doravante designad${g.o} CONTRATANTE.`);
 
-    addText(`E, de outro lado, a empresa MT SOLAR ENERGIA RENOVAVEL, inscrita no CNPJ sob o nº 51.713.487/0001-90, com sede na Rua Rossini Roosevelt de Albuquerque, nº 10, sala 103, Piedade, Jaboatão dos Guararapes – PE, integrador credenciado ${formData.nome_integrador}, CNPJ nº: ${formData.cnpj_integrador}, neste ato representa por seu sócio, Marcos Aurélio Silva do Nascimento, inscrita no CPF nº 092.375.674-48 e RG: 7.834.135 SDS/PE, adiante denominada CONTRATADA.`);
+    addText(`E, de outro lado, a empresa MT SOLAR ENERGIA RENOVAVEL, inscrita no CNPJ sob o nº 51.713.487/0001-90, com sede na Rua Rossini Roosevelt de Albuquerque, nº 10, sala 103, Piedade, Jaboatão dos Guararapes – PE, neste ato representa por seu sócio, Marcos Aurélio Silva do Nascimento, inscrita no CPF nº 092.375.674-48 e RG: 7.834.135 SDS/PE, adiante denominada CONTRATADA.`);
 
     addText('As partes acima identificadas têm, entre si, justas e acertadas o presente contrato, que se regerá pelas cláusulas seguintes:');
 

@@ -4,6 +4,15 @@
 
 ## Alterações — Sessão 14/07/2026
 
+* **Criação da Tabela de Fornecedores de Kits Solares (ETAPAS A, B e C):**
+  * *O que foi feito:* 
+    1. **Banco de Dados:** Criada a tabela `suppliers` no Supabase, incluindo colunas estruturadas (`razao_social`, `cnpj`, `nome_fantasia`, `endereco`, `telefone`, `email`), isolamento multi-tenant via `company_id`, e RLS onde leitura é pública para vendedores e edição é restrita a ADMIN/CEO.
+    2. **Backend:** Implementado CRUD completo (`GET`, `POST`, `PUT`, `DELETE` em `/api/suppliers`) no arquivo `api/index.ts`, com proteção baseada em token (`authenticateToken`) e regras de escopo.
+    3. **Frontend:** No `ProposalGenerator.tsx`, o campo livre de "Fornecedor do Kit" foi substituído por um `<select>` que carrega dinamicamente os distribuidores da base de dados. Adicionada a interface de gerenciamento: Administradores e CEOs agora veem o botão "Gerenciar Distribuidores" para cadastrar novos fornecedores via modal pop-up, além de um botão lateral para editar rapidamente o fornecedor selecionado.
+  * *Arquivos modificados:* `supabase/migrations/20260714_create_suppliers.sql`, `api/index.ts`, `src/pages/ProposalGenerator.tsx`
+  * *Data e hora da alteração:* 14/07/2026 às 12:55 (Horário Local)
+
+
 * **Enriquecimento da Nota Interna de Leads do Kommo com Perfil de Qualificação:**
   * *O que foi feito:* Diagnóstico completo confirmou que o Salesbot do Kommo (leads via Facebook Ads) não gera notas (`/notes`) nem talks de chat acessíveis via API REST — os campos de qualificação do cliente coletados pelo bot ficam armazenados apenas em `custom_fields_values` do lead e do contato. Solução implementada: (1) Criada a função `getKommoLeadFields(leadId, contactId)` em `api/index.ts`, logo após `getKommoLeadNotes()`. Ela busca `GET /leads/{id}` e `GET /contacts/{id}`, aplica whitelist de field_ids confirmados via teste real (Média de gastos, Forma de pagamento, Imóvel, Pretensão de investimento, Decisor, Melhor horário e a cidade via `Position` do contato), normaliza os values (remove underscores, remove ponto final solto, capitaliza). (2) No bloco de montagem de `notaInternaBase` dentro de `POST /api/kommo/webhook`, o `contactId` é extraído do payload do webhook em memória (`lead._embedded?.contacts?.[0]?.id`) sem nenhuma chamada extra à API, e a função `getKommoLeadFields()` é chamada. O resultado é inserido na nota entre o telefone e o campo de "Atribuído para". (3) Testado com dados reais do lead `12735628` (Marcos Aurélio, Jaboatão dos Guararapes): nota gerada confirmada visualmente com cidade e todos os 6 campos de qualificação formatados corretamente.
   * *Nota interna resultante (exemplo real):*

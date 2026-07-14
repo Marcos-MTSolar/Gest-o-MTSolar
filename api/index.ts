@@ -1590,6 +1590,43 @@ app.get('/api/attendance-registry', authenticateToken, async (req: any, res) => 
   }
 });
 
+app.get('/api/attendance-registry/kommo-tracking', authenticateToken, async (req: any, res) => {
+  try {
+    let query = supabase
+      .from('whatsapp_conversations')
+      .select(`
+        id,
+        contact_name,
+        phone,
+        kommo_status_id_origem,
+        kommo_status_id_atual,
+        assigned_to,
+        assigned_name,
+        created_at
+      `)
+      .not('kommo_status_id_origem', 'is', null)
+      .eq('company_id', req.user.company_id)
+      .order('created_at', { ascending: false });
+
+    // Isolamento para o Vendedor
+    if (req.user.role === 'COMMERCIAL') {
+      query = query.eq('assigned_to', req.user.id);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Erro ao buscar rastreio kommo:', error);
+      return res.status(500).json({ error: 'Erro ao buscar rastreio kommo' });
+    }
+
+    return res.json(data);
+  } catch (err) {
+    console.error('Exceção ao buscar rastreio kommo:', err);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
 // WhatsApp Conversations
 app.get('/api/conversations', authenticateToken, async (req: any, res) => {
   const { instance } = req.query;
@@ -4605,6 +4642,87 @@ app.delete('/api/solar-kits/:id', authenticateToken, requireAdminOrCEO, async (r
   }
 });
 
+// ============================================================================
+// FORNECEDORES / DISTRIBUIDORES (SUPPLIERS)
+// ============================================================================
+
+app.get('/api/suppliers', authenticateToken, async (req: any, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('suppliers')
+      .select('id, razao_social, cnpj, nome_fantasia, endereco, telefone, email, ativo, created_at, updated_at, company_id')
+      .eq('company_id', req.user.company_id)
+      .eq('ativo', true)
+      .order('razao_social', { ascending: true });
+    
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/suppliers', authenticateToken, requireAdminOrCEO, async (req: any, res) => {
+  try {
+    const { razao_social, cnpj, nome_fantasia, endereco, telefone, email } = req.body;
+    const payload = {
+      razao_social,
+      cnpj,
+      nome_fantasia,
+      endereco,
+      telefone,
+      email,
+      company_id: req.user.company_id
+    };
+    const { data, error } = await supabase.from('suppliers').insert([payload]).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/suppliers/:id', authenticateToken, requireAdminOrCEO, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    const { razao_social, cnpj, nome_fantasia, endereco, telefone, email } = req.body;
+    const updatePayload = {
+      razao_social,
+      cnpj,
+      nome_fantasia,
+      endereco,
+      telefone,
+      email
+    };
+    const { data, error } = await supabase
+      .from('suppliers')
+      .update(updatePayload)
+      .eq('id', id)
+      .eq('company_id', req.user.company_id)
+      .select()
+      .single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/suppliers/:id', authenticateToken, requireAdminOrCEO, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    const { error } = await supabase
+      .from('suppliers')
+      .update({ ativo: false })
+      .eq('id', id)
+      .eq('company_id', req.user.company_id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Cron: limpeza de mídias de vistoria com mais de 60 dias no R2
 app.get('/api/cron/cleanup-vistoria-midia', async (req, res) => {
   try {
@@ -5118,14 +5236,21 @@ app.post('/api/kommo/webhook', async (req, res) => {
           continue;
         }
 
-        // Atualiza o nome se estava como "Você" ou null
+        // Atualiza o nome e o status_id atual do Kommo
+        const updatesToExisting: any = {};
         if (!existingConv.contact_name || existingConv.contact_name === 'Você') {
+          updatesToExisting.contact_name = contactName;
+        }
+        if (lead.status_id) {
+          updatesToExisting.kommo_status_id_atual = String(lead.status_id);
+        }
+        if (Object.keys(updatesToExisting).length > 0) {
           await supabaseAdmin
             .from('whatsapp_conversations')
-            .update({ contact_name: contactName })
+            .update(updatesToExisting)
             .eq('id', existingConv.id);
         }
-        console.log(`[KOMMO WEBHOOK] Conversa já existe para ${contactPhone} — nome atualizado.`);
+        console.log(`[KOMMO WEBHOOK] Conversa já existe para ${contactPhone} — dados atualizados.`);
 
         // Mover lead no Kommo para coluna "CONVERSANDO"
         try {
@@ -5136,6 +5261,12 @@ app.post('/api/kommo/webhook', async (req, res) => {
             8000
           );
           console.log(`[KOMMO WEBHOOK] Lead ${lead.id} movido para CONVERSANDO no Kommo`);
+          
+          // Reflete o novo status localmente
+          await supabaseAdmin
+            .from('whatsapp_conversations')
+            .update({ kommo_status_id_atual: '107282595' })
+            .eq('id', existingConv.id);
         } catch (kommoMoveErr: any) {
           console.warn(`[KOMMO WEBHOOK] Não foi possível mover lead no Kommo: ${kommoMoveErr.message}`);
         }
@@ -5162,7 +5293,9 @@ app.post('/api/kommo/webhook', async (req, res) => {
         assigned_to: vendedor?.id ?? null,
         assigned_name: vendedor?.name ?? null,
         assigned_at: vendedor ? new Date().toISOString() : null,
-        instance: instanceName
+        instance: instanceName,
+        kommo_status_id_origem: lead.status_id ? String(lead.status_id) : null,
+        kommo_status_id_atual: lead.status_id ? String(lead.status_id) : null
       };
 
       if (tagsToInsert) {
@@ -5194,6 +5327,12 @@ app.post('/api/kommo/webhook', async (req, res) => {
             8000
           );
           console.log(`[KOMMO WEBHOOK] Lead ${lead.id} movido para CONVERSANDO no Kommo`);
+          
+          // Reflete o novo status localmente
+          await supabaseAdmin
+            .from('whatsapp_conversations')
+            .update({ kommo_status_id_atual: '107282595' })
+            .eq('id', novaConversa.id);
         } catch (kommoMoveErr: any) {
           console.warn(`[KOMMO WEBHOOK] Não foi possível mover lead no Kommo: ${kommoMoveErr.message}`);
         }

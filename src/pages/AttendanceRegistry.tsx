@@ -9,7 +9,8 @@ import {
   Clock,
   MessageSquare,
   User,
-  ArrowUpDown
+  ArrowUpDown,
+  Activity
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { differenceInDays, differenceInHours, differenceInMinutes, format } from 'date-fns';
@@ -45,11 +46,27 @@ interface ConversationRecord {
   whatsapp_observations: Observation[];
 }
 
+interface KommoTrackingRecord {
+  id: string;
+  contact_name: string;
+  phone: string;
+  kommo_status_id_origem: string;
+  kommo_status_id_atual: string;
+  assigned_to: string;
+  assigned_name: string;
+  created_at: string;
+}
+
 export default function AttendanceRegistry() {
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'registry' | 'kommo'>('registry');
+
   const [records, setRecords] = useState<ConversationRecord[]>([]);
   const [loading, setLoading] = useState(true);
   
+  const [kommoRecords, setKommoRecords] = useState<KommoTrackingRecord[]>([]);
+  const [loadingKommo, setLoadingKommo] = useState(false);
+
   // Filtros e Ordenação
   const [searchTerm, setSearchTerm] = useState('');
   const [filterAgent, setFilterAgent] = useState('');
@@ -60,6 +77,7 @@ export default function AttendanceRegistry() {
 
   useEffect(() => {
     fetchRecords();
+    fetchKommoRecords();
   }, []);
 
   const fetchRecords = async () => {
@@ -72,6 +90,25 @@ export default function AttendanceRegistry() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchKommoRecords = async () => {
+    try {
+      setLoadingKommo(true);
+      const { data } = await api.get('/api/attendance-registry/kommo-tracking');
+      setKommoRecords(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar rastreio kommo:', error);
+    } finally {
+      setLoadingKommo(false);
+    }
+  };
+
+  const getKommoStatusLabel = (statusId: string) => {
+    if (!statusId) return '-';
+    if (statusId === '107282587') return 'LEAD';
+    if (statusId === '107282595') return 'CONVERSANDO';
+    return statusId;
   };
 
   const getIdleTime = (lastMessageAt: string) => {
@@ -122,6 +159,34 @@ export default function AttendanceRegistry() {
         </div>
       </div>
 
+      {/* TABS */}
+      <div className="flex border-b border-gray-200 mb-6">
+        <button
+          onClick={() => setActiveTab('registry')}
+          className={cn(
+            "py-3 px-6 font-medium text-sm border-b-2 transition-colors outline-none",
+            activeTab === 'registry' 
+              ? "border-blue-600 text-blue-600" 
+              : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+          )}
+        >
+          Atendimentos Ativos
+        </button>
+        <button
+          onClick={() => setActiveTab('kommo')}
+          className={cn(
+            "py-3 px-6 font-medium text-sm border-b-2 transition-colors outline-none flex items-center gap-2",
+            activeTab === 'kommo' 
+              ? "border-blue-600 text-blue-600" 
+              : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+          )}
+        >
+          <Activity size={16} />
+          Rastreio Kommo
+        </button>
+      </div>
+
+      {activeTab === 'registry' && (
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100 bg-gray-50/50">
           <div className="flex flex-col md:flex-row gap-4">
@@ -339,6 +404,78 @@ export default function AttendanceRegistry() {
           </table>
         </div>
       </div>
+      )}
+
+      {activeTab === 'kommo' && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="px-6 py-4 font-bold text-gray-600 text-sm">Cliente</th>
+                  <th className="px-6 py-4 font-bold text-gray-600 text-sm">Origem (Entrada)</th>
+                  <th className="px-6 py-4 font-bold text-gray-600 text-sm">Status Atual (Kommo)</th>
+                  <th className="px-6 py-4 font-bold text-gray-600 text-sm">Responsável (MTSolar)</th>
+                  <th className="px-6 py-4 font-bold text-gray-600 text-sm">Data de Chegada</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingKommo ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                      Carregando rastreio Kommo...
+                    </td>
+                  </tr>
+                ) : kommoRecords.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                      Nenhum lead com origem no Kommo encontrado.
+                    </td>
+                  </tr>
+                ) : (
+                  kommoRecords.map((record) => (
+                    <tr key={record.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-gray-800">{record.contact_name || "Sem Nome"}</span>
+                          <span className="text-xs text-gray-500">{record.phone}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs font-bold rounded">
+                          {getKommoStatusLabel(record.kommo_status_id_origem)}
+                        </span>
+                        <div className="text-[10px] text-gray-400 mt-1">ID: {record.kommo_status_id_origem || '-'}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={cn(
+                          "px-2 py-1 text-xs font-bold rounded text-white",
+                          record.kommo_status_id_atual === '107282595' ? "bg-blue-500" : "bg-purple-500"
+                        )}>
+                          {getKommoStatusLabel(record.kommo_status_id_atual)}
+                        </span>
+                        <div className="text-[10px] text-gray-400 mt-1">ID: {record.kommo_status_id_atual || '-'}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <User size={14} className="text-gray-400" />
+                          <span className="font-medium text-gray-700 text-sm">{record.assigned_name || 'Fila de Espera'}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Clock size={14} className="text-gray-400" />
+                          {format(new Date(record.created_at), 'dd/MM/yyyy HH:mm')}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

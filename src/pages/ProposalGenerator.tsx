@@ -54,6 +54,17 @@ interface SolarKit {
   ativo: boolean;
 }
 
+interface Supplier {
+  id: string;
+  razao_social: string;
+  cnpj: string;
+  nome_fantasia: string;
+  endereco: string;
+  telefone: string;
+  email: string;
+  ativo: boolean;
+}
+
 interface StructureItem {
   id: string;
   name: string;
@@ -213,6 +224,21 @@ export default function ProposalGenerator() {
   const [savingKit, setSavingKit] = useState(false);
   const [selectedKitId, setSelectedKitId] = useState<string>('');
 
+  // --- Estados para Fornecedores (Suppliers) ---
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
+  const [showSupplierModal, setShowSupplierModal] = useState(false);
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [supplierForm, setSupplierForm] = useState<Omit<Supplier, 'id' | 'ativo'>>({
+    razao_social: '',
+    cnpj: '',
+    nome_fantasia: '',
+    endereco: '',
+    telefone: '',
+    email: ''
+  });
+  const [savingSupplier, setSavingSupplier] = useState(false);
+
   const [formData, setFormData] = useState<FormData>({
     clientName: '',
     clientPhone: '',
@@ -323,8 +349,23 @@ export default function ProposalGenerator() {
     if (activeTab === 'kits') fetchSolarKits();
   }, [activeTab]);
 
-  // Carrega kits ao entrar na aba Kit Solar (para o dropdown do vendedor)
-  useEffect(() => { fetchSolarKits(); }, []);
+  // Carrega kits e fornecedores ao entrar no componente
+  useEffect(() => { 
+    fetchSolarKits(); 
+    fetchSuppliers();
+  }, []);
+
+  const fetchSuppliers = async () => {
+    setLoadingSuppliers(true);
+    try {
+      const res = await api.get('/api/suppliers');
+      setSuppliers(res.data ?? []);
+    } catch (err) {
+      console.error('Erro ao carregar fornecedores:', err);
+    } finally {
+      setLoadingSuppliers(false);
+    }
+  };
 
   const fetchSolarKits = async () => {
     setLoadingKits(true);
@@ -388,6 +429,59 @@ export default function ProposalGenerator() {
       fetchSolarKits();
     } catch (err: any) {
       alert('Erro ao desativar kit: ' + (err?.response?.data?.error || err.message));
+    }
+  };
+
+  const openNewSupplierModal = () => {
+    setEditingSupplier(null);
+    setSupplierForm({
+      razao_social: '',
+      cnpj: '',
+      nome_fantasia: '',
+      endereco: '',
+      telefone: '',
+      email: ''
+    });
+    setShowSupplierModal(true);
+  };
+
+  const openEditSupplierModal = (supplier: Supplier) => {
+    setEditingSupplier(supplier);
+    setSupplierForm({
+      razao_social: supplier.razao_social,
+      cnpj: supplier.cnpj || '',
+      nome_fantasia: supplier.nome_fantasia || '',
+      endereco: supplier.endereco || '',
+      telefone: supplier.telefone || '',
+      email: supplier.email || ''
+    });
+    setShowSupplierModal(true);
+  };
+
+  const saveSupplier = async () => {
+    setSavingSupplier(true);
+    try {
+      if (editingSupplier) {
+        await api.put(`/api/suppliers/${editingSupplier.id}`, supplierForm);
+      } else {
+        await api.post('/api/suppliers', supplierForm);
+      }
+      setShowSupplierModal(false);
+      fetchSuppliers();
+    } catch (err: any) {
+      alert('Erro ao salvar fornecedor: ' + (err?.response?.data?.error || err.message));
+    } finally {
+      setSavingSupplier(false);
+    }
+  };
+
+  const deactivateSupplier = async (id: string) => {
+    if (!window.confirm('Deseja desativar este fornecedor? Ele não aparecerá mais para seleção.')) return;
+    try {
+      await api.delete(`/api/suppliers/${id}`);
+      fetchSuppliers();
+    } catch (err: any) {
+      alert('Erro ao desativar fornecedor: ' + (err?.response?.data?.error || err.message));
     }
   };
 
@@ -3500,14 +3594,45 @@ export default function ProposalGenerator() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">Fornecedor do Kit</label>
-                <input 
-                  type="text" 
-                  value={formData.kitSupplier}
-                  onChange={(e) => updateForm('kitSupplier', e.target.value)}
-                  className={inputStyle}
-                  placeholder="Ex: Aldo Solar, WEG, etc."
-                />
+                <div className="flex justify-between items-end mb-1">
+                  <label className="text-sm font-medium text-gray-700">Fornecedor do Kit</label>
+                  {isAdminOrCeo && (
+                    <button
+                      type="button"
+                      onClick={openNewSupplierModal}
+                      className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1"
+                    >
+                      <Plus size={12} /> Gerenciar Distribuidores
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <select
+                    value={formData.kitSupplier}
+                    onChange={(e) => updateForm('kitSupplier', e.target.value)}
+                    className={inputStyle}
+                  >
+                    <option value="">— Selecione (Opcional) —</option>
+                    {suppliers.map(sup => (
+                      <option key={sup.id} value={sup.nome_fantasia || sup.razao_social}>
+                        {sup.nome_fantasia || sup.razao_social}
+                      </option>
+                    ))}
+                  </select>
+                  {isAdminOrCeo && formData.kitSupplier && suppliers.find(s => (s.nome_fantasia || s.razao_social) === formData.kitSupplier) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const sup = suppliers.find(s => (s.nome_fantasia || s.razao_social) === formData.kitSupplier);
+                        if(sup) openEditSupplierModal(sup);
+                      }}
+                      className="px-3 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-lg text-gray-600"
+                      title="Editar Distribuidor"
+                    >
+                      <Edit size={16} />
+                    </button>
+                  )}
+                </div>
                 <p className="text-[10px] text-gray-400">Opcional - se preenchido, aparece na proposta</p>
               </div>
 
@@ -4486,6 +4611,62 @@ export default function ProposalGenerator() {
                 <button onClick={saveKit} disabled={savingKit} className={`px-6 py-2 rounded-lg font-bold text-white shadow flex items-center gap-2 transition-all ${savingKit?'bg-gray-400 cursor-not-allowed':'bg-blue-900 hover:bg-blue-800 hover:scale-105'}`}>
                   {savingKit ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Salvando...</> : <><Check size={16} />{editingKit ? 'Salvar Alterações' : 'Criar Kit'}</>}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Cadastro/Edição de Fornecedor (Supplier) */}
+      {showSupplierModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="bg-blue-900 rounded-t-2xl p-5 flex items-center justify-between">
+              <h3 className="text-white font-bold text-lg flex items-center gap-2">
+                <Package size={20} className="text-amber-400" />
+                {editingSupplier ? 'Editar Distribuidor' : 'Novo Distribuidor'}
+              </h3>
+              <button onClick={() => setShowSupplierModal(false)} className="text-white/70 hover:text-white"><X size={22} /></button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1 col-span-2">
+                  <label className="text-sm font-medium text-gray-700">Razão Social *</label>
+                  <input type="text" value={supplierForm.razao_social} onChange={e => setSupplierForm(p => ({...p, razao_social: e.target.value}))} className={inputStyle} placeholder="Ex: Aldo Componentes Eletrônicos S/A" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-gray-700">Nome Fantasia</label>
+                  <input type="text" value={supplierForm.nome_fantasia} onChange={e => setSupplierForm(p => ({...p, nome_fantasia: e.target.value}))} className={inputStyle} placeholder="Ex: Aldo Solar" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-gray-700">CNPJ</label>
+                  <input type="text" value={supplierForm.cnpj} onChange={e => setSupplierForm(p => ({...p, cnpj: e.target.value}))} className={inputStyle} placeholder="00.000.000/0000-00" />
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <label className="text-sm font-medium text-gray-700">Endereço</label>
+                  <input type="text" value={supplierForm.endereco} onChange={e => setSupplierForm(p => ({...p, endereco: e.target.value}))} className={inputStyle} placeholder="Endereço completo" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-gray-700">Telefone</label>
+                  <input type="text" value={supplierForm.telefone} onChange={e => setSupplierForm(p => ({...p, telefone: e.target.value}))} className={inputStyle} placeholder="(00) 00000-0000" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-gray-700">E-mail</label>
+                  <input type="email" value={supplierForm.email} onChange={e => setSupplierForm(p => ({...p, email: e.target.value}))} className={inputStyle} placeholder="contato@empresa.com" />
+                </div>
+              </div>
+              <div className="flex justify-between items-center pt-2 mt-4">
+                {editingSupplier ? (
+                  <button onClick={() => deactivateSupplier(editingSupplier.id)} className="text-red-500 hover:text-red-700 font-bold text-sm flex items-center gap-1">
+                    <Trash2 size={16} /> Excluir Distribuidor
+                  </button>
+                ) : <div></div>}
+                <div className="flex gap-3">
+                  <button onClick={() => setShowSupplierModal(false)} className="px-5 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 font-medium">Cancelar</button>
+                  <button onClick={saveSupplier} disabled={savingSupplier || !supplierForm.razao_social} className={`px-6 py-2 rounded-lg font-bold text-white shadow flex items-center gap-2 transition-all ${savingSupplier || !supplierForm.razao_social ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-900 hover:bg-blue-800 hover:scale-105'}`}>
+                    {savingSupplier ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Salvando...</> : <><Check size={16} />{editingSupplier ? 'Salvar Alterações' : 'Cadastrar'}</>}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
