@@ -2497,12 +2497,11 @@ export default function ProposalGenerator() {
           );
 
           // ETAPA 3: Capturar cada página com html2canvas
+          // As páginas principais usam a classe .page (definida no <style> do HTML gerado)
+          // A página de fotos usa div com min-height:297mm no style inline
           const pageDivs = Array.from(
-            container.querySelectorAll<HTMLElement>('div[style*="210mm"]')
-          ).filter(el => {
-            const style = el.getAttribute('style') || '';
-            return style.includes('height:297mm') || style.includes('min-height:297mm');
-          });
+            container.querySelectorAll<HTMLElement>('.page, div[style*="min-height:297mm"]')
+          );
 
           console.log(`[PDF html2canvas] Capturando ${pageDivs.length} páginas...`);
           const t0 = performance.now();
@@ -2605,7 +2604,7 @@ export default function ProposalGenerator() {
       let uploadFalhou = false;
 
       try {
-        const url = await uploadFullPDF(htmlContent);
+        const url = await uploadFullPDF(htmlParaNavegador);
         if (url) {
           urlArquivo = url;
         } else {
