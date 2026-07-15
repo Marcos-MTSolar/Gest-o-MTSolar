@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS clients (
   state TEXT,
   status TEXT DEFAULT 'pending',
   created_by INTEGER REFERENCES users(id),
+  assigned_seller_id INTEGER REFERENCES users(id),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

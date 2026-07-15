@@ -47,6 +47,15 @@ export default function Commercial() {
   const [installationProjects, setInstallationProjects] = useState<any[]>([]);
   const [selectedProposalId, setSelectedProposalId] = useState('');
   const [selectedProposal, setSelectedProposal] = useState<any | null>(null);
+  const [vendedores, setVendedores] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (user?.role === 'CEO' || user?.role === 'ADMIN') {
+      api.get('/api/users/vendedores')
+        .then(res => setVendedores(res.data))
+        .catch(err => console.error('Erro ao buscar vendedores', err));
+    }
+  }, [user]);
 
   useEffect(() => {
     fetchProjectsPendentes();
@@ -215,7 +224,7 @@ export default function Commercial() {
         name: '', phone: '', email: '', address: '', city: '', state: '', zip_code: '', cpf_cnpj: '',
         proposal_value: '', payment_method: 'cash', kit_supplier: '', pendencies: '', notes: '', finance_grace_period: 0,
         inversor_marca: '', inversor_modelo: '', inversor_potencia: '', 
-        modulo_potencia: '', modulo_modelo: '', estrutura_tipo: ''
+        modulo_potencia: '', modulo_modelo: '', estrutura_tipo: '', assigned_seller_id: ''
       });
       setFormErrors({});
       setSelectedProposalId('');
@@ -400,6 +409,23 @@ export default function Commercial() {
                       ))}
                     </select>
                   </div>
+                  
+                  {(user?.role === 'CEO' || user?.role === 'ADMIN') && (
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-bold text-gray-500 mb-1">VENDEDOR RESPONSÁVEL</label>
+                      <select
+                        className="w-full border p-2 rounded bg-white text-sm focus:ring-2 focus:ring-blue-500"
+                        value={newClient.assigned_seller_id || ''}
+                        onChange={(e) => setNewClient({ ...newClient, assigned_seller_id: e.target.value })}
+                      >
+                        <option value="">Selecione o vendedor (opcional)</option>
+                        {vendedores.map(v => (
+                          <option key={v.id} value={v.id}>{v.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">CIDADE *</label>
                     <input placeholder="Cidade" className={`w-full border p-2 rounded ${formErrors.city ? 'border-red-500' : ''}`} value={newClient.city} onChange={e => setNewClient({ ...newClient, city: e.target.value })} />
@@ -602,7 +628,7 @@ export default function Commercial() {
               onClick={() => setActiveTab('activeProposals')}
               className={`px-6 py-3 font-bold transition-colors ${activeTab === 'activeProposals' ? 'border-b-2 border-blue-900 text-blue-900' : 'text-gray-500 hover:text-gray-700'}`}
             >
-              Propostas Ativas (7 dias)
+              Propostas Ativas (30 dias)
             </button>
           </div>
 
@@ -616,6 +642,11 @@ export default function Commercial() {
                   <div>
                     <h3 className="text-lg font-bold text-gray-800">{p.client_name}</h3>
                     <p className="text-sm text-gray-500">{p.title}</p>
+                    {(user?.role === 'CEO' || user?.role === 'ADMIN') && p.assigned_seller_id && (
+                      <p className="text-xs text-blue-700 mt-1 font-medium bg-blue-50 inline-block px-2 py-1 rounded">
+                        Vendedor: {vendedores.find(v => v.id === p.assigned_seller_id)?.name || 'ID ' + p.assigned_seller_id}
+                      </p>
+                    )}
                     {p.commercial_status === 'pending' && p.commercial_pendencies && (
                       <p className="text-xs text-amber-700 mt-1 bg-amber-50 p-1 rounded inline-block border border-amber-200">
                         <strong>Pendência:</strong> {p.commercial_pendencies}
@@ -745,7 +776,8 @@ export default function Commercial() {
                     inversor_potencia: selectedProject.inversor_potencia || '',
                     modulo_potencia: selectedProject.modulo_potencia || '',
                     modulo_modelo: selectedProject.modulo_modelo || '',
-                    estrutura_tipo: selectedProject.estrutura_tipo || ''
+                    estrutura_tipo: selectedProject.estrutura_tipo || '',
+                    assigned_seller_id: selectedProject.assigned_seller_id || ''
                   });
                   setShowEditClient(true);
                 }}
@@ -1030,6 +1062,23 @@ export default function Commercial() {
                   ))}
                 </select>
               </div>
+
+              {(user?.role === 'CEO' || user?.role === 'ADMIN') && (
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-gray-500 mb-1">VENDEDOR RESPONSÁVEL</label>
+                  <select
+                    className="w-full border p-2 rounded bg-white text-sm focus:ring-2 focus:ring-blue-500"
+                    value={editClientData.assigned_seller_id || ''}
+                    onChange={(e) => setEditClientData({ ...editClientData, assigned_seller_id: e.target.value })}
+                  >
+                    <option value="">Selecione o vendedor (opcional)</option>
+                    {vendedores.map(v => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1">CIDADE *</label>
                 <input placeholder="Cidade" className={`w-full border p-2 rounded ${formErrors.city ? 'border-red-500' : ''}`} value={editClientData.city} onChange={e => setEditClientData({ ...editClientData, city: e.target.value })} />

@@ -2,6 +2,85 @@
 
 ---
 
+## Alterações — Sessão 15/07/2026 (Parte 4: Auditoria e Correção do Dashboard)
+
+### Isolamento de Dados do Dashboard para Vendedor (role COMMERCIAL)
+
+* **O que foi feito:**
+  1. **Cards Projetos Ativos, Vistorias Pendentes e Projetos Concluídos (`GET /api/stats`):**
+     - **Bug identificado:** A `baseFilter` usava `.eq('created_by', req.user.id)` diretamente na tabela `projects`, campo que **não existe** nessa tabela (o `created_by` vive em `clients`). O filtro era silenciosamente ignorado pelo Supabase, ou retornava 0 — ambos errados.
+     - **Correção:** Refatorada a `baseFilter` para incluir `clients!inner(created_by, assigned_seller_id)` no select e aplicar `.or('created_by.eq.X,assigned_seller_id.eq.X', { foreignTable: 'clients' })` — mesmo padrão validado nas demais rotas desta sessão. Os 3 cards são calculados pela mesma função, então a correção resolve os 3 de uma vez.
+  2. **Painel Status das Homologações (filtro client-side em `Dashboard.tsx`):**
+     - **Bug identificado:** Linha 48 usava `p.assigned_to` — campo que **nunca existiu** no schema. Metade da condição do filtro era inerte desde a origem.
+     - **Correção:** Substituído `p.assigned_to` por `p.assigned_seller_id` — campo correto implementado nesta sessão. O filtro de backend (`GET /api/projects`) já é a camada de segurança principal; o filtro client-side é uma camada de defesa extra.
+  3. **Painel Protocolos Neoenergia (`GET /api/neoenergia`):**
+     - **Decisão:** Mantido filtro apenas por `created_by`. A tabela `neoenergia_protocols` não tem FK para `clients`, tornando qualquer vínculo via `assigned_seller_id` frágil e impreciso. O filtro atual é semanticamente correto para essa entidade.
+* **Data e hora da alteração:** 15/07/2026 às 11:40 (Horário Local)
+* **Arquivos modificados:** `api/index.ts`, `src/pages/Dashboard.tsx`
+
+---
+
+## Alterações — Sessão 15/07/2026 (Parte 3: Isolamento de Dados por Vendedor)
+
+### Filtragem Comercial nas Abas de Projetos e Propostas
+
+* **O que foi feito:**
+  1. **Projetos Pendentes & Instalações (Rota `GET /api/projects`):**
+     - **Antes:** Retornava todos os projetos da empresa (`company_id`), filtrando apenas os status no frontend, expondo dados de todos os vendedores para qualquer um.
+     - **Correção:** Alterado o `select` para utilizar `clients!inner` (garantindo o inner join nativo do Supabase) e aplicado a restrição de segurança no backend: se o role for `COMMERCIAL`, a API adiciona `.or('created_by.eq.X,assigned_seller_id.eq.X', { foreignTable: 'clients' })`, garantindo que o vendedor só veja projetos que ele cadastrou ou que foram atribuídos a ele.
+  2. **Propostas Ativas (Rota `GET /api/proposals-active`):**
+     - **Antes:** Retornava todas as propostas da empresa nos últimos 30 dias sem filtro de vendedor. A tabela `proposals` guarda `created_by` como string (nome ou email), e não possui `assigned_seller_id` (pois a proposta nasce antes do cadastro do cliente).
+     - **Correção:** Adicionado filtro seguro no backend: se o role for `COMMERCIAL`, a API anexa um `.or('created_by.eq.X,created_by.eq.Y')` (onde X é o nome e Y é o email do usuário logado), assegurando que o vendedor só baixe propostas geradas por ele mesmo.
+  3. **Visão Gerencial Mantida:** As regras condicionais garantem que as contas `CEO` e `ADMIN` bypassam o `.or()` e continuam consumindo 100% da base.
+  4. **Correção visual:** Aba "Propostas Ativas (7 dias)" renomeada para **"Propostas Ativas (30 dias)"** — a rota já retornava 30 dias desde sessão de 07/07/2026, mas o rótulo da UI não havia sido atualizado.
+* **Data e hora da alteração:** 15/07/2026 às 11:35 (Horário Local)
+* **Arquivos modificados:** `api/index.ts`, `src/pages/Commercial.tsx`
+
+---
+
+## Alterações — Sessão 15/07/2026 (Parte 2: Frontend)
+
+### Seleção de Vendedor Responsável na Área Comercial
+
+* **O que foi feito:**
+  1. **Integração de Estado (Commercial.tsx):** 
+     - Adicionado estado `vendedores` e um `useEffect` que consome `GET /api/users/vendedores` apenas se o `user?.role` do `AuthContext` for `'CEO'` ou `'ADMIN'`.
+  2. **Formulários de Cadastro e Edição (`newClient` e `editClientData`):**
+     - Adicionado o campo `<select>` "VENDEDOR RESPONSÁVEL", seguindo os padrões visuais existentes (com `w-full border p-2 rounded focus:ring-blue-500`).
+     - Lógica Condicional: O campo só é renderizado quando `(user?.role === 'CEO' || user?.role === 'ADMIN')`. 
+     - Quando um `COMMERCIAL` está operando, o campo não aparece, garantindo que a delegação seja feita tacitamente pelo backend.
+     - Os estados iniciais e reset foram atualizados para incluir `assigned_seller_id`.
+  3. **Visualização Kanban:**
+     - Nos cards de Projetos Pendentes, caso o usuário tenha visão gerencial, é exibido de forma secundária o nome do vendedor responsável (buscando na lista de vendedores em memória) com uma formatação em azul claro.
+* **Data e hora da alteração:** 15/07/2026 às 11:20 (Horário Local)
+* **Arquivos modificados:** `src/pages/Commercial.tsx`
+
+> ⚠️ **COMO TESTAR ESTA TAREFA:**
+> 1. **Cenário CEO/ADMIN:** Faça login como CEO. Acesse "Comercial" > "Novo Cliente". O campo "Vendedor Responsável" deve aparecer abaixo de "Origem da Venda". Selecione um vendedor, salve e confirme no banco de dados se o `assigned_seller_id` corresponde ao usuário selecionado.
+> 2. **Cenário COMMERCIAL:** Faça login como vendedor. O campo "Vendedor Responsável" NÃO deve existir no form. Cadastre um cliente e confirme no banco que o `assigned_seller_id` foi preenchido automaticamente com o ID deste vendedor.
+
+---
+
+## Alterações — Sessão 15/07/2026 (Parte 1: Backend)
+
+### Adição de Vendedor Responsável (assigned_seller_id) em Clientes
+
+* **O que foi feito:**
+  1. **Banco de Dados:** Criada a coluna `assigned_seller_id` na tabela `clients` com FK para `users(id)` e um índice para performance.
+  2. **Backend (api/index.ts):** 
+     - Criada nova rota `GET /api/users/vendedores` para listar apenas usuários `COMMERCIAL` ativos.
+     - Modificadas as rotas `POST /api/clients` e `PUT /api/clients/:id` para receber e gravar o `assigned_seller_id`.
+     - Implementada regra de negócio de segurança e automação: se o usuário logado for `COMMERCIAL`, o `assigned_seller_id` é forçado para o seu próprio ID; se for `CEO` ou `ADMIN`, o valor recebido pelo frontend (ou null) é respeitado. O fallback de colunas ausentes `PGRST204` foi mantido para a nova coluna.
+     - Atualizadas as rotas `GET /api/projects` e `GET /api/projects/:id` para expor `assigned_seller_id` no objeto achatado.
+  3. **Diagnóstico TypeScript:** `api/index.ts` validado sem erros novos.
+* **Data e hora da alteração:** 15/07/2026 às 11:05 (Horário Local)
+* **Arquivos modificados:** `supabase/migrations/20260715_add_assigned_seller_to_clients.sql`, `supabase_schema.sql`, `api/index.ts`
+
+> ⚠️ **AÇÃO MANUAL NECESSÁRIA NO SUPABASE:**
+> Você deve executar manualmente o conteúdo do arquivo `supabase/migrations/20260715_add_assigned_seller_to_clients.sql` no SQL Editor do Supabase para aplicar as alterações.
+
+---
+
 ## Alterações — Sessão 14/07/2026
 
 ### PDF do Histórico corrompido: diagnóstico e correção completa

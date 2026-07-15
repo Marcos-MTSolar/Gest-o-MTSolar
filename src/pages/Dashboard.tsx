@@ -45,7 +45,7 @@ export default function Dashboard() {
     api.get('/api/projects').then(res => {
       if (Array.isArray(res.data)) {
         const projetosVisiveis = user?.role === 'COMMERCIAL'
-          ? res.data.filter((p: any) => p.created_by === user.id || p.assigned_to === user.id)
+          ? res.data.filter((p: any) => p.created_by === user.id || p.assigned_seller_id === user.id)
           : res.data;
 
         setHomologacoes(projetosVisiveis.filter((p: any) =>

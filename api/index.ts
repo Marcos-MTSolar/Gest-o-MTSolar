@@ -248,6 +248,17 @@ app.get('/api/auth/me', authenticateToken, async (req: any, res) => {
 });
 
 // Users
+app.get('/api/users/vendedores', authenticateToken, async (req: any, res) => {
+  const { data: vendedores, error } = await supabase
+    .from('users')
+    .select('id, name, email, role, active')
+    .eq('company_id', req.user.company_id)
+    .eq('role', 'COMMERCIAL')
+    .eq('active', true);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(vendedores ?? []);
+});
+
 app.get('/api/users', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CEO' && req.user.role !== 'ADMIN') return res.sendStatus(403);
 
@@ -432,8 +443,14 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
     name, phone, email, address, city, state, cpf_cnpj, origem_venda = null,
     proposal_value, payment_method, kit_supplier, pendencies, notes, finance_grace_period,
     inversor_marca = null, inversor_modelo = null, inversor_potencia = null,
-    modulo_modelo = null, modulo_potencia = null, estrutura_tipo = null
+    modulo_modelo = null, modulo_potencia = null, estrutura_tipo = null,
+    assigned_seller_id
   } = req.body;
+
+  let finalAssignedSellerId = assigned_seller_id || null;
+  if (req.user.role === 'COMMERCIAL') {
+    finalAssignedSellerId = req.user.id;
+  }
 
   try {
     // Verificar duplicidade por telefone ou CPF antes de inserir
@@ -479,6 +496,7 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
       modulo_potencia: modulo_potencia !== null && modulo_potencia !== '' && !isNaN(parseFloat(modulo_potencia)) ? parseFloat(modulo_potencia) : null,
       estrutura_tipo,
       created_by: req.user.id,
+      assigned_seller_id: finalAssignedSellerId,
       company_id: req.user.company_id
     };
 
@@ -498,7 +516,7 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
       console.warn('[clients POST] Colunas extras ausentes no schema - retentando sem campos do kit negociado');
       const { data: fallbackData, error: fallbackError } = await supabase
         .from('clients')
-        .insert({ name, phone, email, address, city, state, cpf_cnpj, created_by: req.user.id, company_id: req.user.company_id })
+        .insert({ name, phone, email, address, city, state, cpf_cnpj, created_by: req.user.id, assigned_seller_id: finalAssignedSellerId, company_id: req.user.company_id })
         .select()
         .single();
       client = fallbackData;
@@ -548,7 +566,8 @@ app.put('/api/clients/:id', authenticateToken, async (req: any, res) => {
   const { 
     name, phone, email, address, city, state, cpf_cnpj, origem_venda = null,
     inversor_marca = null, inversor_modelo = null, inversor_potencia = null,
-    modulo_modelo = null, modulo_potencia = null, estrutura_tipo = null
+    modulo_modelo = null, modulo_potencia = null, estrutura_tipo = null,
+    assigned_seller_id
   } = req.body;
 
   const updatePayload: any = {
@@ -568,6 +587,13 @@ app.put('/api/clients/:id', authenticateToken, async (req: any, res) => {
     estrutura_tipo
   };
 
+  if (assigned_seller_id !== undefined) {
+    updatePayload.assigned_seller_id = assigned_seller_id || null;
+  }
+  if (req.user.role === 'COMMERCIAL') {
+    updatePayload.assigned_seller_id = req.user.id;
+  }
+
   let { error: updateError } = await supabase.from('clients')
     .update(updatePayload)
     .eq('id', req.params.id)
@@ -575,8 +601,13 @@ app.put('/api/clients/:id', authenticateToken, async (req: any, res) => {
 
   if (updateError && (updateError.code === 'PGRST204' || updateError.code === '42703' || String(updateError.code) === '42703')) {
     console.warn('[clients PUT] Colunas extras ausentes no schema - retentando sem campos do kit negociado');
+    const fallbackUpdate: any = { name, phone, email, address, city, state, cpf_cnpj };
+    if (updatePayload.assigned_seller_id !== undefined) {
+      fallbackUpdate.assigned_seller_id = updatePayload.assigned_seller_id;
+    }
+
     const { error: fallbackError } = await supabase.from('clients')
-      .update({ name, phone, email, address, city, state, cpf_cnpj })
+      .update(fallbackUpdate)
       .eq('id', req.params.id)
       .eq('company_id', req.user.company_id);
     updateError = fallbackError;
@@ -617,17 +648,27 @@ app.get('/api/relatorio/origem-vendas', authenticateToken, async (req: any, res)
 
 // Projects
 app.get('/api/projects', authenticateToken, async (req: any, res) => {
-  const { data: projects } = await supabase
+  let query = supabase
     .from('projects')
     .select(`
       *,
-      clients (name),
+      clients!inner (name, assigned_seller_id, created_by),
       commercial_data (status, pendencies),
       technical_data (status, structure_type),
       documents (*)
     `)
-    .eq('company_id', req.user.company_id)
-    .order('updated_at', { ascending: false });
+    .eq('company_id', req.user.company_id);
+
+  if (req.user.role === 'COMMERCIAL') {
+    query = query.or(`created_by.eq.${req.user.id},assigned_seller_id.eq.${req.user.id}`, { foreignTable: 'clients' });
+  }
+
+  const { data: projects, error } = await query.order('updated_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching projects:', error);
+    return res.status(500).json({ error: error.message });
+  }
 
   // Flatten for frontend compatibility
   const formatted = projects?.map((p: any) => {
@@ -638,6 +679,7 @@ app.get('/api/projects', authenticateToken, async (req: any, res) => {
     return {
       ...p,
       client_name: p.clients?.name || p.client_name,
+      assigned_seller_id: p.clients?.assigned_seller_id || null,
       commercial_status: commData?.status || 'pending',
       commercial_pendencies: commData?.pendencies || null,
       proposal_value: commData?.proposal_value || null,
@@ -685,6 +727,7 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
   const formatted = {
     ...project,
     client_name: project.clients?.name || project.client_name,
+    assigned_seller_id: project.clients?.assigned_seller_id || null,
     phone: project.clients?.phone || null,
     address: project.clients?.address || null,
     city: project.clients?.city || null,
@@ -3182,12 +3225,17 @@ app.get('/api/proposal-history', authenticateToken, async (req: any, res) => {
 app.get('/api/proposals-active', authenticateToken, async (req: any, res) => {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('proposals')
     .select('*')
     .eq('company_id', req.user.company_id)
-    .gte('created_at', thirtyDaysAgo)
-    .order('created_at', { ascending: false });
+    .gte('created_at', thirtyDaysAgo);
+
+  if (req.user.role === 'COMMERCIAL') {
+    query = query.or(`created_by.eq.${req.user.name},created_by.eq.${req.user.email}`);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) return res.status(500).json({ error: error.message });
   res.json(data || []);
@@ -3498,30 +3546,36 @@ app.delete('/api/neoenergia/:id', authenticateToken, async (req: any, res) => {
 // Stats
 app.get('/api/stats', authenticateToken, async (req: any, res) => {
   const isCommercial = req.user.role === 'COMMERCIAL';
-  
-  // Base query com filtro por vendedor se necessário
+
+  // Seleciona com join em clients para suportar filtro por created_by e assigned_seller_id
   const baseFilter = (query: any) => {
-    query = query.eq('company_id', req.user.company_id);
+    query = query
+      .select('*, clients!inner(created_by, assigned_seller_id)', { count: 'exact', head: true })
+      .eq('company_id', req.user.company_id);
     if (isCommercial) {
-      query = query.eq('created_by', req.user.id);
+      // Vendedor vê projetos que cadastrou OU que estão atribuídos a ele
+      query = query.or(
+        `created_by.eq.${req.user.id},assigned_seller_id.eq.${req.user.id}`,
+        { foreignTable: 'clients' }
+      );
     }
     return query;
   };
 
   const { count: totalProjects } = await baseFilter(
-    supabase.from('projects').select('*', { count: 'exact', head: true })
+    supabase.from('projects')
   );
-  
+
   const { count: completedProjects } = await baseFilter(
-    supabase.from('projects').select('*', { count: 'exact', head: true })
+    supabase.from('projects')
   ).or('status.eq.completed,current_stage.eq.completed');
 
   const { count: pendingInspections } = await baseFilter(
-    supabase.from('projects').select('*', { count: 'exact', head: true })
+    supabase.from('projects')
   ).eq('current_stage', 'inspection');
 
   const { count: pendingInstallations } = await baseFilter(
-    supabase.from('projects').select('*', { count: 'exact', head: true })
+    supabase.from('projects')
   ).eq('current_stage', 'installation');
 
   const activeProjects = (totalProjects || 0) - (completedProjects || 0);
