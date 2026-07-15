@@ -2,6 +2,35 @@
 
 ---
 
+## Alterações — Sessão 15/07/2026 (Parte 6: UX Comercial)
+
+### Animação de Sucesso na Aprovação Comercial
+
+* **O que foi feito:**
+  - Instalada a biblioteca `canvas-confetti` (e suas tipagens) para adicionar micro-interações de comemoração na Área Comercial.
+  - O código que lida com o clique no botão "Aprovar Proposta Comercial" (`handleSaveCommercialChanges` em `Commercial.tsx`) foi refatorado.
+  - Agora, **estritamente após** a API retornar sucesso na transição de status para `proposta_enviada`, uma animação de confete é disparada utilizando as cores da identidade visual do sistema (Azul Escuro, Dourado/Laranja e Verde de sucesso).
+  - Um pequeno delay de 100ms foi adicionado antes de exibir o `alert()` nativo do navegador. Como o `alert()` paralisa a thread do JavaScript (e consequentemente a renderização da animação), esse delay garante que a explosão de partículas seja iniciada *antes* do travamento, criando uma experiência não-bloqueante e fluida.
+* **Data e hora da alteração:** 15/07/2026 às 11:58 (Horário Local)
+* **Arquivos modificados:** `src/pages/Commercial.tsx`, `package.json`
+
+---
+
+## Alterações — Sessão 15/07/2026 (Parte 5: Autopreenchimento de Propostas no Comercial)
+
+### Correção da Vinculação de Proposta Ativa no Cadastro de Cliente
+
+* **Causa Raiz Encontrada:** 
+  A funcionalidade estava duplamente incompleta. O handler `fillFromProposal` no frontend (`Commercial.tsx`) só mapeava 4 dados básicos (nome, telefone, email, endereço) e ignorava qualquer campo técnico (kit) ou financeiro (valor). Além disso, a lista de seleção do dropdown vinha da rota `GET /api/proposals-active` (tabela `proposals`), que por sua vez tem dados limitados, porque a rota `POST /api/proposals` não gravava os dados técnicos no banco (apesar do gerador de propostas tentar enviá-los). Apenas a tabela `proposal_history` possuía o `raw_data` JSON completo com todas as variáveis.
+* **Correção Aplicada:** 
+  1. **Backend:** Criado novo endpoint `GET /api/proposal-history/by-number/:number` que busca os dados completos e intactos da proposta (`raw_data`) diretamente da `proposal_history`, utilizando o `proposal_number` como elo.
+  2. **Frontend:** O handler `fillFromProposal` foi convertido para `async`. Agora, ao selecionar uma proposta no dropdown, ele faz um fetch neste novo endpoint, resgata o `raw_data` completo e mapeia perfeitamente os 6 campos do kit (`inversor_marca`, `inversor_modelo`, `inversor_potencia`, `modulo_modelo`, `modulo_potencia`, `estrutura_tipo`) e o valor da proposta para o estado do formulário (`newClient`).
+  3. Os campos permanecem 100% **editáveis** após o autopreenchimento (estado React flexível sem bloqueio `readonly`).
+* **Data e hora da alteração:** 15/07/2026 às 11:55 (Horário Local)
+* **Arquivos modificados:** `api/index.ts`, `src/pages/Commercial.tsx`
+
+---
+
 ## Alterações — Sessão 15/07/2026 (Parte 4: Auditoria e Correção do Dashboard)
 
 ### Isolamento de Dados do Dashboard para Vendedor (role COMMERCIAL)

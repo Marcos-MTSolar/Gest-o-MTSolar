@@ -3221,6 +3221,28 @@ app.get('/api/proposal-history', authenticateToken, async (req: any, res) => {
   }
 });
 
+// Buscar histórico de proposta específica por proposal_number
+app.get('/api/proposal-history/by-number/:number', authenticateToken, async (req: any, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('proposal_history')
+      .select('*')
+      .eq('proposal_number', req.params.number)
+      .eq('company_id', req.user.company_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 is no rows returned
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json(data || null);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Propostas Ativas (7 dias)
 app.get('/api/proposals-active', authenticateToken, async (req: any, res) => {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();

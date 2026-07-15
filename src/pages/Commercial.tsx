@@ -4,6 +4,7 @@ import { Plus, Search, FileText, CheckCircle, Clock, Camera, Package } from 'luc
 import { sendUpdateNotification } from '../lib/notifications';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import confetti from 'canvas-confetti';
 
 const ORIGENS_VENDA = [
   'Lead (Tráfego Pago)',
@@ -93,16 +94,44 @@ export default function Commercial() {
     }
   };
 
-  const fillFromProposal = (proposal: any) => {
-    setNewClient(prev => ({
-      ...prev,
-      name: proposal.client_name,
-      phone: proposal.phone,
-      email: proposal.email,
-      address: proposal.address
-    }));
-    setSelectedProposal(proposal);
-    alert('Dados da proposta preenchidos no formulário!');
+  const fillFromProposal = async (proposal: any) => {
+    try {
+      // Buscar dados completos da proposta no histórico (que contém o raw_data com o kit negociado)
+      const res = await api.get(`/api/proposal-history/by-number/${proposal.proposal_number}`);
+      const history = res.data;
+      
+      const raw = history?.raw_data || {};
+      
+      setNewClient(prev => ({
+        ...prev,
+        name: proposal.client_name,
+        phone: raw.clientPhone || proposal.phone || '',
+        email: raw.clientEmail || proposal.email || '',
+        address: raw.clientAddress || proposal.address || '',
+        proposal_value: raw.valorFinalVenda || proposal.kit_value || '',
+        inversor_marca: raw.inverterBrand || '',
+        inversor_modelo: raw.inverterModel || '',
+        inversor_potencia: raw.inverterPower || '',
+        modulo_modelo: raw.moduleModel || '',
+        modulo_potencia: raw.modulePower || '',
+        estrutura_tipo: raw.tipoEstrutura || ''
+      }));
+      
+      setSelectedProposal(proposal);
+      alert('Dados completos da proposta preenchidos no formulário!');
+    } catch (err) {
+      console.error('Erro ao buscar detalhes da proposta no histórico:', err);
+      // Fallback em caso de erro na busca do histórico
+      setNewClient(prev => ({
+        ...prev,
+        name: proposal.client_name,
+        phone: proposal.phone,
+        email: proposal.email,
+        address: proposal.address
+      }));
+      setSelectedProposal(proposal);
+      alert('Dados básicos da proposta preenchidos (detalhes técnicos não encontrados).');
+    }
   };
 
   const fetchProjectsPendentes = async () => {
@@ -262,7 +291,24 @@ export default function Commercial() {
 
       await api.put(`/api/commercial-data/${selectedProject.id}`, commercialData);
       await sendUpdateNotification('commercial', selectedProject.client_name);
-      alert(action === 'proposta_enviada' ? "Proposta Comercial Aprovada! O projeto seguiu para Vistoria." : "Preferências salvas com sucesso.");
+      
+      if (action === 'proposta_enviada') {
+        // Dispara animação de comemoração de forma não-bloqueante
+        confetti({
+          particleCount: 150,
+          spread: 80,
+          origin: { y: 0.6 },
+          colors: ['#1e3a5f', '#f5a623', '#4CAF50'] // Cores da marca: Azul escuro, Dourado/Laranja e Verde sucesso
+        });
+        
+        // Pequeno atraso para a animação começar antes do alert bloquear a UI
+        setTimeout(() => {
+          alert("Proposta Comercial Aprovada! O projeto seguiu para Vistoria.");
+        }, 100);
+      } else {
+        alert("Preferências salvas com sucesso.");
+      }
+      
       await fetchProjectsPendentes();
       setSelectedProject(null);
     } catch (error) {
