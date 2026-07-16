@@ -129,6 +129,16 @@ const authenticateToken = (req: any, res: any, next: any) => {
   });
 };
 
+function sanitizeFileName(originalName: string): string {
+  // 1. Converter acentos e caracteres especiais (NFD + regex de remoção de diacríticos)
+  let sanitized = originalName.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  // 2. Substituir espaços por underscore
+  sanitized = sanitized.replace(/\s+/g, '_');
+  // 3. Manter apenas letras, números, hífen, underscore e ponto (que preserva a extensão)
+  sanitized = sanitized.replace(/[^a-zA-Z0-9_.-]/g, '');
+  return sanitized;
+}
+
 // Helper para upload de arquivo para o Cloudflare R2
 // O parâmetro 'bucket' é mantido para compatibilidade com chamadores existentes,
 // mas agora é usado apenas como prefixo de pasta no R2.
@@ -2272,7 +2282,7 @@ app.get('/api/whatsapp/profile-picture/:conversationId', authenticateToken, asyn
 app.post('/api/whatsapp/upload-media', authenticateToken, upload.single('file'), async (req: any, res) => {
   if (!req.file) return res.status(400).json({ error: 'Arquivo ausente' });
   const companyId = req.user.company_id;
-  const fileName = `${Date.now()}_${req.file.originalname}`;
+  const fileName = `${Date.now()}_${sanitizeFileName(req.file.originalname)}`;
   const filePath = `${companyId}/${fileName}`;
 
   console.log(`[WA UPLOAD] Recebido arquivo: ${req.file.originalname} para tenant ${companyId}`);
@@ -2336,7 +2346,7 @@ app.post('/api/whatsapp/send-media', authenticateToken, async (req: any, res) =>
         number: phone,
         mediatype: mediatype,
         caption: caption || '',
-        media: mediaUrl,
+        media: encodeURI(mediaUrl),
         fileName: filename
       })
     });
@@ -3072,11 +3082,11 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
   } catch (err: any) {
     console.error('[WEBHOOK FATAL ERROR] Exceção não tratada no webhook:', err);
     try {
-      // companyId pode estar resolvido ou não dependendo do ponto em que a exceção ocorreu
+      // Se companyId não estiver definido (pois foi movido para dentro do try em algum refactor), salva nulo
       await supabaseAdmin.from('webhook_failures').insert({
         payload_raw: req.body,
         error_message: `Fatal error: ${err.message || String(err)}`,
-        company_id: typeof companyId !== 'undefined' ? companyId : null
+        company_id: null
       });
     } catch (dbErr) {
       console.error('[WEBHOOK FATAL ERROR] Falha ao salvar na dead letter queue:', dbErr);

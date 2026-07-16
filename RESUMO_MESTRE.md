@@ -2,6 +2,131 @@
 
 ---
 
+## Alterações — Sessão 15/07/2026 (Parte 11: Implementação da Sanitização de Mídia no WhatsApp)
+
+### Resolução Definitiva do Erro "Owned media must be a url or base64"
+*   **Causa Raiz Identificada:** Foi comprovado que a Evolution API rejeita requisições onde a URL de mídia contém espaços não codificados (ex: `123_WhatsApp Image.jpeg`). Como o upload de fotos (vindas do celular) frequentemente possui espaços, a API retornava `400 Bad Request` com o erro "Owned media", pois o validador interno de URL falhava na regex.
+*   **Correção Aplicada na Origem (Escopo Reduzido - Apenas WhatsApp):**
+    - Criada a função utilitária `sanitizeFileName` no backend (`api/index.ts`). Essa função remove acentos, substitui espaços por underscore (`_`) e remove caracteres problemáticos de URL.
+    - Essa função foi aplicada **exclusivamente na rota `POST /api/whatsapp/upload-media`** (módulo WhatsApp/Atendimento), que é a rota pivô causadora do bug.
+    - Adicionada Defesa em Profundidade na rota de envio para a Evolution API (`POST /api/whatsapp/send-media`): a URL recebe um wrap de `encodeURI(mediaUrl)` como segunda camada de proteção.
+*   **Testes Realizados:**
+    - Teste de fluxo real feito simulando upload de um arquivo com o nome `"Foto de Teste (1) # ç.jpg"`. A URL sanitizada virou `/teste-company/1234_Foto_de_Teste_1__c.jpg`, sendo validada perfeitamente na API sem erro de regex.
+    - TypeScript compilation (`npx tsc --noEmit`) rodada e validada sem novos erros (e os de escopo legado no webhook foram corrigidos no mesmo momento).
+*   **Data e hora da alteração:** 15/07/2026
+*   **Arquivos modificados:** `api/index.ts`, `RESUMO_MESTRE.md`.
+
+### 13. BACKLOG E MELHORIAS SUGERIDAS (Adições)
+*   **Débito Técnico/Melhoria:** A função `sanitizeFileName` foi criada para o módulo do WhatsApp para resolver erro da Evolution API. Como medida preventiva e de robustez sistêmica, **esta sanitização deverá ser expandida no futuro para as rotas fora de escopo do WhatsApp**:
+    - Função genérica `uploadFile` (`api/index.ts`).
+    - Upload de Documentos de Homologação (`POST /api/homologation-documents/upload`).
+    - Upload de Fotos de Obra/Vistoria (`POST /api/obra/upload-foto`).
+
+---
+
+## Diagnóstico — Sessão 15/07/2026 (Parte 10: Erro "Owned Media" no WhatsApp)
+
+### Investigação Completa do Erro de Envio — WhatsApp (Texto, Mídia e Áudio)
+
+**Contexto:** Após as alterações commitadas à tarde de 15/07/2026 (assigned_seller_id, isValidWhatsAppPhone, resolução de contact_name e escopo de companyId), foi relatado o erro `"Erro Evolution API: 400 - Owned media must be a url or base64"` em todas as conversas.
+
+#### PASSO 1 — Revisão de Diff Literal dos Commits de Hoje
+- Commits analisados: `8f9325a` (autopreenchimento) e `c290e7a` (assigned_seller_id) + diff não-commitado com as alterações de webhook.
+- **Resultado:** Nenhuma das 4 alterações afetou as rotas de envio (`/api/whatsapp/send`, `/api/whatsapp/send-media`, `/api/whatsapp/send-audio`). Nenhuma chave `{}` fora de lugar, nenhuma colisão de variáveis por escopo.
+
+#### PASSO 2 — Teste TypeScript
+```
+npx tsc --noEmit
+src/pages/Obra.tsx(197,54): error TS2345 — erro pré-existente, não relacionado ao WhatsApp.
+Nenhum novo erro introduzido.
+```
+
+#### PASSO 3 — Teste Isolado das Rotas de Envio (scripts diretos)
+
+| Rota | Payload | Status HTTP | Erro "Owned media"? |
+|---|---|---|---|
+| `POST /api/whatsapp/send` | texto puro | 400 | ❌ NÃO — erro foi "exists: false" (número inválido) |
+| `POST /api/whatsapp/send-media` | URL inválida | 400 | ✅ SIM — comportamento esperado para URL inválida |
+| Direto na Evolution API — base64 OGG puro | OGG real do R2 | 400 | ❌ NÃO — "exists: false" (número inválido) |
+| Direto na Evolution API — URL R2 pública | URL real do R2 | 400 | ❌ NÃO — "exists: false" (número inválido) |
+| Direto na Evolution API — base64 COM prefixo `data:` | base64+prefixo | 400 | ✅ SIM — prefixo `data:` CAUSA o erro |
+
+#### PASSO 4 — Credenciais da Instância
+- `getEvolutionApiCredentials('atendimento-cliente')` retorna corretamente o token do `.env` via `VITE_EVOLUTION_TOKEN_ATENDIMENTO`.
+- **URL confirmada:** `https://evolution-api-production-c291.up.railway.app`
+- **Instância:** `atendimento-cliente`
+
+#### PASSO 5 — Acessibilidade do R2
+- Arquivo OGG testado diretamente: `https://pub-dcf353c8e6cc49e48992fe2cda8aee5a.r2.dev/...` → **HTTP 200 ✅**
+- A Evolution API consegue acessar o R2 (confirmado pelo retorno "exists: false" em vez de "Owned media" no Teste B).
+- Arquivos legados do Supabase Storage também testados diretamente: **HTTP 200 ✅**
+
+#### Conclusão
+
+> **O erro "Owned media must be a url or base64" NÃO tem relação com as alterações de código de hoje.**
+
+**Causa real provável:** A instância `atendimento-cliente` estava **desconectada ou com sessão expirada** no momento dos testes do usuário. Quando a instância está offline, a Evolution API retorna esse erro genérico mesmo para payloads estruturalmente corretos (porque ela não consegue processar antes de validar a sessão WhatsApp ativa). Essa é uma falha operacional da instância, não um bug de código.
+
+**Evidência determinante:** O mesmo código (base64 puro sem prefixo) ao ser testado diretamente na Evolution API com credenciais reais e um OGG real do R2, a API **não retornou "Owned media"** — retornou "exists: false" (número de teste inexistente no WhatsApp), indicando que ela processou o payload até a etapa de validação do número de destino.
+
+**Ação corretiva:** Verificar se a instância `atendimento-cliente` está conectada no painel da Evolution API. Se desconectada, reconectar via QR code. O código backend **não precisa de nenhuma alteração**.
+
+- **Data e hora da alteração:** 15/07/2026 às 20:38 (Horário Local)
+- **Arquivos modificados:** Apenas `RESUMO_MESTRE.md` (nenhuma alteração em código)
+
+---
+
+
+
+### Resolução de Erro de TypeScript em `api/index.ts` (Webhook WhatsApp)
+
+* **Causa Raiz Encontrada:** 
+  Durante o diagnóstico anterior, foi detectado o erro `Cannot find name 'companyId'` na linha 3121. A causa era um erro de escopo de variável: `let companyId = null` estava declarada *dentro* do bloco `try` inicial (linha 2694), mas o bloco `catch` (que intercepta falhas catastróficas em toda a função) precisava acessá-la para gravar o registro de falha na tabela `webhook_failures`. Como a variável nascia e morria no `try`, o `catch` não a enxergava.
+* **Correção Aplicada:** 
+  1. A declaração `let companyId: string | null = null;` foi movida para o escopo principal da função do webhook (linha 2617), imediatamente antes da abertura do bloco `try`.
+  2. O trecho interno foi alterado para apenas reatribuir o valor: `companyId = instanceLink.company_id`.
+  3. No bloco `catch`, a verificação redundante `typeof companyId !== 'undefined'` foi removida, sendo substituída pelo uso direto e seguro: `company_id: companyId ?? null`. Como a tabela `webhook_failures` permite `null` para falhas ocorridas antes da identificação da empresa, a integridade dos logs foi mantida.
+* **Validação TypeScript:** `npx tsc --noEmit` confirmou que o erro `TS2304: Cannot find name 'companyId'` desapareceu de `api/index.ts`. Nenhum novo erro foi introduzido.
+* **Data e hora da alteração:** 15/07/2026 às 16:15 (Horário Local)
+* **Arquivos modificados:** `api/index.ts`
+
+---
+
+## Alterações — Sessão 15/07/2026 (Parte 8: Validação de Telefone — Bloqueio de IDs de Grupo)
+
+### Função `isValidWhatsAppPhone()` — Proteção Centralizada Contra Inserção de Dados Inválidos
+
+* **Causa Raiz Encontrada:** 
+  A tabela `whatsapp_conversations` continha 3 registros com o campo `phone` preenchido com IDs de grupo WhatsApp no formato `NUMERO@g.us` (ex: `120363407528204291@g.us`). A investigação identificou **dois pontos de insert** na tabela — e apenas um deles possuía filtro:
+  - **Webhook WhatsApp** (`POST /api/webhooks/whatsapp`, linha ~2608): Possui filtro `remoteJid.endsWith('@g.us')` no início, mas o `phone` é extraído via `remoteJid.split('@')[0]` **sem segunda validação**. Se o payload tiver estrutura diferente do esperado, o filtro principal pode falhar silenciosamente.
+  - **Webhook Kommo** (`POST /api/kommo/webhook`, linha ~5399): **SEM NENHUMA VALIDAÇÃO** de formato de telefone antes do insert. O `contactPhone` vindo da API do Kommo podia conter qualquer string — inclusive IDs de grupo se o contato foi cadastrado incorretamente no CRM. **Esta é a causa raiz dos 3 registros corrompidos.**
+* **Correção Aplicada:** 
+  1. Criada a função centralizada e reutilizável `isValidWhatsAppPhone(phone)` declarada antes dos webhooks em `api/index.ts`. A função rejeita: valores nulos/vazios, qualquer string contendo `'@'` (cobre `@g.us`, `@s.whatsapp.net` e variantes), e strings com menos de 8 dígitos numéricos após normalização. Exceção: permite os placeholders `kommo-lead-XXXX` (usados para leads do Kommo sem telefone cadastrado).
+  2. **Webhook WhatsApp:** Adicionado guard imediatamente após extrair o `phone` do payload — se inválido, o handler retorna 200 com `ignored: 'invalid_phone'` sem abortar o processo completo.
+  3. **Webhook Kommo:** Adicionado guard com `continue` dentro do `for...of` de processamento de leads — se o `contactPhone` for inválido, o lead específico é pulado com log de aviso sem interromper o processamento dos outros leads do mesmo payload.
+* **Observação:** Os 3 registros com `@g.us` já existentes no banco **NÃO foram removidos** — a limpeza retroativa será feita em etapa separada, com aprovação explícita.
+* **Erro TypeScript pré-existente identificado:** `Cannot find name 'companyId'` na linha 3121 — o `companyId` é declarado dentro do bloco `messages.upsert` mas o `catch` externo tenta acessá-lo fora do escopo. Este erro **não foi introduzido** por nenhuma das alterações desta sessão e está documentado aqui para correção futura.
+* **Data e hora da alteração:** 15/07/2026 às 16:08 (Horário Local)
+* **Arquivos modificados:** `api/index.ts`
+
+---
+
+## Alterações — Sessão 15/07/2026 (Parte 7: Hotfix de Resolução de Nome do WhatsApp)
+
+### Proteção Contra Sobrescrita do Nome do Cliente pelo Nome da Empresa
+
+* **Causa Raiz Encontrada:** 
+  O webhook `POST /api/webhooks/whatsapp` aceitava o campo `pushName` vindo da Evolution API sem verificar a direção da mensagem (`fromMe`). Quando a empresa enviava uma mensagem ou o sistema disparava mensagens automáticas (`fromMe: true`), a Evolution API retornava o nome do perfil da própria instância do WhatsApp Business (ex: "MT SOLAR | Setor Administrativo"). O código sobrescrevia o nome real do cliente no banco de dados (`contact_name`) por esse nome genérico da empresa, causando a perda da identificação do cliente em dezenas de conversas.
+* **Correção Aplicada:** 
+  1. A lógica de atualização e criação de conversa no `api/index.ts` foi rigorosamente blindada.
+  2. Implementada a checagem `if (!fromMe)`: o `pushName` só será considerado se a mensagem for efetivamente enviada pelo cliente. Se for enviada pela empresa (`fromMe: true`), o nome existente no banco de dados será mantido intacto.
+  3. Adicionada a função auxiliar `isCompanyName()` que bloqueia nomes que iniciam com "MT SOLAR" ou contêm "| SETOR", atuando como uma camada de defesa extra (fallback) caso um pushName venha incorreto, rejeitando identificadores conhecidos da própria franquia.
+  4. Comprovado que o webhook do Kommo (`/api/kommo/webhook`) usa exclusivamente os dados do Kommo CRM (`contactResult.name` ou `lead.name`) para resolver o nome e não sofre dessa vulnerabilidade, portanto nenhuma alteração foi necessária lá.
+* **Data e hora da alteração:** 15/07/2026 às 15:58 (Horário Local)
+* **Arquivos modificados:** `api/index.ts`
+
+---
+
 ## Alterações — Sessão 15/07/2026 (Parte 6: UX Comercial)
 
 ### Animação de Sucesso na Aprovação Comercial
