@@ -2,6 +2,15 @@
 
 ---
 
+## Auditoria — Sessão 17/07/2026 (Parte 1: Distribuição Round-Robin Kommo)
+
+### Verificação da Regra de Atribuição do Último Lead
+*   **O que foi feito:** Solicitada a alteração na função `getRoundRobinVendedor()` em `api/index.ts` para que o critério principal (`lastAssignedAt`) fosse calculado através do `MAX(created_at)` de todas as conversas do vendedor, ignorando a origem da mensagem (remover o filtro de `phone LIKE 'kommo-lead-%'`). Após auditoria no código, foi **confirmado que o código atual já implementa exatamente esta lógica** via Supabase `.order('created_at', { ascending: false }).limit(1)`. Não há filtro por prefixo de telefone. Portanto, a regra de distribuição já opera como desejado (baseada puramente no tempo desde o último lead recebido de qualquer origem).
+*   **Data e hora da alteração:** 17/07/2026
+*   **Arquivos modificados:** Nenhuma alteração no código (`api/index.ts` validado). Atualização apenas no `RESUMO_MESTRE.md`.
+
+---
+
 ## Alterações — Sessão 15/07/2026 (Parte 11: Implementação da Sanitização de Mídia no WhatsApp)
 
 ### Resolução Definitiva do Erro "Owned media must be a url or base64"
@@ -1318,8 +1327,12 @@ O fluxo de processamento de mÃƒÂ­dias foi otimizado para evitar expiraÃƒÂ
 
 ---
 
+* **Correção do Algoritmo Round-Robin de Distribuição de Leads:**
+  * *O que foi feito:* A função `getRoundRobinVendedor()` (em `api/index.ts`) estava distribuindo leads de forma desbalanceada quando a contagem de atendimentos (`in_progress`) estava próxima ou empatada, devido à instabilidade do método `sort()` do array, que acabava favorecendo o vendedor com menor ID. A lógica foi reescrita para adotar um critério de **rotação real baseado em ordem de chegada**: o sistema agora busca a data do último lead atribuído a cada vendedor elegível (buscando o `created_at` mais recente na tabela `whatsapp_conversations`). Quem recebeu o último lead há mais tempo (ou nunca recebeu) tem prioridade máxima. A contagem de `in_progress` foi mantida apenas como critério secundário de desempate caso dois vendedores nunca tenham recebido leads.
+  * *Data e hora da alteração:* 17/07/2026 às 10:59 (Horário Local)
+  * *Arquivos modificados:* `api/index.ts`.
 
-* **Deduplicação de Clientes e Filtro de Vendedor no Dashboard:**
+---
   * *O que foi feito:* 
     1. Implementada verificação de duplicidade de cliente no backend (`POST /api/clients`) por telefone ou CPF/CNPJ. Retorna HTTP 409 caso exista, exibindo o nome do usuário que o cadastrou.
     2. Adicionado tratamento de erro HTTP 409 no frontend (`Commercial.tsx`), exibindo um alerta amigável ao vendedor e mantendo o modal aberto para correção.
