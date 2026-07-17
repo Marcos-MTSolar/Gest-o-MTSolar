@@ -2102,3 +2102,7 @@ Esta seÃ§Ã£o rastreia os arquivos de migration que foram criados no reposit�
 |---|---|---|
 | supabase/migrations/20260625_create_whatsapp_observations.sql | Cria a tabela whatsapp_observations com RLS e Ã­ndices para o mÃ³dulo de notas do Atendimento. | 25/06/2026 |
 
+
+## [17/07/2026 18:39] Correção: Normalização Centralizada de Telefones
+- **O que foi feito:** Criada a função `normalizarTelefoneBR` para padronizar telefones e evitar duplicidade de contatos. A função injeta o 9º dígito apenas em celulares (10 dígitos começando com 6-9), respeita fixos, ignora números internacionais (ex: +1) e casos nulos. Foi aplicada em 4 pontos críticos: `getKommoLeadContact`, fallback do webhook Kommo, webhook do WhatsApp (Evolution API) e na rota de cadastro manual (`POST /api/clients`).
+- **Arquivos modificados:** `api/index.ts`

@@ -450,12 +450,14 @@ app.get('/api/clients', authenticateToken, async (req: any, res) => {
 
 app.post('/api/clients', authenticateToken, async (req: any, res) => {
   const { 
-    name, phone, email, address, city, state, cpf_cnpj, origem_venda = null,
+    name, phone: rawPhoneInput, email, address, city, state, cpf_cnpj, origem_venda = null,
     proposal_value, payment_method, kit_supplier, pendencies, notes, finance_grace_period,
     inversor_marca = null, inversor_modelo = null, inversor_potencia = null,
     modulo_modelo = null, modulo_potencia = null, estrutura_tipo = null,
     assigned_seller_id
   } = req.body;
+
+  const phone = rawPhoneInput ? normalizarTelefoneBR(rawPhoneInput) : null;
 
   let finalAssignedSellerId = assigned_seller_id || null;
   if (req.user.role === 'COMMERCIAL') {
@@ -2597,6 +2599,65 @@ app.post('/api/whatsapp/transfer', authenticateToken, async (req: any, res) => {
     res.status(400).json({ error: err.message });
   }
 });
+function normalizarTelefoneBR(rawPhone: string): string {
+  if (!rawPhone) return rawPhone;
+
+  if (rawPhone.startsWith('kommo-lead-')) {
+    return rawPhone;
+  }
+
+  if (rawPhone.trim().startsWith('+') && !rawPhone.trim().startsWith('+55')) {
+    console.warn(`[NORMALIZACAO] Código de país estrangeiro detectado: ${rawPhone}. Nenhuma normalização aplicada.`);
+    return rawPhone;
+  }
+
+  // a) Remove todos os caracteres não-numéricos.
+  let digits = rawPhone.replace(/\D/g, '');
+  if (!digits) return rawPhone;
+
+  const isBRSize = digits.length === 10 || digits.length === 11;
+  const has55 = digits.startsWith('55');
+
+  if (!has55 && !isBRSize) {
+    console.warn(`[NORMALIZACAO] Padrão atípico detectado (tamanho: ${digits.length}): ${rawPhone}. Nenhuma normalização aplicada.`);
+    return rawPhone;
+  }
+
+  // b) Remove o prefixo '55' temporariamente se já existir, para trabalhar só com DDD + número.
+  if (digits.startsWith('55') && digits.length >= 12) {
+    digits = digits.substring(2);
+  }
+
+  let finalDigits = digits;
+
+  // c) Se o número (sem 55) tiver 11 dígitos (DDD + 9 dígitos) -> mantém como está.
+  if (digits.length === 11) {
+    finalDigits = digits;
+  } 
+  // d) Se o número (sem 55) tiver 10 dígitos (DDD + 8 dígitos, SEM o 9º dígito) -> insere o dígito '9' se for celular
+  else if (digits.length === 10) {
+    const ddd = digits.substring(0, 2);
+    const numero = digits.substring(2);
+    const primeiroDigitoNumero = numero.charAt(0);
+    
+    if (['6', '7', '8', '9'].includes(primeiroDigitoNumero)) {
+      // Padrão de celular sem o 9º dígito -> insere o 9
+      finalDigits = `${ddd}9${numero}`;
+    } else {
+      // Padrão de fixo (começa com 2,3,4,5) -> NÃO insere o 9, mantém como está
+      console.log(`[NORMALIZACAO] Número de 10 dígitos identificado como FIXO (não celular): ${digits}. Nenhum 9º dígito inserido.`);
+      finalDigits = digits;
+    }
+  }
+
+  // f) Recoloca o prefixo '55' na frente.
+  const phoneNormalizado = `55${finalDigits}`;
+  
+  // h) Adicione um console.log mostrando: telefone original -> telefone normalizado
+  console.log(`[NORMALIZACAO] ${rawPhone} -> ${phoneNormalizado}`);
+  
+  return phoneNormalizado;
+}
 
 
 app.post('/api/webhooks/whatsapp', async (req, res) => {
@@ -2744,7 +2805,8 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
   // Processa nova mensagem recebida/enviada pela Evolution API
   if (body.event === 'messages.upsert') {
     const message = body.data;
-    const phone = message.key.remoteJid.split('@')[0];
+    const rawRemotePhone = message.key.remoteJid.split('@')[0];
+    const phone = normalizarTelefoneBR(rawRemotePhone);
     const fromMe = message.key.fromMe;
     const messageId = message.key.id;
     const pushName = message.pushName || null;
@@ -4950,27 +5012,81 @@ async function getRoundRobinVendedor(companyId: string): Promise<{ id: number; n
     }
   }
 
-  // Conta atendimentos ativos por vendedor
-  const counts = await Promise.all(
+  // 4. Para cada elegível, busca:
+  //    (a) O created_at da última conversa atribuída (critério PRIMÁRIO de rotação)
+  //    (b) O total de in_progress (critério SECUNDÁRIO — apenas para desempate)
+  //
+  // CRITÉRIO PRIMÁRIO: quem recebeu o lead mais antigo (ou NUNCA recebeu) é escolhido.
+  // Isso garante alternância real entre os vendedores sem depender de histórico acumulado.
+  // CRITÉRIO SECUNDÁRIO: apenas quando ambos nunca receberam lead (lastAssignedAt = null),
+  // decide por menor contagem de in_progress.
+  const enriched = await Promise.all(
     elegiveis.map(async (v: any) => {
+      // (a) Data do último lead atribuído
+      const { data: lastConvData } = await supabaseAdmin
+        .from('whatsapp_conversations')
+        .select('created_at')
+        .eq('company_id', companyId)
+        .eq('assigned_to', v.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const lastAssignedAt: string | null = lastConvData?.created_at ?? null;
+
+      // (b) Contagem de in_progress (desempate secundário)
       const { count } = await supabaseAdmin
         .from('whatsapp_conversations')
         .select('*', { count: 'exact', head: true })
         .eq('company_id', companyId)
         .eq('assigned_to', v.id)
         .eq('status', 'in_progress');
-      return { ...v, total: count ?? 0 };
+
+      const totalInProgress = count ?? 0;
+
+      return { ...v, lastAssignedAt, totalInProgress };
     })
   );
 
-  // Retorna o vendedor com menos atendimentos ativos
-  counts.sort((a: any, b: any) => a.total - b.total);
-  
-  console.log(`[ROUND-ROBIN] Distribuição atual:`);
-  counts.forEach((v: any) => console.log(`  ${v.name}: ${v.total} atendimentos`));
-  console.log(`[ROUND-ROBIN] Escolhido: ${counts[0].name} (${counts[0].total} atendimentos ativos)`);
-  
-  return counts[0];
+  // 5. Log detalhado para auditoria nos logs da Vercel
+  console.log(`[ROUND-ROBIN] ===== DISTRIBUIÇÃO ATUAL =====`);
+  enriched.forEach((v: any) => {
+    const ultimoLead = v.lastAssignedAt
+      ? new Date(v.lastAssignedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+      : 'nunca recebeu lead';
+    console.log(`[ROUND-ROBIN]   ${v.name}: in_progress=${v.totalInProgress} | último lead atribuído: ${ultimoLead}`);
+  });
+
+  // 6. Ordenação:
+  //    Primário  → lastAssignedAt ASC (null = nunca recebeu → vai primeiro)
+  //    Secundário → totalInProgress ASC (menor carga atual)
+  enriched.sort((a: any, b: any) => {
+    // Vendedor sem nenhuma conversa atribuída vai sempre primeiro
+    if (a.lastAssignedAt === null && b.lastAssignedAt !== null) return -1;
+    if (a.lastAssignedAt !== null && b.lastAssignedAt === null) return 1;
+
+    // Ambos nunca receberam → desempate por menor in_progress
+    if (a.lastAssignedAt === null && b.lastAssignedAt === null) {
+      return a.totalInProgress - b.totalInProgress;
+    }
+
+    // Critério primário: quem recebeu lead há mais tempo vai antes
+    const diff = new Date(a.lastAssignedAt).getTime() - new Date(b.lastAssignedAt).getTime();
+    if (diff !== 0) return diff;
+
+    // Mesmo timestamp (improvável): desempate por menor in_progress
+    return a.totalInProgress - b.totalInProgress;
+  });
+
+  const escolhido = enriched[0];
+  const criterio = escolhido.lastAssignedAt === null
+    ? 'nunca recebeu lead (null) — critério: menor in_progress'
+    : `último lead em ${new Date(escolhido.lastAssignedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} — critério: mais antigo`;
+
+  console.log(`[ROUND-ROBIN] Escolhido: ${escolhido.name} | ${criterio}`);
+  console.log(`[ROUND-ROBIN] ==========================================`);
+
+  return { id: escolhido.id, name: escolhido.name };
 }
 
 // Helper: busca dados do contato vinculado ao lead no Kommo
@@ -5033,15 +5149,7 @@ async function getKommoLeadContact(leadId: string, maxTentativas: number = 2): P
 
       let phone: string | null = null;
       if (rawPhone) {
-        const digits = rawPhone.replace(/\D/g, '');
-        if (digits.length === 10 || digits.length === 11) {
-          phone = `55${digits}`;
-        } else if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
-          phone = digits;
-        } else {
-          phone = digits; // Fallback se não bater os padrões comuns
-        }
-        console.log(`[KOMMO] Telefone: original=${rawPhone} normalizado=${phone}`);
+        phone = normalizarTelefoneBR(rawPhone);
       }
 
       return { name: contactName, phone };
@@ -5287,16 +5395,7 @@ app.post('/api/kommo/webhook', async (req, res) => {
           null;
 
         if (webhookPhone) {
-          const rawPhone = String(webhookPhone);
-          const digits = rawPhone.replace(/\D/g, '');
-          if (digits.length === 10 || digits.length === 11) {
-            contactPhone = `55${digits}`;
-          } else if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
-            contactPhone = digits;
-          } else {
-            contactPhone = digits;
-          }
-          console.log(`[KOMMO] Telefone: original=${rawPhone} normalizado=${contactPhone}`);
+          contactPhone = normalizarTelefoneBR(String(webhookPhone));
           console.log(`[KOMMO WEBHOOK] Usando telefone do payload do webhook para lead ${leadId}: ${contactPhone}`);
         } else {
           // Salva sem telefone usando identificador do lead como "chave"
