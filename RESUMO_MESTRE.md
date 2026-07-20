@@ -1311,8 +1311,20 @@ O fluxo de processamento de mÃƒÂ­dias foi otimizado para evitar expiraÃƒÂ
 
 ---
 
-## 11. PROBLEMAS RESOLVIDOS E TAREFAS CONCLUÃDAS
+## 11. PROBLEMAS RESOLVIDOS E TAREFAS CONCLUÍDAS
 
+---
+
+* **Saneamento Completo de Duplicatas e Normalizacao de Telefones (Race Condition no Atendimento WhatsApp):**
+  * *O que foi feito:*
+    * Diagnosticado que a ausencia de uma UNIQUE constraint no banco permitia uma Race Condition entre os webhooks do Kommo e da Evolution API, gerando conversas duplicadas para o mesmo numero de telefone.
+    * **Fase 1 - Merge principal (25 pares):** Realizado o merge de 11 pares de duplicatas exatas e 14 pares por diferenca de formatacao (12 vs 13 digitos). Criterio: prioridade para quem tinha assigned_to preenchido, depois volume de mensagens, depois last_message_at mais recente.
+    * **Fase 2 - Update em lote (169 registros legados):** Todos os registros isolados com telefone de 12 digitos normalizados para 13 digitos.
+    * **Fase 3 - Merge residual (5 pares adicionais):** Descobertos e resolvidos com sequencia corrigida (deletar secundaria antes de atualizar phone, respeitando a UNIQUE constraint ja ativa).
+    * **Grupos excluidos intencionalmente:** JIDs 120363407528204291 e 120363397458917068 mantidos como pendencia de investigacao futura (bug: conversas de grupo nao deveriam estar na tabela de atendimento).
+    * **Resultado final:** Zero duplicatas de telefone (exceto os 2 grupos), zero telefones com 12 digitos. Constraint UNIQUE (phone, company_id, instance) ativa e confirmada.
+  * *Data e hora da alteracao:* 20/07/2026 as 15:47 (Horario Local)
+  * *Arquivos modificados:* Banco de Dados Supabase (tabelas whatsapp_conversations e whatsapp_messages)
 ---
 
 ### INCIDENTE: Perda de Dados em proposal_history (18/06 a 25/06/2026)
@@ -2115,3 +2127,25 @@ Esta seÃ§Ã£o rastreia os arquivos de migration que foram criados no reposit�
 ## [20/07/2026 09:49] Correção: Proteção contra números internacionais na normalização de telefones
 - **O que foi feito:** Ajustada a função `normalizarTelefoneBR` para evitar falsos positivos em números brasileiros que chegam com o prefixo `+` mas sem o `55` (ex: `+81998286931`). A proteção contra números estrangeiros reais foi mantida (ex: `+1...`), mas agora a função verifica se a versão limpa do número possui 10 ou 11 dígitos e se os primeiros formam um DDD plausível (ex. o terceiro dígito em celular deve ser 6, 7, 8 ou 9). Caso positivo, o número é tratado como brasileiro e normalizado corretamente (adicionando o 55), evitando erros 400 de envio via Evolution API. Também foi executado um script de banco de dados que corrigiu a conversa `871149f8-5d9e-4e34-ba9f-512f2461f6f7` para o número normalizado, permitindo que as mensagens voltem a ser entregues.
 - **Arquivos modificados:** `api/index.ts`, testes em `scratch/test_phone.ts`, banco de dados Supabase (tabelas `whatsapp_conversations` e `whatsapp_messages`).
+
+
+* **Prevenção de Race Condition e Perda de Leads (Webhooks Kommo e WhatsApp):**
+  * *O que foi feito:*
+    * Substituída a lógica de verificação e criação (SELECT + INSERT) dos webhooks por UPSERT atômico.
+    * Implementada função RPC ('upsert_whatsapp_conversation') no Supabase para lidar com colisões da constraint UNIQUE (phone, company_id, instance).
+    * Adicionada gravação na Dead Letter Queue (tabela 'webhook_failures') no webhook do Kommo caso ocorra falha de inserção, eliminando perda invisível de leads.
+    * Mantida a consistência do Round-Robin para proteger vendedores já atribuídos durante uma concorrência.
+  * *Data e hora da alteração:* 20/07/2026 às 16:17 (Horário Local)
+  * *Arquivos modificados:* api/index.ts, Banco de Dados Supabase (RPC upsert_whatsapp_conversation)
+
+
+* **INCIDENTE — Correção de 24 Telefones Fixos Corrompidos pelo Lote de Normalização de Legados:**
+  * *Causa raiz:* O script de atualização em lote dos 169 registros legados (sessao anterior) inseriu o 9o digito em TODOS os numeros de 12 digitos sem passar pela logica de diferenciacao fixo/celular ja existente em normalizarTelefoneBR(). Isso corrompeu 24 numeros de telefone FIXO (3o digito local 2-5) ao transformar, por exemplo, 558738622001 (fixo) em 5587938622001 (invalido).
+  * *Extensao do dano:* 24 registros corrompidos. Desses, 22 eram atualizacoes simples diretas; 2 geraram conflito de duplicata porque o sistema (via webhook UPSERT recem-ativado) criou novos registros com o telefone correto de 12 digitos antes da reversao.
+  * *Correcao aplicada em 20/07/2026:*
+    * 22 updates diretos: removido o digito '9' da 5a posicao de cada phone corrompido (phone.slice(0,4) + phone.slice(5)).
+    * 2 merges de par (Setor Administrativo DDD 81 e DDD 27): mensagens movidas, secundaria deletada, phone do principal revertido para 12 digitos.
+  * *Resultado final:* 0 fixos corrompidos restantes. 0 duplicatas de contatos individuais (apenas os 2 JIDs de grupo documentados).
+  * *Licao aprendida:* QUALQUER correcao em lote de dados de telefone deve reutilizar a funcao normalizarTelefoneBR() ja validada — nunca replicar a logica manualmente em script solto. Scripts ad-hoc de UPDATE devem ser revisados contra a funcao canonica antes da execucao.
+  * *Data e hora da alteracao:* 20/07/2026 as 16:35 (Horario Local)
+  * *Arquivos modificados:* Banco de Dados Supabase (tabela whatsapp_conversations — 24 phone corrigidos, 2 conversas deletadas)
