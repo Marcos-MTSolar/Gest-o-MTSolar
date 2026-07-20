@@ -2606,14 +2606,34 @@ function normalizarTelefoneBR(rawPhone: string): string {
     return rawPhone;
   }
 
-  if (rawPhone.trim().startsWith('+') && !rawPhone.trim().startsWith('+55')) {
-    console.warn(`[NORMALIZACAO] Código de país estrangeiro detectado: ${rawPhone}. Nenhuma normalização aplicada.`);
-    return rawPhone;
-  }
-
   // a) Remove todos os caracteres não-numéricos.
   let digits = rawPhone.replace(/\D/g, '');
   if (!digits) return rawPhone;
+
+  if (rawPhone.trim().startsWith('+') && !rawPhone.trim().startsWith('+55')) {
+    // Pode ser um número estrangeiro OU um número BR que alguém digitou com '+' e esqueceu do 55 (ex: +81998286931)
+    const isBRSize = digits.length === 10 || digits.length === 11;
+    let isPlausibleBR = false;
+
+    if (isBRSize) {
+      const ddd = parseInt(digits.substring(0, 2), 10);
+      if (ddd >= 11 && ddd <= 99) {
+        const thirdDigit = digits.charAt(2);
+        if (digits.length === 11 && ['6', '7', '8', '9'].includes(thirdDigit)) {
+          isPlausibleBR = true;
+        } else if (digits.length === 10 && ['2', '3', '4', '5'].includes(thirdDigit)) {
+          isPlausibleBR = true;
+        }
+      }
+    }
+
+    if (isPlausibleBR) {
+      console.warn(`[NORMALIZACAO] Número parece internacional pelo '+', mas tem padrão de tamanho BR: ${rawPhone}. Tratando como brasileiro.`);
+    } else {
+      console.warn(`[NORMALIZACAO] Código de país estrangeiro detectado: ${rawPhone}. Nenhuma normalização aplicada.`);
+      return rawPhone;
+    }
+  }
 
   const isBRSize = digits.length === 10 || digits.length === 11;
   const has55 = digits.startsWith('55');
