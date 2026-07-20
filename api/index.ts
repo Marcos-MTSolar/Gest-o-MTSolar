@@ -2982,105 +2982,51 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
     if (text) {
       console.log('[WEBHOOK] Tentando processar conversa/mensagem...');
       console.log('[WEBHOOK] Dados da conversa:', JSON.stringify({ phone, pushName, companyId, instanceName }));
-      // 1. Find or Create Conversation (UPSERT)
+      // 1. Find or Create Conversation (UPSERT via RPC)
       let conversationId = null;
       let conv: any = null;
       try {
-        console.log('[WEBHOOK] Fazendo upsert da conversa para:', phone);
+        console.log('[WEBHOOK] Fazendo upsert atômico da conversa para:', phone);
         
-        const { data: existingConv } = await supabase
-          .from('whatsapp_conversations')
-          .select('*')
-          .eq('phone', phone)
-          .eq('company_id', companyId)
-          .eq('instance', instanceName)
-          .maybeSingle();
+        let resolvedName = (pushName && pushName.trim() !== '' && pushName !== 'Você') ? pushName : null;
+        if (!resolvedName) {
+          const { data: clientMatch } = await supabaseAdmin
+            .from('clients')
+            .select('name')
+            .eq('phone', phone)
+            .eq('company_id', companyId)
+            .maybeSingle();
+          if (clientMatch?.name) resolvedName = clientMatch.name;
+        }
 
+        const insertPayload = {
+          phone,
+          company_id: companyId,
+          instance: instanceName,
+          contact_name: resolvedName,
+          last_message: text,
+          last_message_at: new Date().toISOString(),
+          status: sanitizeConversationStatus(fromMe ? 'in_progress' : 'waiting', null)
+        };
 
-        if (existingConv) {
-          // Atualizar conversa existente
-          let newStatus = existingConv.status;
-          if (!fromMe && newStatus !== 'in_progress') newStatus = 'waiting';
+        const { data: upserted, error: upsertError } = await supabaseAdmin.rpc('upsert_whatsapp_conversation', {
+          payload: insertPayload
+        });
 
-          newStatus = sanitizeConversationStatus(newStatus, existingConv.assigned_to);
-
-          // Se pushName veio preenchido, usa ele.
-          // Se não veio (mensagem fromMe do Kommo), mantém o nome já salvo na conversa.
-          // Se não há nome salvo, tenta buscar na tabela clients pelo telefone.
-          let resolvedName = 
-            (pushName && pushName.trim() !== '' && pushName !== 'Você') 
-              ? pushName 
-              : existingConv?.contact_name || null;
-
-          if (!resolvedName || resolvedName === 'Você') {
-            const { data: clientMatch } = await supabaseAdmin
-              .from('clients')
-              .select('name')
-              .eq('phone', phone)
-              .eq('company_id', companyId)
-              .maybeSingle();
-            if (clientMatch?.name) resolvedName = clientMatch.name;
-          }
-
-          const { data: updated } = await supabase
-            .from('whatsapp_conversations')
-            .update({
-              contact_name: (resolvedName && resolvedName !== 'Você') ? resolvedName : (existingConv.contact_name !== 'Você' ? existingConv.contact_name : null),
-              last_message: text,
-              last_message_at: new Date().toISOString(),
-              status: newStatus
-            })
-            .eq('id', existingConv.id)
-            .select()
-            .single();
-
-          conv = updated;
-          conversationId = existingConv.id;
-          console.log('[WEBHOOK] Conversa existente atualizada. ID:', conversationId, 'instance:', instanceName);
+        if (upsertError || !upserted || upserted.length === 0) {
+          console.error('[WEBHOOK ERROR] Falha no UPSERT da conversa:', upsertError?.message);
+          await supabaseAdmin.from('webhook_failures').insert({
+            payload_raw: body,
+            error_message: `Falha no UPSERT (RPC) da conversa: ${upsertError?.message || 'Retorno vazio'}`,
+            company_id: companyId
+          });
         } else {
-          // Criar nova conversa
-          // Tenta resolver o nome mesmo quando pushName vem vazio (ex: mensagens fromMe do Kommo)
-          let newConvName = (pushName && pushName.trim() !== '' && pushName !== 'Você') ? pushName : null;
-
-          if (!newConvName || newConvName === 'Você') {
-            const { data: clientMatch } = await supabaseAdmin
-              .from('clients')
-              .select('name')
-              .eq('phone', phone)
-              .eq('company_id', companyId)
-              .maybeSingle();
-            if (clientMatch?.name) newConvName = clientMatch.name;
-          }
-
-          const { data: inserted, error: insertError } = await supabase
-            .from('whatsapp_conversations')
-            .insert({
-              phone,
-              company_id: companyId,
-              contact_name: (newConvName && newConvName !== 'Você') ? newConvName : null,
-              last_message: text,
-              last_message_at: new Date().toISOString(),
-              status: sanitizeConversationStatus('waiting', null),
-              instance: instanceName
-            })
-            .select()
-            .single();
-
-          if (insertError) {
-            console.error('[WEBHOOK ERROR] Falha ao criar conversa:', insertError.message);
-            await supabaseAdmin.from('webhook_failures').insert({
-              payload_raw: body,
-              error_message: `Falha ao criar conversa: ${insertError.message}`,
-              company_id: companyId  // empresa já estava resolvida neste ponto
-            });
-          } else {
-            conv = inserted;
-            conversationId = inserted.id;
-            console.log('[WEBHOOK] Nova conversa criada. ID:', conversationId, 'instance:', instanceName);
-          }
+          conv = upserted[0];
+          conversationId = conv.id;
+          console.log('[WEBHOOK] Upsert (RPC) concluído. Conversa ID:', conversationId);
         }
       } catch (err: any) {
-        console.error('[WEBHOOK ERROR] Erro inesperado ao processar conversa:', err.message, err.details);
+        console.error('[WEBHOOK ERROR] Erro inesperado ao processar UPSERT da conversa:', err.message);
       }
 
       // 2. Save Message
@@ -5507,16 +5453,22 @@ app.post('/api/kommo/webhook', async (req, res) => {
         insertPayload.tags = tagsToInsert;
       }
 
-      const { data: novaConversa, error: convError } = await supabaseAdmin
-        .from('whatsapp_conversations')
-        .insert(insertPayload)
-        .select()
-        .single();
+      const { data: upsertedResult, error: upsertError } = await supabaseAdmin.rpc('upsert_whatsapp_conversation', {
+        payload: insertPayload
+      });
 
-      if (convError || !novaConversa) {
-        console.error(`[KOMMO WEBHOOK] Erro ao criar conversa:`, convError?.message);
+      if (upsertError || !upsertedResult || upsertedResult.length === 0) {
+        console.error(`[KOMMO WEBHOOK] Erro ao criar/atualizar conversa (UPSERT):`, upsertError?.message);
+        // PREVENINDO PERDA INVISÍVEL
+        await supabaseAdmin.from('webhook_failures').insert({
+          payload_raw: req.body,
+          error_message: `Falha no UPSERT do Kommo para o Lead ${lead.id}: ${upsertError?.message || 'Retorno vazio'}`,
+          company_id: companyId
+        });
         continue;
       }
+      
+      const novaConversa = upsertedResult[0];
 
       if (isTempPhone) {
         console.log(`[KOMMO WEBHOOK] Conversa criada/encontrada para lead sem telefone: ${novaConversa.id}`);
