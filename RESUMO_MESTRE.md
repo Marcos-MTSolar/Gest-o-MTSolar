@@ -2,6 +2,37 @@
 
 ---
 
+## Alterações — Sessão 22/07/2026 (Otimização de Polling do Chat e Logs do Realtime)
+
+### Otimização e Rede de Segurança no Chat do WhatsApp
+*   **Causa Raiz / Contexto Histórico:** O polling de 3 segundos no frontend para `GET /api/conversations/:id/messages` foi adicionado originalmente como um "workaround" em 18/05/2026 (12 dias após a implementação do Realtime) para contornar quedas silenciosas de Websocket. No entanto, sua agressividade gerava cerca de ~36.000 chamadas diárias inúteis (para 3 operadores simultâneos), gerando ~72.000 queries redundantes no Supabase por dia.
+*   **Correção Aplicada:**
+    1. Aumentado o intervalo de polling de fallback de `3s` (3000ms) para `30s` (30000ms) no useEffect do chat em [WhatsApp.tsx](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/src/pages/WhatsApp.tsx).
+    2. Adicionado um listener de visibilidade (`visibilitychange`) que realiza o fetch imediato de mensagens quando a aba do navegador volta a ficar visível/focada (`document.visibilityState === 'visible'`).
+    3. Adicionado log no método `.subscribe()` do canal do Supabase Realtime (`[WA-REALTIME] Status da conexão:`) para monitorar o status do Websocket no console e coletar dados para futuras otimizações.
+*   **Impacto Estimado:** Redução de aproximadamente 90% no volume diário de requisições de polling do chat (de ~36.000 chamadas para ~3.600 chamadas diárias).
+*   **Testes Realizados:**
+    - Verificado que mensagens novas continuam aparecendo instantaneamente via canal WebSocket de Realtime do Supabase.
+    - Confirmada a limpeza correta do event listener e do intervalo ao desmontar o componente.
+*   **Data e hora da alteração:** 22/07/2026 às 19:56
+*   **Arquivos modificados:** [src/pages/WhatsApp.tsx](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/src/pages/WhatsApp.tsx)
+
+---
+
+## Alterações — Sessão 22/07/2026 (Correção de Timeout no Webhook do WhatsApp e Estouro de CPU Vercel)
+
+### Correção de Falta de Resposta HTTP em Descartes Precoces
+*   **Causa Raiz:** O manipulador de rota `POST /api/webhooks/whatsapp` em [api/index.ts](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/api/index.ts) possuía múltiplos pontos de descarte precoce (como descarte de mensagens de grupo `@g.us` e status de confirmação `READ`/`DELIVERY_ACK`) contendo apenas a instrução `return;`. Sem o envio de uma resposta HTTP correspondente via Express (`res.send()` ou `res.json()`), a conexão ficava pendurada na Vercel até atingir o limite máximo de timeout de 30 segundos (erro 504), sendo o principal responsável pelo estouro do limite de CPU Fluid Active da plataforma.
+*   **Correção Aplicada:**
+    - Substituídos os 3 pontos de descarte precoce por `return res.status(200).json({ status: 'ok', success: true, ignored: true });` para encerrar e responder imediatamente as requisições na Vercel.
+*   **Testes Realizados:**
+    - Verificado que mensagens normais de contatos externos (`messages.upsert` de leads) continuam sendo integradas e salvas com sucesso no banco Supabase.
+    - Verificado que eventos de status de confirmação e mensagens de grupo são ignorados de imediato com sucesso (status 200), zerando as ocorrências de timeouts de 30 segundos na Vercel.
+*   **Data e hora da alteração:** 22/07/2026 às 19:40
+*   **Arquivos modificados:** [api/index.ts](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/api/index.ts)
+
+---
+
 ## Alterações — Sessão 22/07/2026 (Build do APK de Teste - Proposta Comercial)
 
 ### Geração de APK de Debug para Validação no Dispositivo Físico
