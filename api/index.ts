@@ -2689,7 +2689,7 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
     const remoteJid: string = payload?.data?.key?.remoteJid ?? '';
   if (remoteJid.endsWith('@g.us')) {
     console.log('[WA-WEBHOOK] Mensagem de grupo ignorada:', remoteJid);
-    return;
+    return res.status(200).json({ status: 'ok', success: true, ignored: true });
   }
 
   // Filtro de status de confirmação aplicado APENAS fora de messages.upsert
@@ -2699,7 +2699,7 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
     const statusesParaIgnorar = ['DELIVERY_ACK', 'READ', 'PLAYED', 'SERVER_ACK'];
     if (statusesParaIgnorar.includes(messageStatus)) {
       console.log('[WA-WEBHOOK] Status de confirmação ignorado (evento não é messages.upsert):', messageStatus);
-      return;
+      return res.status(200).json({ status: 'ok', success: true, ignored: true });
     }
   }
 
@@ -2837,7 +2837,7 @@ app.post('/api/webhooks/whatsapp', async (req, res) => {
     const statusesDeConfirmacao = ['DELIVERY_ACK', 'READ', 'PLAYED', 'SERVER_ACK'];
     if (statusesDeConfirmacao.includes(msgStatus) && fromMe) {
       console.log('[WA-WEBHOOK] messages.upsert ignorado: status de confirmação de mensagem enviada:', msgStatus);
-      return;
+      return res.status(200).json({ status: 'ok', success: true, ignored: true });
     }
 
     let mediaType = null;
