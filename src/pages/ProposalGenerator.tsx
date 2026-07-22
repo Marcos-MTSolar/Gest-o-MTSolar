@@ -2464,6 +2464,59 @@ export default function ProposalGenerator() {
         const pageWidth  = 210; // mm
         const pageHeight = 297; // mm
 
+        // ETAPA A: Pré-conversão das imagens de fundo estáticas para base64
+        const imageUrls = [
+          '/Pag__1.jpeg',
+          '/Pag__2.jpeg',
+          '/Pag__3.jpeg',
+          '/Pag__4.jpeg'
+        ];
+
+        const convertImageToBase64 = async (url: string): Promise<string> => {
+          try {
+            console.log(`[PDF] Iniciando fetch para conversão de imagem: ${url}`);
+            const response = await fetch(url);
+            if (!response.ok) {
+              throw new Error(`Erro HTTP! status: ${response.status}`);
+            }
+            const blob = await response.blob();
+            const base64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+            console.log(`[PDF] Imagem ${url} convertida com sucesso.`);
+            return base64;
+          } catch (err) {
+            console.error(`[PDF] Erro ao converter ${url} para base64:`, err);
+            return '';
+          }
+        };
+
+        console.log('[PDF] Convertendo imagens de fundo para base64 antes do html2canvas...');
+        const base64Images = await Promise.all(imageUrls.map(url => convertImageToBase64(url)));
+        console.log('[PDF] Conversão concluída.');
+
+        // Verificar se alguma imagem falhou na conversão
+        imageUrls.forEach((url, idx) => {
+          if (!base64Images[idx]) {
+            console.warn(`[PDF] AVISO: A imagem de fundo ${url} falhou na conversão e pode aparecer em branco.`);
+          }
+        });
+
+        // Substituir as URLs das imagens pelas strings base64 no HTML
+        const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        let htmlComBase64 = html;
+        imageUrls.forEach((url, index) => {
+          const base64 = base64Images[index];
+          if (base64) {
+            // Substitui todas as ocorrências de forma segura escapando caracteres especiais
+            htmlComBase64 = htmlComBase64.replace(new RegExp(escapeRegex(url), 'g'), base64);
+          }
+        });
+
         // ETAPA 1: Criar container oculto fora da viewport
         const container = document.createElement('div');
         container.style.cssText = [
@@ -2476,7 +2529,7 @@ export default function ProposalGenerator() {
           'pointer-events:none',
           'overflow:visible',
         ].join(';');
-        container.innerHTML = html;
+        container.innerHTML = htmlComBase64;
         document.body.appendChild(container);
 
         try {
@@ -2513,7 +2566,7 @@ export default function ProposalGenerator() {
             const canvas = await html2canvas(pageEl, {
               scale: 2,
               useCORS: true,
-              allowTaint: true,
+              allowTaint: false, // Alterado para false: agora que temos as imagens em base64, não queremos permitir taint para evitar erros silenciosos
               logging: false,
               width:  pageEl.scrollWidth,
               height: pageEl.scrollHeight,

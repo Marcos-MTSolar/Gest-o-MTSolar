@@ -2,6 +2,22 @@
 
 ---
 
+## Alterações — Sessão 22/07/2026 (Correção de PDF em Branco no Capacitor Mobile)
+
+### Pré-conversão de Imagens Estáticas de Fundo para Base64 no PDF Comercial
+*   **O que foi feito:**
+    - Correção do bug em que o PDF comercial nativo (APK Android/Capacitor) gerava páginas completamente em branco.
+    - **Causa Raiz:** O `html2canvas` tentava renderizar caminhos relativos de imagens (como `/Pag__1.jpeg`) sob o domínio do Capacitor nativo, disparando restrições de mesma origem (same-origin policy) e tornando o canvas *tainted* (sujo). Ao chamar `canvas.toDataURL()`, a exportação falhava silenciosamente no WebView nativo do Android.
+    - **Solução Definitiva:**
+        1. Criada função auxiliar `convertImageToBase64` utilizando `fetch` + `FileReader` para pré-converter as 4 imagens estáticas de fundo (`/Pag__1.jpeg` a `/Pag__4.jpeg`) para base64 puro antes do início da rasterização por parte do `html2canvas`.
+        2. Adicionado wrap de segurança `escapeRegex` na substituição das URLs originais por strings base64 no HTML injetado temporariamente no DOM.
+        3. Alterado o parâmetro `allowTaint: true` para `allowTaint: false` nas configurações do `html2canvas`, assegurando que problemas futuros de recursos externos de segurança impeçam o taint e emitam avisos adequados.
+        4. Adicionados logs de aviso no console (`console.warn`) caso a conversão em base64 de alguma imagem falhe, facilitando o diagnóstico em runtime.
+*   **Data e hora da alteração:** 22/07/2026 às 10:47
+*   **Arquivos modificados:** `src/pages/ProposalGenerator.tsx`, `RESUMO_MESTRE.md`.
+
+---
+
 ## Auditoria — Sessão 17/07/2026 (Parte 1: Distribuição Round-Robin Kommo)
 
 ### Verificação da Regra de Atribuição do Último Lead
