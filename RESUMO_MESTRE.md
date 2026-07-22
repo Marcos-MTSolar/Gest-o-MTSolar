@@ -2,6 +2,19 @@
 
 ---
 
+## Alterações — Sessão 22/07/2026 (Build do APK de Teste - Proposta Comercial)
+
+### Geração de APK de Debug para Validação no Dispositivo Físico
+*   **O que foi feito:**
+    - Executado o comando `npx cap sync android` para copiar a pasta `dist` (contendo a correção do PDF da Proposta Comercial) e sincronizar os plugins nativos do Capacitor.
+    - Confirmado no arquivo [build.gradle](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/android/app/build.gradle) que o `versionCode` (12) e o `versionName` ("1.1.0") não necessitam de incremento para builds de depuração local (debug).
+    - Gerado o APK de debug utilizando o comando `./gradlew assembleDebug` dentro do diretório `android`.
+    - Identificado e validado o caminho do APK final gerado.
+*   **Data e hora da alteração:** 22/07/2026 às 10:53
+*   **Arquivos modificados:** `RESUMO_MESTRE.md` (apenas registro do fluxo).
+
+---
+
 ## Alterações — Sessão 22/07/2026 (Correção de PDF em Branco no Capacitor Mobile)
 
 ### Pré-conversão de Imagens Estáticas de Fundo para Base64 no PDF Comercial
