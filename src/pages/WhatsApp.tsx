@@ -311,17 +311,27 @@ export default function WhatsApp() {
         }, (payload) => {
           setMessages(prev => [...prev, payload.new as Message]);
         })
-        .subscribe();
+        .subscribe((status) => {
+          console.log('[WA-REALTIME] Status da conexão:', status);
+        });
+
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible' && selectedConversation?.id) {
+          fetchMessages(selectedConversation.id);
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
 
       const pollInterval = setInterval(() => {
         if (selectedConversation?.id) {
           fetchMessages(selectedConversation.id);
         }
-      }, 3000);
+      }, 30000);
 
       return () => {
         supabase.removeChannel(messageSubscription);
         clearInterval(pollInterval);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
       };
     } else {
       setMessages([]);
