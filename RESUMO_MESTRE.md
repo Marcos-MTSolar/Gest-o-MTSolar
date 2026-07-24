@@ -178,7 +178,26 @@ Nenhum novo erro introduzido.
 * **Data e hora da alteração:** 15/07/2026 às 16:08 (Horário Local)
 * **Arquivos modificados:** `api/index.ts`
 
+## Alterações — Sessão 24/07/2026 (Correção de Download de Proposta no Mobile)
+
+### Correção na Geração e Armazenamento Local de PDF (Capacitor Mobile)
+
+* **Causa Raiz Encontrada:** 
+  No ambiente nativo Android (Capacitor), o botão de geração de proposta tentava compartilhar o arquivo chamando `Share.share` com a URI de retorno do `Filesystem.getUri()` apontando para `Directory.Documents` (um diretório interno/privado do app). Como a URI de esquema `file://` não estava sendo exposta através de um FileProvider mapeado para esse diretório específico, e o arquivo não estava sendo salvo em uma pasta de visibilidade pública, o compartilhamento resultava em um arquivo corrompido ou em branco de apenas 1 página no destino (ex: WhatsApp). Além disso, não existia uma forma para o usuário salvar o arquivo de maneira autônoma na pasta de Downloads do dispositivo.
+
+* **Correção Aplicada:** 
+  1. **Fluxo Híbrido com Fallback**: Implementou-se um fluxo de duas etapas em [ProposalGenerator.tsx](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/src/pages/ProposalGenerator.tsx) para o bloco de plataforma nativa.
+  2. **Escrita no Diretório de Downloads**: O app tenta primeiramente salvar o PDF diretamente no diretório público `Directory.Downloads`.
+  3. **Fallback para Documentos**: Caso a escrita em Downloads falhe por restrições do sistema ou do dispositivo, o catch redireciona a gravação para o diretório interno `Directory.Documents`.
+  4. **Feedback de Sucesso**: Um toast é exibido na tela (`toast.success`) apenas **após** a confirmação de que o arquivo foi gravado fisicamente em disco, informando onde o arquivo foi salvo ("Downloads" ou "Documentos").
+  5. **Compartilhamento Opcional**: Após a gravação bem-sucedida, a janela nativa de compartilhamento (`Share.share`) é aberta como conveniência. Se o compartilhamento falhar ou for cancelado pelo usuário, o arquivo permanece salvo localmente e íntegro no aparelho.
+
+* **Data e hora da alteração:** 24/07/2026 às 09:12 (Horário Local)
+* **Arquivos modificados:** `src/pages/ProposalGenerator.tsx`
+
 ---
+
+
 
 ## Alterações — Sessão 15/07/2026 (Parte 7: Hotfix de Resolução de Nome do WhatsApp)
 

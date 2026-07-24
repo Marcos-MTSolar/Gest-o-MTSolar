@@ -2606,27 +2606,57 @@ export default function ProposalGenerator() {
               reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
               reader.onerror = reject;
             });
+
+            let writeResult;
+            let targetDirectory = Directory.Downloads;
+
+            try {
+              // Tentativa 1: Pasta pública de Downloads
+              writeResult = await Filesystem.writeFile({
+                path: fileName,
+                data: base64Data,
+                directory: Directory.Downloads
+              });
+            } catch (errDownloads) {
+              console.warn('Falha ao gravar no Directory.Downloads, tentando Directory.Documents...', errDownloads);
+              // Fallback Tentativa 2: Pasta Documents
+              targetDirectory = Directory.Documents;
+              writeResult = await Filesystem.writeFile({
+                path: fileName,
+                data: base64Data,
+                directory: Directory.Documents
+              });
+            }
+
+            // Importação do toast para feedback em tempo real
+            const { default: toast } = await import('react-hot-toast');
             
-            await Filesystem.writeFile({
-              path: fileName,
-              data: base64Data,
-              directory: Directory.Documents
-            });
-            
-            const uriResult = await Filesystem.getUri({
-              directory: Directory.Documents,
-              path: fileName
-            });
-            
-            await Share.share({
-              title: `Proposta MT Solar - ${formData.clientName || 'Cliente'}`,
-              text: 'Confira a proposta comercial.',
-              url: uriResult.uri,
-              dialogTitle: 'Compartilhar Proposta'
-            });
-          } catch (mobileErr) {
-            console.error('Erro ao compartilhar PDF no mobile:', mobileErr);
-            alert('Erro ao gerar/compartilhar o PDF no dispositivo.');
+            if (targetDirectory === Directory.Downloads) {
+              toast.success('Proposta salva em Downloads!');
+            } else {
+              toast.success('Proposta salva em Documentos!');
+            }
+
+            // Compartilhamento opcional rápido pós-salvamento
+            try {
+              const uriResult = await Filesystem.getUri({
+                directory: targetDirectory,
+                path: fileName
+              });
+              
+              await Share.share({
+                title: `Proposta MT Solar - ${formData.clientName || 'Cliente'}`,
+                text: 'Confira a proposta comercial.',
+                url: uriResult.uri,
+                dialogTitle: 'Compartilhar Proposta'
+              });
+            } catch (shareErr) {
+              console.warn('Compartilhamento ignorado ou indisponível:', shareErr);
+            }
+
+          } catch (mobileErr: any) {
+            console.error('Erro crítico ao gerar/salvar PDF no mobile:', mobileErr);
+            alert(`Erro ao salvar o PDF no dispositivo: ${mobileErr?.message || mobileErr || 'Erro desconhecido'}`);
           } finally {
             setIsGeneratingPDF(false);
           }
