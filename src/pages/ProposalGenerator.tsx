@@ -2674,37 +2674,18 @@ export default function ProposalGenerator() {
               reader.onerror = reject;
             });
 
-            let writeResult;
-            let targetDirectory = Directory.Downloads;
-
-            try {
-              // Tentativa 1: Pasta pública de Downloads
-              writeResult = await Filesystem.writeFile({
-                path: fileName,
-                data: base64Data,
-                directory: Directory.Downloads,
-                recursive: true
-              });
-            } catch (errDownloads) {
-              console.warn('Falha ao gravar no Directory.Downloads, tentando Directory.Documents...', errDownloads);
-              // Fallback Tentativa 2: Pasta Documents
-              targetDirectory = Directory.Documents;
-              writeResult = await Filesystem.writeFile({
-                path: fileName,
-                data: base64Data,
-                directory: Directory.Documents,
-                recursive: true
-              });
-            }
+            // Salva diretamente na pasta sandbox local Documents para evitar restrições de Scoped Storage no Android
+            const targetDirectory = Directory.Documents;
+            const writeResult = await Filesystem.writeFile({
+              path: fileName,
+              data: base64Data,
+              directory: targetDirectory,
+              recursive: true
+            });
 
             // Importação do toast para feedback em tempo real
             const { default: toast } = await import('react-hot-toast');
-            
-            if (targetDirectory === Directory.Downloads) {
-              toast.success('Proposta salva em Downloads!');
-            } else {
-              toast.success('Proposta salva em Documentos!');
-            }
+            toast.success('PDF pronto! Abrindo compartilhamento...');
 
             // Compartilhamento opcional rápido pós-salvamento
             try {
@@ -2755,11 +2736,11 @@ export default function ProposalGenerator() {
             await Filesystem.writeFile({
               path: 'pdf-debug-log.txt',
               data: debugLog,
-              directory: Directory.Downloads,
+              directory: Directory.Documents,
               encoding: Encoding.UTF8,
               recursive: true
             });
-            console.log('[PDF DEBUG] Log de diagnóstico gravado com sucesso.');
+            console.log('[PDF DEBUG] Log de diagnóstico gravado com sucesso em Documents.');
           } catch (logErr) {
             console.error('[PDF DEBUG] Erro ao gravar log de diagnóstico:', logErr);
           }
@@ -2846,11 +2827,11 @@ export default function ProposalGenerator() {
       await Filesystem.writeFile({
         path: 'teste-simples.txt',
         data: 'teste ' + new Date().toISOString(),
-        directory: Directory.Downloads,
+        directory: Directory.Documents,
         encoding: Encoding.UTF8,
         recursive: true
       });
-      alert('Escrita OK! Salvo em Downloads.');
+      alert('Escrita OK! Salvo em Documentos.');
     } catch (e: any) {
       alert('ERRO: ' + (e?.message || JSON.stringify(e)));
     }
