@@ -308,6 +308,7 @@ export default function ProposalGenerator() {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   // Estado para avisos sobre salvamento no histórico (sucesso, warning ou erro crítico)
   const [historyNotice, setHistoryNotice] = useState<{ type: 'success' | 'warning' | 'error'; message: string } | null>(null);
+  const [debugLogContent, setDebugLogContent] = useState<string>('');
 
   useEffect(() => {
     if (location.state) {
@@ -2837,6 +2838,20 @@ export default function ProposalGenerator() {
     }
   };
 
+  const lerLogDebug = async () => {
+    try {
+      const resultado = await Filesystem.readFile({
+        path: 'pdf-debug-log.txt',
+        directory: Directory.Documents,
+        encoding: Encoding.UTF8
+      });
+      setDebugLogContent(resultado.data as string);
+      alert('Log lido com sucesso! Veja o campo de texto exibido no topo da tela.');
+    } catch (e: any) {
+      alert('Erro ao ler log: ' + (e?.message || JSON.stringify(e)));
+    }
+  };
+
   const tabs = [
     { id: 'dados' as TabType, label: 'Dados do Cliente', icon: User },
     { id: 'kit' as TabType, label: 'Kit Solar', icon: Package },
@@ -2873,6 +2888,12 @@ export default function ProposalGenerator() {
             >
               [TESTE] Gravar TXT
             </button>
+            <button
+              onClick={lerLogDebug}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow border border-blue-400 active:scale-95 transition-all"
+            >
+              [LER LOG] pdf-debug-log.txt
+            </button>
           </div>
           <div>
             {!formData.clientName || !formData.kitCost ? (
@@ -2889,6 +2910,28 @@ export default function ProposalGenerator() {
           </div>
         </div>
       </header>
+
+      {/* Campo temporário para exibir e copiar o debugLogContent */}
+      {debugLogContent && (
+        <div className="bg-gray-950 text-green-400 p-4 rounded-xl shadow-inner border border-gray-800 space-y-2">
+          <div className="flex justify-between items-center border-b border-gray-800 pb-2">
+            <span className="text-xs font-bold font-mono text-gray-400">Conteúdo do pdf-debug-log.txt:</span>
+            <button 
+              onClick={() => setDebugLogContent('')}
+              className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1 rounded"
+            >
+              Fechar
+            </button>
+          </div>
+          <textarea 
+            readOnly 
+            value={debugLogContent} 
+            className="w-full h-80 bg-transparent font-mono text-xs focus:outline-none resize-y"
+            onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+          />
+          <p className="text-[10px] text-gray-500">Dica: Dê um clique dentro da caixa de texto para selecionar tudo e copiar.</p>
+        </div>
+      )}
 
       {editingProposalId && activeTab !== 'historico' && (
         <div className="bg-amber-100 border-l-4 border-amber-500 text-amber-800 p-4 rounded-xl shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -2959,6 +3002,8 @@ export default function ProposalGenerator() {
           })}
         </div>
       </div>
+
+
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-2 p-1 bg-gray-200 rounded-lg overflow-hidden">
