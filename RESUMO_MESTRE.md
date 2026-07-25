@@ -1385,12 +1385,222 @@ O fluxo de processamento de mÃƒÂ­dias foi otimizado para evitar expiraÃƒÂ
 
 ### Mobile com Capacitor
 * **SincronizaÃƒÂ§ÃƒÂ£o:** ApÃƒÂ³s o build de produÃƒÂ§ÃƒÂ£o (`npm run build`), o comando `npx cap sync` atualiza as plataformas mÃƒÂ³veis (`android` e `ios`) copiando a pasta `/dist` e os plugins necessÃƒÂ¡rios.
+* `status` (TEXT - `'sent', 'delivered', 'read'`)
+* `media_type` (TEXT - `'image', 'audio', 'document', 'video', 'sticker'`)
+* `media_url` (TEXT - Link pÃƒÂºblico e permanente no Supabase Storage)
+* `file_name` (TEXT)
+* `file_size` (NUMERIC)
+* `is_internal` (BOOLEAN - Se a mensagem foi escrita como anotaÃƒÂ§ÃƒÂ£o interna e nÃƒÂ£o enviada ao cliente)
+
+#### `work_schedules` (HorÃƒÂ¡rios de Trabalho por FunÃƒÂ§ÃƒÂ£o/Empresa)
+* `id` (SERIAL - Primary Key)
+* `company_id` (UUID - References `companies.id` ON DELETE CASCADE)
+* `role` (TEXT - Restrito via CHECK: `'CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'`)
+* `entry_time` (TIME - HorÃƒÂ¡rio de entrada)
+* `lunch_start` (TIME - HorÃƒÂ¡rio de inÃƒÂ­cio do almoÃƒÂ§o)
+* `lunch_end` (TIME - HorÃƒÂ¡rio de tÃƒÂ©rmino do almoÃƒÂ§o)
+* `exit_time` (TIME - HorÃƒÂ¡rio de saÃƒÂ­da)
+* `created_at` (TIMESTAMPTZ)
+
+#### `time_records` (Registros de Ponto EletrÃƒÂ´nico)
+* `id` (SERIAL - Primary Key)
+* `company_id` (UUID - References `companies.id` ON DELETE CASCADE)
+* `user_id` (INTEGER - References `users.id` ON DELETE CASCADE)
+* `type` (TEXT - Restrito via CHECK: `'entry', 'lunch_start', 'lunch_end', 'exit'`)
+* `timestamp` (TIMESTAMPTZ - Registro de data/hora do ponto)
+* `latitude` (NUMERIC)
+* `longitude` (NUMERIC)
+* `selfie_url` (TEXT - Link pÃƒÂºblico da foto de selfie no Supabase Storage)
+* `selfie_path` (TEXT - Caminho interno da foto no bucket de Storage)
+* `status` (TEXT - Restrito via CHECK: `'pending', 'approved', 'adjustment_requested'`)
+
+#### `time_adjustments` (SolicitaÃƒÂ§ÃƒÂµes de Ajuste de Ponto)
+* `id` (SERIAL - Primary Key)
+* `company_id` (UUID - References `companies.id` ON DELETE CASCADE)
+* `time_record_id` (INTEGER - References `time_records.id` ON DELETE CASCADE)
+* `requested_by` (INTEGER - References `users.id` ON DELETE CASCADE)
+* `justification` (TEXT - Justificativa detalhada do funcionÃƒÂ¡rio para o ajuste)
+* `new_timestamp` (TIMESTAMPTZ - Nova data/hora solicitada)
+* `status` (TEXT - Restrito via CHECK: `'pending', 'approved', 'rejected'`)
+* `reviewed_by` (INTEGER - References `users.id` - ID do usuÃƒÂ¡rio gestor que aprovou/rejeitou)
+* `reviewed_at` (TIMESTAMPTZ - Data/hora da revisÃƒÂ£o)
+* `created_at` (TIMESTAMPTZ)
+
+
+### Regras de Isolamento Multi-Tenant (company_id)
+* **Preenchimento:** Todas as inserÃƒÂ§ÃƒÂµes nas tabelas crÃƒÂ­ticas incluem a coluna `company_id` obtida no lado do servidor via decodificaÃƒÂ§ÃƒÂ£o do JWT Token do usuÃƒÂ¡rio conectado.
+* **Isolamento:** Toda requisiÃƒÂ§ÃƒÂ£o `SELECT`, `UPDATE` ou `DELETE` no backend Express injeta a clÃƒÂ¡usula `.eq('company_id', req.user.company_id)` para impedir vazamento ou alteraÃƒÂ§ÃƒÂ£o de dados entre diferentes empresas contratantes.
+
+
+---
+
+## 6. INTEGRAÃƒâ€¡Ãƒâ€¢ES EXTERNAS
+
+### Evolution API (WhatsApp)
+* **Envio:** O frontend dispara requisiÃƒÂ§ÃƒÂµes para a API local Express em rotas como `/api/whatsapp/send`. O backend localiza as credenciais seguras da instÃƒÂ¢ncia (Base URL, API Key) na tabela `company_instances` e faz o disparo do JSON para a Evolution API.
+* **Recebimento via Webhook:** A Evolution API monitora o celular e envia webhooks (`POST /api/webhooks/whatsapp`) para o backend da aplicaÃƒÂ§ÃƒÂ£o. O Express resolve qual empresa ÃƒÂ© dona da mensagem processando o `instance_name` recebido e salvando nas tabelas `whatsapp_conversations` e `whatsapp_messages`.
+
+### Supabase Storage
+O armazenamento de arquivos ÃƒÂ© dividido nos seguintes Buckets de acesso:
+1. **`whatsapp-media`:** Guarda permanentemente imagens, ÃƒÂ¡udios e documentos trocados pelo painel do WhatsApp.
+2. **`propostas`:** Armazena os PDFs de propostas gerados pela equipe comercial.
+3. **`uploads`:** Guarda documentos gerais e fotos rÃƒÂ¡pidas de vistoria cadastrados via CRM Kanban.
+4. **`obras-fotos`:** Fotos de checklists de obras enviadas pelos instaladores.
+5. **`homologacao-docs`:** DocumentaÃƒÂ§ÃƒÂµes burocrÃƒÂ¡ticas submetidas ÃƒÂ s distribuidoras de energia.
+
+### Firebase (Push Notifications)
+* **ServiÃƒÂ§o FCM:** O Firebase Admin SDK no Express ÃƒÂ© inicializado com chaves privadas de ambiente. Quando um status de projeto ou mensagem do WhatsApp precisa alertar um usuÃƒÂ¡rio mobile, o backend busca o `push_token` do usuÃƒÂ¡rio na tabela `users` e envia o payload.
+
+### Vercel (Deploy e Serverless)
+* **Backend Serverless:** O arquivo `/api/index.ts` roda em ambiente Vercel. Todas as rotas de API `/api/*` sÃƒÂ£o reescritas para apontar para a serverless function monolÃƒÂ­tica.
+* **Cronjobs:** Conforme definido em `vercel.json`, a Vercel aciona rotas agendadas em background:
+  * `GET /api/cleanup-proposals` Ã¢â‚¬â€  Diariamente ÃƒÂ s 03:00 UTC. Remove propostas expiradas.
+  * `GET /api/cron/agenda-reminders` Ã¢â‚¬â€  Diariamente ÃƒÂ s 07:00 UTC. Notifica usuÃƒÂ¡rios de compromissos prÃƒÂ³ximos.
+  * `POST /api/cron/mensagem-inicio-expediente` Ã¢â‚¬â€  Segunda a sexta, 11:30 UTC (08:30 BRT). Envia mensagem de inÃƒÂ­cio de expediente para conversas em atendimento.
+  * `POST /api/cron/mensagem-almoco` Ã¢â‚¬â€  Segunda a sexta, 15:00 UTC (12:00 BRT). Envia mensagem de pausa para almoÃƒÂ§o.
+  * `POST /api/cron/mensagem-fim-expediente` Ã¢â‚¬â€  Segunda a sexta, 20:00 UTC (17:00 BRT). Envia mensagem de encerramento do atendimento.
+
+### Railway (Evolution API)
+* A hospedagem das instÃƒÂ¢ncias da Evolution API e da conexÃƒÂ£o com o WhatsApp do cliente final reside em um servidor Railway, provendo uma API contÃƒÂ­nua com IP estÃƒÂ¡vel para nÃƒÂ£o derrubar o escaneamento do QR Code.
+
+
+---
+
+## 7. AUTENTICAÃƒâ€¡ÃƒÆ’O E SEGURANÃƒâ€¡A
+
+* **Fluxo de Login e JWT:**
+  1. O usuÃƒÂ¡rio submete e-mail e senha na tela de Login.
+  2. O backend faz o hash e compara usando `bcrypt.compareSync()`. Caso o e-mail seja `ceo@mtsolar.com` e a senha `admin123`, hÃƒÂ¡ um fallback administrador configurado para facilitar a recuperaÃƒÂ§ÃƒÂ£o.
+  3. Com a senha correta, ÃƒÂ© assinado um Token JWT contendo: `id`, `name`, `role` e `company_id`.
+  4. O token ÃƒÂ© retornado na resposta JSON e gravado em `localStorage` via `login()` do `AuthContext`. O `AuthContext` tambÃƒÂ©m emite um cookie via backend simultaneamente.
+  5. Em toda inicializaÃƒÂ§ÃƒÂ£o do React, `AuthContext` chama `GET /api/auth/me` para validar a sessÃƒÂ£o. Em caso de falha, remove o token do `localStorage` automaticamente.
+* **Cliente HTTP (`src/lib/api.ts`):**
+  * InstÃƒÂ¢ncia Axios com `timeout: 15000ms` e `withCredentials: true`.
+  * **`baseURL` dinÃƒÂ¢mica:** Se rodando em plataforma nativa Capacitor, aponta para `https://gest-o-mt-solar.vercel.app`. Em ambiente web, usa `window.location.origin` (funciona tanto em local quanto em produÃƒÂ§ÃƒÂ£o sem reconfiguraÃƒÂ§ÃƒÂ£o).
+  * Interceptor automÃƒÂ¡tico que injeta o header `Authorization: Bearer <token>` lido do `localStorage` em todas as requisiÃƒÂ§ÃƒÂµes.
+* **Role-Based Access Control (Roles de UsuÃƒÂ¡rio e Rotas Protegidas):**
+
+  | Rota | CEO | ADMIN | COMMERCIAL | TECHNICAL |
+
+
+
+
+
+---:|
+  | `/` (Dashboard) | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Å“â€¦ |
+  | `/commercial` (CRM) | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Â Å’ |
+  | `/whatsapp` | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Â Å’ |
+  | `/proposal-generator` | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Â Å’ |
+  | `/agenda` | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Â Å’ |
+  | `/calculadora` | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Å“â€¦ |
+  | `/technical` | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Â Å’ | Ã¢Å“â€¦ |
+  | `/obra` | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Â Å’ | Ã¢Å“â€¦ |
+  | `/cronograma` | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Å“â€¦ |
+  | `/homologation` | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Â Å’ |
+  | `/estoque` | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Â Å’ | Ã¢Â Å’ |
+  | `/kit-purchase` | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Â Å’ | Ã¢Â Å’ |
+  | `/users` | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Â Å’ | Ã¢Â Å’ |
+  | `/settings` | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Â Å’ | Ã¢Â Å’ |
+  | `/contracts` | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Â Å’ | Ã¢Â Å’ |
+  | `/neoenergia` | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Â Å’ | Ã¢Â Å’ |
+  | `/finished` | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Â Å’ | Ã¢Â Å’ |
+  | `/messages` | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Â Å’ | Ã¢Å“â€¦ |
+  | `/documents` | Ã¢Å“â€¦ | Ã¢Å“â€¦ | Ã¢Â Å’ | Ã¢Â Å’ |
+
+  * **Regra especial COMMERCIAL:** Se o usuÃƒÂ¡rio tem `role = COMMERCIAL` e tenta acessar qualquer rota fora das permitidas, ÃƒÂ© redirecionado para `/` pelo `PrivateRoute` em `App.tsx`.
+* **Middleware de AutenticaÃƒÂ§ÃƒÂ£o (`authenticateToken`):**
+  * Toda rota protegida do Express passa por este middleware. Ele lÃƒÂª o token do header `Authorization: Bearer <token>` ou do Cookie, verifica a assinatura contra `JWT_SECRET` e injeta `req.user` contendo as informaÃƒÂ§ÃƒÂµes e o `company_id` da empresa na requisiÃƒÂ§ÃƒÂ£o.
+* **Firebase Admin (Push Notifications):**
+  * A inicializaÃƒÂ§ÃƒÂ£o do Firebase Admin ÃƒÂ© **condicional**: sÃƒÂ³ ocorre se as trÃƒÂªs variÃƒÂ¡veis `FIREBASE_PROJECT_ID`, `FIREBASE_PRIVATE_KEY` e `FIREBASE_CLIENT_EMAIL` estiverem presentes no ambiente. Caso contrÃƒÂ¡rio, a API inicializa normalmente sem crash.
+
+
+---
+
+## 8. REGRAS DE NEGÃƒâ€œCIO
+
+* **Isolamento de VisualizaÃƒÂ§ÃƒÂ£o por Role (WhatsApp):**
+  * Vendedores (`COMMERCIAL`) visualizam e respondem chats apenas sob as seguintes regras:
+    1. A conversa nÃƒÂ£o tem dono (`assigned_to IS NULL`) e estÃƒÂ¡ na fila (`status = 'waiting'`).
+    2. A conversa estÃƒÂ¡ explicitamente atribuÃƒÂ­da a ele (`assigned_to = user_id`).
+  * Administradores e CEOs acessam todas as conversas sem barreiras. Conversas em atendimento por outros agentes aparecem para o COMMERCIAL, mas travadas (bloqueadas para escrita e com conteÃƒÂºdo oculto).
+* **AssunÃƒÂ§ÃƒÂ£o e TransferÃƒÂªncia de Tickets:**
+  * **Assumir:** Quando um atendente clica em uma conversa na fila, o sistema atualiza `assigned_to` para o seu ID de usuÃƒÂ¡rio e o status para `in_progress`.
+  * **Transferir:** Um atendente comercial pode transferir a conversa para outro colaborador ou departamento. O sistema apaga o `assigned_to` anterior, atribui ao novo colaborador e registra uma mensagem do sistema indicando o direcionamento.
+  * **TransferÃƒÂªncia de InstÃƒÂ¢ncia:** InstÃƒÂ¢ncia `atendimento-cliente` Ã¢â€ â€™ `mtsolar` (administrativo) e vice-versa, disponÃƒÂ­vel apenas para ADMINs.
+* **Sistema de Etiquetas (Tags) das Conversas:**
+  * Cada conversa pode ter **mÃƒÂºltiplas etiquetas** armazenadas na coluna `tags TEXT[]`.
+  * As etiquetas disponÃƒÂ­veis sÃƒÂ£o definidas no frontend em `WHATSAPP_TAGS` (constante em `WhatsApp.tsx`) com id, label e cor hex.
+  * A lÃƒÂ³gica de toggle: ao clicar em uma etiqueta, se ela jÃƒÂ¡ existe no array ÃƒÂ© removida; se nÃƒÂ£o existe, ÃƒÂ© adicionada. O estado completo do array ÃƒÂ© sempre enviado ao backend (`PUT /api/conversations/:id/tag`).
+  * Etiquetas disponÃƒÂ­veis: Atendimento Iniciado, Cuidar e Fechar, Fechou Venda, Lead Desqualificado, Lead Qualificado, NÃƒÂ£o Fechou Venda, OrÃƒÂ§amento Enviado, Visita Agendada, Transferido.
+* **Funil de Vendas Kanban:**
+  * Os projetos transitam de forma linear pelas colunas de estÃƒÂ¡gio. Cada estÃƒÂ¡gio exige preenchimento ou upload de dados diferentes (ex: o fechamento comercial exige upload de contrato; a fase tÃƒÂ©cnica exige vistoria cadastrada).
+
+
+---
+
+## 9. FLUXO DO WHATSAPP
+
+O fluxo de processamento de mÃƒÂ­dias foi otimizado para evitar expiraÃƒÂ§ÃƒÂ£o rÃƒÂ¡pida de links e garantir o histÃƒÂ³rico permanente.
+
+### Envio de Mensagens
+
+#### Envio de Texto
+* O front-end envia para `/api/whatsapp/send`. A Evolution despacha e o Express grava a mensagem no banco.
+
+#### Envio de Imagens/Documentos
+* O front-end faz o upload do arquivo para o bucket temporÃƒÂ¡rio `/api/whatsapp/upload-media`, que retorna uma URL assinada temporÃƒÂ¡ria (vÃƒÂ¡lida por 600 segundos) e o caminho do arquivo (`filePath`).
+* O front-end chama `/api/whatsapp/send-media` passando essa URL assinada como origem para a Evolution API realizar o download e envio.
+* ApÃƒÂ³s a confirmaÃƒÂ§ÃƒÂ£o da Evolution API, o Express gera a URL pÃƒÂºblica e definitiva via `supabaseAdmin.storage.from(...).getPublicUrl(filePath)` e insere o registro com `media_url: publicUrl` e `from_me: true`.
+
+#### Envio de ÃƒÂ udio
+* O front-end grava o ÃƒÂ¡udio e envia uma string em formato `base64` no corpo da requisiÃƒÂ§ÃƒÂ£o para `/api/whatsapp/send-audio`.
+* O backend Express repassa o ÃƒÂ¡udio em `base64` para a Evolution API.
+* ApÃƒÂ³s sucesso no disparo, o Express converte o `base64` em um `Buffer` fÃƒÂ­sico e realiza o upload para o Supabase Storage sob o caminho `company_id/conversationId/audio-[timestamp].ogg`.
+* O backend obtÃƒÂ©m a URL pÃƒÂºblica estÃƒÂ¡tica gerada pelo storage e insere no banco a nova mensagem contendo `media_url: audioPublicUrl`, `media_type: 'audio'`, `file_name: 'audio.ogg'` e `from_me: true`.
+
+### Recebimento (Webhook)
+* Quando uma mensagem de mÃƒÂ­dia externa (imagem, ÃƒÂ¡udio ou documento) chega pelo Webhook da Evolution API:
+  1. O Express intercepta a mensagem no webhook de recebimento (`/api/webhooks/whatsapp`).
+  2. Caso a mensagem contenha mÃƒÂ­dia, o webhook faz uma chamada reversa ÃƒÂ  Evolution API (`/chat/getBase64FromMediaMessage`) para ler o binÃƒÂ¡rio em formato `base64`.
+  3. O backend converte o `base64` para binÃƒÂ¡rio (`Buffer`) e realiza o upload permanente no Supabase Storage no bucket `whatsapp-media`.
+  4. O link pÃƒÂºblico estÃƒÂ¡tico e definitivo gerado pelo Supabase ÃƒÂ© salvo na coluna `media_url` da mensagem gravada no banco com `from_me: false`.
+
+
+---
+
+## 10. BUILD E DEPLOY
+
+### Processo de Build do Frontend
+* O build ÃƒÂ© executado via script do Vite: `npm run build` ou `vite build`. O compilador lÃƒÂª as configuraÃƒÂ§ÃƒÂµes do arquivo `vite.config.ts` e gera os arquivos estÃƒÂ¡ticos indexados na pasta `/dist`.
+
+### Deploy na Vercel
+* O deploy ÃƒÂ© estruturado com base nas regras do arquivo `vercel.json`:
+  * As requisiÃƒÂ§ÃƒÂµes direcionadas para `/api/*` sÃƒÂ£o interceptadas e encaminhadas para a serverless function Express (`/api/index.ts`).
+  * Qualquer outra rota de pÃƒÂ¡gina `/.*` ÃƒÂ© redirecionada para a pÃƒÂ¡gina estÃƒÂ¡tica raiz `/index.html` para deixar a navegaÃƒÂ§ÃƒÂ£o de rotas internas a cargo do React Router DOM (SPA).
+
+### Mobile com Capacitor
+* **SincronizaÃƒÂ§ÃƒÂ£o:** ApÃƒÂ³s o build de produÃƒÂ§ÃƒÂ£o (`npm run build`), o comando `npx cap sync` atualiza as plataformas mÃƒÂ³veis (`android` e `ios`) copiando a pasta `/dist` e os plugins necessÃƒÂ¡rios.
 * **Build de Desenvolvimento:** O comando `npm run build:mobile` usa chaves e arquivos `.env.mobile` especÃƒÂ­ficos para gerar o build e sincronizar imediatamente no simulador ou celular conectado.
 
 
 ---
 
 ## 11. PROBLEMAS RESOLVIDOS E TAREFAS CONCLUÍDAS
+
+---
+
+* **Correção do Bug de PDF em Branco no Android WebView (Causa A + Causa B) — EM TESTE:**
+  * *Problema:* PDF gerado no mobile (Android WebView/Capacitor) saía completamente em branco. No desktop (nova aba) funcionava normalmente. O log `pdf-debug-log.txt` não era gerado, indicando falha silenciosa antes mesmo do html2canvas.
+  * *Causa A diagnosticada:* O HTML completo (com `<!DOCTYPE>`, `<html>`, `<head>`, `<style>`, `<body>`) era inserido via `container.innerHTML = htmlComBase64`. O browser descarta silenciosamente o `<head>` e o `<style>` nessa operação, deixando as classes CSS (`.page`, etc.) indefinidas. Os `pageDivs` tinham dimensões `0×0`, produzindo canvases em branco e um PDF sem XObjects.
+  * *Causa B diagnosticada:* O `setActiveTab('dados')` e o `window.scrollTo` eram chamados **fora e imediatamente após** a IIFE assíncrona, em paralelo com o `html2canvas`. O re-render do React provocado pelo `setActiveTab` potencialmente interrompia ou corrompía a captura.
+  * *O que foi feito:*
+    * **Correção A (DOMParser):** Substituído `container.innerHTML = htmlComBase64` por `DOMParser().parseFromString(htmlComBase64, 'text/html')`. O CSS é extraído com `.querySelector('style').textContent` e injetado diretamente no `document.head` como um `<style id="pdf-temp-style">` real. Apenas o `parsedDoc.body.innerHTML` vai para o container. O `<style>` temporário é removido no bloco `finally` via `document.getElementById('pdf-temp-style')?.remove()`.
+    * **Correção B (setActiveTab):** O `setActiveTab('dados')` e o `window.scrollTo` foram movidos para **dentro da IIFE**, logo após o `await uploadFullPDF()` resolver. Isso garante que o html2canvas complete a captura sem interferência de re-renders do React.
+    * **Feedback visual (UX):** Como `isGeneratingPDF` existia mas nunca estava conectado ao JSX (estado morto-vivo), adicionado `toast.loading('Gerando proposta...', { id: 'pdf-toast' })` no início do fluxo mobile e `toast.dismiss('pdf-toast')` ao final. Ambos os botões ("Baixar Proposta em PDF" e "Atualizar Proposta") agora ficam desabilitados (`disabled={isGeneratingPDF}`) e exibem o texto "Gerando..." durante o processo.
+    * **Instrumentação mantida:** debugLog e `pdf-debug-log.txt` preservados para confirmação pós-teste (esperado: `pageDivs.length > 0` e canvases com dimensões reais).
+  * *Status:* APK de debug gerado. Aguardando confirmação em teste real no dispositivo antes de commit/push.
+  * *Data e hora da alteração:* 25/07/2026 às 09:51 (Horário Local)
+  * *Arquivos modificados:* `src/pages/ProposalGenerator.tsx`
 
 ---
 

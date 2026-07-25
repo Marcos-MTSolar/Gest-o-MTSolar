@@ -31,7 +31,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import api from '../lib/api';
 import { Capacitor } from '@capacitor/core';
-import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 
 type TabType = 'dados' | 'kit' | 'calculo' | 'financiamento' | 'servicos' | 'historico' | 'kits';
@@ -1159,6 +1159,9 @@ export default function ProposalGenerator() {
       }
     } else {
       setIsGeneratingPDF(true);
+      // Feedback imediato enquanto o html2canvas processa (único indicador visual no mobile)
+      const { default: toast } = await import('react-hot-toast');
+      toast.loading('Gerando proposta...', { id: 'pdf-toast' });
     }
 
     const structureTranslations: Record<string, string> = {
@@ -2456,6 +2459,11 @@ export default function ProposalGenerator() {
 
     // Função para upload de PDF completo em background
     const uploadFullPDF = async (html: string) => {
+      // TODO: remover após diagnóstico do bug de PDF em branco
+      let debugLog = `--- DIAGNÓSTICO DE GERAÇÃO DE PDF ---\n`;
+      debugLog += `Data/Hora: ${new Date().toISOString()}\n`;
+      debugLog += `Plataforma: Android WebView (Capacitor)\n\n`;
+
       try {
         const { jsPDF } = await import('jspdf');
         const html2canvas = (await import('html2canvas')).default;
@@ -2498,12 +2506,13 @@ export default function ProposalGenerator() {
         const base64Images = await Promise.all(imageUrls.map(url => convertImageToBase64(url)));
         console.log('[PDF] Conversão concluída.');
 
-        // Verificar se alguma imagem falhou na conversão
+        // LOG 1: Registro das imagens base64
+        debugLog += `[ETAPA A] Conversão de Imagens Estáticas:\n`;
         imageUrls.forEach((url, idx) => {
-          if (!base64Images[idx]) {
-            console.warn(`[PDF] AVISO: A imagem de fundo ${url} falhou na conversão e pode aparecer em branco.`);
-          }
+          const len = base64Images[idx] ? base64Images[idx].length : 0;
+          debugLog += `  - ${url}: ${len > 0 ? `Sucesso (Tamanho: ${len} chars)` : 'FALHA (Retornou vazio)'}\n`;
         });
+        debugLog += `\n`;
 
         // Substituir as URLs das imagens pelas strings base64 no HTML
         const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -2517,37 +2526,78 @@ export default function ProposalGenerator() {
           }
         });
 
-        // ETAPA 1: Criar container oculto fora da viewport
+        debugLog += `[ETAPA B] HTML Preparado:\n`;
+        debugLog += `  - Tamanho original do HTML: ${html.length} chars\n`;
+        debugLog += `  - Tamanho do HTML com Base64: ${htmlComBase64.length} chars\n\n`;
+
+        // ETAPA 1b: Parse do HTML via DOMParser para separar <style> do <body>
+        // Corrige a Causa A: ao usar innerHTML diretamente com um documento HTML completo
+        // (<html><head><style>...<body>), o browser descarta o <head>/<style>, deixando
+        // as classes CSS (.page, etc.) indefinidas e os pageDivs sem dimensões reais.
+        const parsedDoc = new DOMParser().parseFromString(htmlComBase64, 'text/html');
+        const styleEl = parsedDoc.querySelector('style');
+        const bodyContent = parsedDoc.body.innerHTML;
+
+        // Injetar o CSS no document.head do documento principal com id para remoção no finally
+        let tempStyle: HTMLStyleElement | null = null;
+        if (styleEl) {
+          tempStyle = document.createElement('style');
+          tempStyle.id = 'pdf-temp-style';
+          tempStyle.textContent = styleEl.textContent;
+          document.head.appendChild(tempStyle);
+        }
+
+        debugLog += `[ETAPA 1b] Parse do HTML:\n`;
+        debugLog += `  - bodyContent length: ${bodyContent.length} chars\n`;
+        debugLog += `  - CSS extraído: ${tempStyle ? `Sim (${tempStyle.textContent?.length} chars)` : 'Não encontrado — verifique se o HTML gerado contém <style>'}\n\n`;
+
+        // ETAPA 1: Criar container oculto fora da viewport (sem visibility:hidden para que o html2canvas e WebView o pintem)
         const container = document.createElement('div');
         container.style.cssText = [
           'position:fixed',
           'top:0',
           'left:-9999px',
           'width:210mm',
-          'visibility:hidden',
-          'z-index:-1',
           'pointer-events:none',
           'overflow:visible',
         ].join(';');
-        container.innerHTML = htmlComBase64;
+        // Inserir apenas o conteúdo do body (sem <html>/<head>/<body> que seriam descartados)
+        container.innerHTML = bodyContent;
         document.body.appendChild(container);
+
+        // LOG 2: Verificar inserção do container no DOM e dimensões físicas
+        debugLog += `[ETAPA 1] Container Oculto Criado:\n`;
+        debugLog += `  - Inserido no body: ${document.body.contains(container)}\n`;
+        debugLog += `  - offsetWidth: ${container.offsetWidth}px\n`;
+        debugLog += `  - offsetHeight: ${container.offsetHeight}px\n`;
+        debugLog += `  - innerHTML length: ${container.innerHTML.length} chars\n\n`;
 
         try {
           // ETAPA 2: Aguardar todas as <img> carregarem
           const imgs = Array.from(container.querySelectorAll('img'));
+          
+          debugLog += `[ETAPA 2] Carregamento de Imagens Internas:\n`;
+          debugLog += `  - Imagens <img> encontradas no container: ${imgs.length}\n`;
+
           await Promise.all(
-            imgs.map(img =>
+            imgs.map((img, idx) =>
               new Promise<void>(resolve => {
-                if (img.complete && img.naturalHeight !== 0) {
+                const checkImg = () => {
+                  debugLog += `    * IMG ${idx + 1} (${img.src.substring(0, 50)}...): complete=${img.complete}, naturalWidth=${img.naturalWidth}, naturalHeight=${img.naturalHeight}\n`;
                   resolve();
+                };
+
+                if (img.complete && img.naturalHeight !== 0) {
+                  checkImg();
                   return;
                 }
-                const timeout = setTimeout(resolve, 15000);
-                img.onload  = () => { clearTimeout(timeout); resolve(); };
-                img.onerror = () => { clearTimeout(timeout); resolve(); };
+                const timeout = setTimeout(checkImg, 15000);
+                img.onload  = () => { clearTimeout(timeout); checkImg(); };
+                img.onerror = () => { clearTimeout(timeout); checkImg(); };
               })
             )
           );
+          debugLog += `\n`;
 
           // ETAPA 3: Capturar cada página com html2canvas
           // As páginas principais usam a classe .page (definida no <style> do HTML gerado)
@@ -2555,6 +2605,13 @@ export default function ProposalGenerator() {
           const pageDivs = Array.from(
             container.querySelectorAll<HTMLElement>('.page, div[style*="min-height:297mm"]')
           );
+
+          debugLog += `[ETAPA 3] Divs de Páginas Identificadas:\n`;
+          debugLog += `  - Quantidade de páginas (.page / min-height:297mm): ${pageDivs.length}\n`;
+          pageDivs.forEach((pageEl, idx) => {
+            debugLog += `    * Página ${idx + 1}: scrollWidth=${pageEl.scrollWidth}px, scrollHeight=${pageEl.scrollHeight}px\n`;
+          });
+          debugLog += `\n`;
 
           console.log(`[PDF html2canvas] Capturando ${pageDivs.length} páginas...`);
           const t0 = performance.now();
@@ -2575,6 +2632,13 @@ export default function ProposalGenerator() {
             });
 
             const imgData = canvas.toDataURL('image/jpeg', 0.92);
+            console.log(`[PDF html2canvas] Página ${i + 1} — canvas ${canvas.width}x${canvas.height}px, dataURL length: ${imgData.length}`);
+            
+            // LOG 3: Informações de captura de cada página
+            debugLog += `[Captura Página ${i + 1}]:\n`;
+            debugLog += `  - Canvas gerado: ${canvas.width}x${canvas.height}px\n`;
+            debugLog += `  - dataURL length: ${imgData.length} chars\n`;
+            debugLog += `  - Prefixo dataURL: ${imgData.substring(0, 100)}...\n\n`;
 
             if (!primeiraPage) {
               doc.addPage();
@@ -2587,12 +2651,15 @@ export default function ProposalGenerator() {
 
           const t1 = performance.now();
           console.log(`[PDF html2canvas] Geração concluída em ${((t1 - t0) / 1000).toFixed(1)}s.`);
+          debugLog += `[Sucesso] PDF gerado em ${((t1 - t0) / 1000).toFixed(1)}s.\n`;
 
         } finally {
           // ETAPA 4: Remover container do DOM
           if (document.body.contains(container)) {
             document.body.removeChild(container);
           }
+          // Remover também o <style> temporário injetado no document.head
+          document.getElementById('pdf-temp-style')?.remove();
         }
 
         const pdfBlob = doc.output('blob');
@@ -2656,6 +2723,7 @@ export default function ProposalGenerator() {
 
           } catch (mobileErr: any) {
             console.error('Erro crítico ao gerar/salvar PDF no mobile:', mobileErr);
+            debugLog += `[ERRO MOBILE] Falha no fluxo nativo: ${mobileErr?.message || mobileErr}\n`;
             alert(`Erro ao salvar o PDF no dispositivo: ${mobileErr?.message || mobileErr || 'Erro desconhecido'}`);
           } finally {
             setIsGeneratingPDF(false);
@@ -2672,11 +2740,27 @@ export default function ProposalGenerator() {
           .from('propostas')
           .getPublicUrl(fileName);
 
+        debugLog += `[Sucesso] Upload no Supabase concluído: ${publicUrl}\n`;
         return publicUrl;
-      } catch (err) {
+      } catch (err: any) {
         console.error('Erro no upload do PDF completo:', err);
+        debugLog += `[ERRO GERAL] Falha na execução da função: ${err?.message || err}\n`;
         if (Capacitor.isNativePlatform()) setIsGeneratingPDF(false);
         return null;
+      } finally {
+        if (Capacitor.isNativePlatform()) {
+          try {
+            await Filesystem.writeFile({
+              path: 'pdf-debug-log.txt',
+              data: debugLog,
+              directory: Directory.Downloads,
+              encoding: Encoding.UTF8
+            });
+            console.log('[PDF DEBUG] Log de diagnóstico gravado com sucesso.');
+          } catch (logErr) {
+            console.error('[PDF DEBUG] Erro ao gravar log de diagnóstico:', logErr);
+          }
+        }
       }
     };
     // O download do PDF (abertura da nova aba) já foi disparado via newWindow.open
@@ -2695,6 +2779,16 @@ export default function ProposalGenerator() {
         }
       } catch {
         uploadFalhou = true;
+      }
+
+      // Navegar para a aba inicial APÓS o html2canvas concluir (Correção Causa B)
+      // Antes estava fora da IIFE e causava re-render do React no meio da captura
+      setActiveTab('dados');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Dispensar o toast de loading agora que a geração de imagens concluiu
+      if (Capacitor.isNativePlatform()) {
+        const { default: toast } = await import('react-hot-toast');
+        toast.dismiss('pdf-toast');
       }
 
       // Se o upload falhou, avisa o usuário mas continua para salvar o registro sem o PDF
@@ -2738,12 +2832,25 @@ export default function ProposalGenerator() {
       }
     })();
 
-    // Retornar para tela inicial da proposta imediatamente (não aguarda o salvamento)
-    setActiveTab('dados');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // NOTA: setActiveTab e window.scrollTo foram movidos para dentro da IIFE
+    // (após uploadFullPDF resolver) para evitar re-render do React durante o html2canvas.
   };
 
   const isAdminOrCeo = user?.role === 'CEO' || user?.role === 'ADMIN';
+
+  const testarEscrita = async () => {
+    try {
+      await Filesystem.writeFile({
+        path: 'teste-simples.txt',
+        data: 'teste ' + new Date().toISOString(),
+        directory: Directory.Downloads,
+        encoding: Encoding.UTF8
+      });
+      alert('Escrita OK! Salvo em Downloads.');
+    } catch (e: any) {
+      alert('ERRO: ' + (e?.message || JSON.stringify(e)));
+    }
+  };
 
   const tabs = [
     { id: 'dados' as TabType, label: 'Dados do Cliente', icon: User },
@@ -2772,6 +2879,15 @@ export default function ProposalGenerator() {
               <h1 className="text-2xl font-bold text-white">Gerador de Proposta Solar</h1>
               <p className="text-amber-400 font-semibold tracking-wider uppercase text-xs">Engenharia MT Solar</p>
             </div>
+          </div>
+          {/* Botão de Teste Isolado do Filesystem */}
+          <div className="flex gap-2">
+            <button
+              onClick={testarEscrita}
+              className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow border border-red-400 active:scale-95 transition-all"
+            >
+              [TESTE] Gravar TXT
+            </button>
           </div>
           <div>
             {!formData.clientName || !formData.kitCost ? (
@@ -4642,35 +4758,37 @@ export default function ProposalGenerator() {
               </button>
               <button
                 onClick={() => {
-                  if (!isReady) return;
+                  if (!isReady || isGeneratingPDF) return;
                   generatePDF();
                 }}
-                title={!isReady ? "Preencha os dados obrigatórios" : ""}
+                disabled={isGeneratingPDF}
+                title={!isReady ? "Preencha os dados obrigatórios" : isGeneratingPDF ? "Gerando proposta..." : ""}
                 className={`flex items-center gap-2 px-8 py-4 font-bold rounded-lg shadow-lg transition-all ${
-                  isReady 
+                  isReady && !isGeneratingPDF
                     ? 'bg-amber-400 text-blue-900 hover:bg-amber-500 hover:scale-105 active:scale-95' 
                     : 'bg-gray-300 text-gray-500 opacity-50 cursor-not-allowed'
                 }`}
               >
                 <FileDown className="w-5 h-5" />
-                Atualizar Proposta
+                {isGeneratingPDF ? 'Gerando...' : 'Atualizar Proposta'}
               </button>
             </>
           ) : (
             <button
               onClick={() => {
-                if (!isReady) return;
+                if (!isReady || isGeneratingPDF) return;
                 generatePDF();
               }}
-              title={!isReady ? "Preencha os dados obrigatórios" : ""}
+              disabled={isGeneratingPDF}
+              title={!isReady ? "Preencha os dados obrigatórios" : isGeneratingPDF ? "Gerando proposta..." : ""}
               className={`flex items-center gap-2 px-8 py-4 font-bold rounded-lg shadow-lg transition-all ${
-                isReady 
+                isReady && !isGeneratingPDF
                   ? 'bg-amber-400 text-blue-900 hover:bg-amber-500 hover:scale-105 active:scale-95' 
                   : 'bg-gray-300 text-gray-500 opacity-50 cursor-not-allowed'
               }`}
             >
               <FileDown className="w-5 h-5" />
-              Baixar Proposta em PDF
+              {isGeneratingPDF ? 'Gerando...' : 'Baixar Proposta em PDF'}
             </button>
           )}
         </div>
