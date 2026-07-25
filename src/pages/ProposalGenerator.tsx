@@ -2682,7 +2682,8 @@ export default function ProposalGenerator() {
               writeResult = await Filesystem.writeFile({
                 path: fileName,
                 data: base64Data,
-                directory: Directory.Downloads
+                directory: Directory.Downloads,
+                recursive: true
               });
             } catch (errDownloads) {
               console.warn('Falha ao gravar no Directory.Downloads, tentando Directory.Documents...', errDownloads);
@@ -2691,7 +2692,8 @@ export default function ProposalGenerator() {
               writeResult = await Filesystem.writeFile({
                 path: fileName,
                 data: base64Data,
-                directory: Directory.Documents
+                directory: Directory.Documents,
+                recursive: true
               });
             }
 
@@ -2754,7 +2756,8 @@ export default function ProposalGenerator() {
               path: 'pdf-debug-log.txt',
               data: debugLog,
               directory: Directory.Downloads,
-              encoding: Encoding.UTF8
+              encoding: Encoding.UTF8,
+              recursive: true
             });
             console.log('[PDF DEBUG] Log de diagnóstico gravado com sucesso.');
           } catch (logErr) {
@@ -2844,7 +2847,8 @@ export default function ProposalGenerator() {
         path: 'teste-simples.txt',
         data: 'teste ' + new Date().toISOString(),
         directory: Directory.Downloads,
-        encoding: Encoding.UTF8
+        encoding: Encoding.UTF8,
+        recursive: true
       });
       alert('Escrita OK! Salvo em Downloads.');
     } catch (e: any) {
