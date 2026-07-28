@@ -2,6 +2,38 @@
 
 ---
 
+## Alterações — Sessão 28/07/2026 (Correção de Ícone do App — Conformidade Google Play)
+
+### Inconsistência de Ícone Identificada pelo Google Play (Política de Declarações Enganosas)
+
+*   **Problema:** O ícone exibido na ficha da Play Store era diferente do ícone instalado no dispositivo Android, gerando alerta de violação de política no Google Play Console.
+*   **Solução Aplicada:**
+    1.  Criada pasta `resources/` na raiz do projeto.
+    2.  Copiado o novo ícone oficial MT Solar (1024×1024 px, fundo azul marinho escuro com logo solar + gráfico + circuito + "MT") para `resources/icon.png`.
+    3.  Instalado `@capacitor/assets` como `devDependency` (`npm install @capacitor/assets --save-dev`).
+    4.  Executado `npx @capacitor/assets generate --android` — gerou **74 arquivos** de ícone/splash em todas as densidades:
+        - `mipmap-ldpi`, `mipmap-mdpi`, `mipmap-hdpi`, `mipmap-xhdpi`, `mipmap-xxhdpi`, `mipmap-xxxhdpi` → `ic_launcher.png`, `ic_launcher_round.png`, `ic_launcher_foreground.png`, `ic_launcher_background.png`
+        - `mipmap-anydpi-v26` → `ic_launcher.xml`, `ic_launcher_round.xml` (adaptive icon)
+        - Todos os `drawable-*` de splash também foram regenerados com o novo ícone.
+    5.  Executado `npx cap sync android` → assets sincronizados com sucesso.
+    6.  Incrementado `versionCode` de **12 → 13** em `android/app/build.gradle` (versionName mantido em `1.1.0`).
+    7.  Executado `gradlew assembleDebug` → **BUILD SUCCESSFUL em 17s**.
+*   **APK debug gerado:** `android/app/build/outputs/apk/debug/app-debug.apk` (~12,4 MB)
+*   **Verificação:**
+    - `AndroidManifest.xml` já apontava corretamente para `@mipmap/ic_launcher` e `@mipmap/ic_launcher_round` — nenhuma alteração necessária.
+    - Todos os 24 arquivos `.png` dos diretórios mipmap foram sobrescritos com o novo ícone.
+    - Nenhuma lógica de negócio foi alterada.
+*   **Data e hora da alteração:** 28/07/2026 às 10:38 (Horário Local)
+*   **Arquivos modificados:**
+    - `resources/icon.png` (**NOVO**)
+    - `android/app/build.gradle` (versionCode 12 → 13)
+    - `android/app/src/main/res/mipmap-*/ic_launcher*.png` (todos sobrescritos)
+    - `android/app/src/main/res/mipmap-anydpi-v26/ic_launcher*.xml` (regenerados)
+    - `android/app/src/main/res/drawable-*/splash.png` (regenerados)
+    - `package.json` / `package-lock.json` (@capacitor/assets adicionado como devDependency)
+
+---
+
 ## Alterações — Sessão 28/07/2026 (Implementação de Logs Incrementais na Geração de PDF)
 
 ### Log Incremental por Etapas via `logStep`
@@ -2483,3 +2515,23 @@ Esta seÃ§Ã£o rastreia os arquivos de migration que foram criados no reposit�
   * *Licao aprendida:* QUALQUER correcao em lote de dados de telefone deve reutilizar a funcao normalizarTelefoneBR() ja validada — nunca replicar a logica manualmente em script solto. Scripts ad-hoc de UPDATE devem ser revisados contra a funcao canonica antes da execucao.
   * *Data e hora da alteracao:* 20/07/2026 as 16:35 (Horario Local)
   * *Arquivos modificados:* Banco de Dados Supabase (tabela whatsapp_conversations — 24 phone corrigidos, 2 conversas deletadas)
+
+---
+
+## [28/07/2026 09:41] Correção: Seletor de páginas do PDF mobile corrigido (causa raiz definitiva do pageDivs=0)
+
+### O que foi feito
+- **Causa raiz identificada e corrigida:** O seletor `container.querySelectorAll('.page, div[style*="min-height:297mm"]')` nunca encontrava nenhuma div de página no WebView Android porque:
+  1. Nenhuma div do HTML gerado usa `class="page"` — apenas o `<style>` injetado define a regra CSS `.page`, mas as divs usam apenas `style` inline.
+  2. A variante `min-height:297mm` não existe no HTML gerado — as divs usam `height:297mm` (sem o `min-`).
+- **Solução aplicada:** Adicionado o atributo `data-pdf-page="true"` manualmente nas **10 divs de página** do template HTML em `generatePDF`, e o seletor em `uploadFullPDF` foi atualizado para `[data-pdf-page="true"]`.
+- **Divs corrigidas (linhas):** 1543, 1549, 1554, 1559, 1564 (páginas 1-5), 1842 (página 6), 2015 (página 7), 2212 (página 8), 2345 (página 9), 2446 (página de fotos).
+- **Seletor corrigido (linha 2608):** `.page, div[style*="min-height:297mm"]` → `[data-pdf-page="true"]`
+- **Logs de diagnóstico (logStep) mantidos** para confirmar resultado nas próximas sessões de teste.
+- Build gerado com sucesso: `npm run build:mobile` + `cap sync` + `gradlew assembleDebug` — BUILD SUCCESSFUL em 14s.
+
+### Data e hora
+28/07/2026 às 09:41 (Horário Local, UTC-3)
+
+### Arquivos modificados
+- `src/pages/ProposalGenerator.tsx`
