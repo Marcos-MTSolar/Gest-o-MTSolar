@@ -2,6 +2,24 @@
 
 ---
 
+## Alterações — Sessão 28/07/2026 (Implementação de Logs Incrementais na Geração de PDF)
+
+### Log Incremental por Etapas via `logStep`
+*   **Problema original:** O log de diagnóstico de PDF acumulava mensagens em uma string `debugLog` que só era gravada uma única vez no bloco `finally` ao fim da execução de `uploadFullPDF`. Se a execução travasse ou sofresse exceção no meio do caminho, o arquivo `pdf-debug-log.txt` não era gravado, impedindo a visualização da etapa de falha.
+*   **Correção Aplicada:**
+    1.  Implementada a função auxiliar `logStep` em `ProposalGenerator.tsx` para escrever cada linha de log de forma incremental e instantânea usando `Filesystem.appendFile` no `Directory.Cache`.
+    2.  Removida a variável acumuladora `debugLog` e substituídas todas as suas concatenações por chamadas a `await logStep(...)` ao longo das etapas críticas de `uploadFullPDF`.
+    3.  Ajustada a primeira linha de `generatePDF` para registrar `generatePDF iniciado` imediatamente.
+    4.  Mapeados 12 pontos críticos de rastreamento (início, importações, conversão de imagens, DOMParser, injeção no DOM, carregamento de imagens de kit, listagem de páginas, início de captura, canvas de cada página capturada, fim do loop, blob finalizado, sucesso de uploads/compartilhamento e catches de erro).
+    5.  Alterada a função `lerLogDebug` e o botão de interface `[LER LOG]` para ler o novo arquivo `pdf-debug-steps.txt` e atualizado o rótulo visual correspondente na tela.
+*   **Build executado com sucesso:**
+    - `npm run build:mobile` (Vite build + `npx cap sync`) → ✅ concluído
+    - `gradlew assembleDebug` → ✅ **BUILD SUCCESSFUL**
+*   **Data e hora da alteração:** 28/07/2026 às 08:59 (Horário Local)
+*   **Arquivos modificados:** [`src/pages/ProposalGenerator.tsx`](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/src/pages/ProposalGenerator.tsx), `RESUMO_MESTRE.md`
+
+---
+
 ## Alterações — Sessão 28/07/2026 (Correção de Directory.Documents → Directory.Cache)
 
 ### Troca de Diretório de Filesystem no Capacitor (Android)
