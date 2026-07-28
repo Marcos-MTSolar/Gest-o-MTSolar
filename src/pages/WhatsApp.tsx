@@ -866,7 +866,7 @@ export default function WhatsApp() {
         await Filesystem.writeFile({
           path: fileName,
           data: base64,
-          directory: Directory.Documents,
+          directory: Directory.Cache,
         });
         await Share.share({ url: fileName, title: fileName });
       } else {

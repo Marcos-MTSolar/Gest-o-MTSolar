@@ -2675,8 +2675,8 @@ export default function ProposalGenerator() {
               reader.onerror = reject;
             });
 
-            // Salva diretamente na pasta sandbox local Documents para evitar restrições de Scoped Storage no Android
-            const targetDirectory = Directory.Documents;
+            // Salva no cache da aplicação (sandbox do app) — sem restrições de Scoped Storage no Android
+            const targetDirectory = Directory.Cache;
             const writeResult = await Filesystem.writeFile({
               path: fileName,
               data: base64Data,
@@ -2737,11 +2737,11 @@ export default function ProposalGenerator() {
             await Filesystem.writeFile({
               path: 'pdf-debug-log.txt',
               data: debugLog,
-              directory: Directory.Documents,
+              directory: Directory.Cache,
               encoding: Encoding.UTF8,
               recursive: true
             });
-            console.log('[PDF DEBUG] Log de diagnóstico gravado com sucesso em Documents.');
+            console.log('[PDF DEBUG] Log de diagnóstico gravado com sucesso em Cache.');
           } catch (logErr) {
             console.error('[PDF DEBUG] Erro ao gravar log de diagnóstico:', logErr);
           }
@@ -2828,11 +2828,11 @@ export default function ProposalGenerator() {
       await Filesystem.writeFile({
         path: 'teste-simples.txt',
         data: 'teste ' + new Date().toISOString(),
-        directory: Directory.Documents,
+        directory: Directory.Cache,
         encoding: Encoding.UTF8,
         recursive: true
       });
-      alert('Escrita OK! Salvo em Documentos.');
+      alert('Escrita OK! Salvo em Cache.');
     } catch (e: any) {
       alert('ERRO: ' + (e?.message || JSON.stringify(e)));
     }
@@ -2842,7 +2842,7 @@ export default function ProposalGenerator() {
     try {
       const resultado = await Filesystem.readFile({
         path: 'pdf-debug-log.txt',
-        directory: Directory.Documents,
+        directory: Directory.Cache,
         encoding: Encoding.UTF8
       });
       setDebugLogContent(resultado.data as string);

@@ -2,6 +2,33 @@
 
 ---
 
+## Alterações — Sessão 28/07/2026 (Correção de Directory.Documents → Directory.Cache)
+
+### Troca de Diretório de Filesystem no Capacitor (Android)
+
+*   **Causa Raiz / Contexto:** O `Directory.Documents` no Android requer permissão `WRITE_EXTERNAL_STORAGE` e/ou está sujeito às restrições do Scoped Storage (Android 10+), causando falha silenciosa ao gravar arquivos (PDF, log de debug e teste de escrita) no dispositivo físico. O `Directory.Cache` é o diretório sandbox do próprio app, sempre acessível sem permissões extras, ideal para arquivos temporários e de diagnóstico.
+*   **Correção Aplicada — 5 ocorrências:**
+    1.  **[ProposalGenerator.tsx](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/src/pages/ProposalGenerator.tsx) — L2679:** `targetDirectory = Directory.Documents` → `Directory.Cache` (gravação do PDF gerado no mobile). Comentário ajustado de "Documents" para "cache da aplicação".
+    2.  **[ProposalGenerator.tsx](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/src/pages/ProposalGenerator.tsx) — L2740:** `directory: Directory.Documents` → `Directory.Cache` (gravação do `pdf-debug-log.txt` no `finally`). Log console ajustado de "Documents" para "Cache".
+    3.  **[ProposalGenerator.tsx](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/src/pages/ProposalGenerator.tsx) — L2831:** `directory: Directory.Documents` → `Directory.Cache` (função `testarEscrita`). Alert ajustado: `'Escrita OK! Salvo em Documentos.'` → `'Escrita OK! Salvo em Cache.'`.
+    4.  **[ProposalGenerator.tsx](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/src/pages/ProposalGenerator.tsx) — L2845:** `directory: Directory.Documents` → `Directory.Cache` (função `lerLogDebug`).
+    5.  **[WhatsApp.tsx](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/src/pages/WhatsApp.tsx) — L869:** `directory: Directory.Documents` → `Directory.Cache` (função `handleDownloadMedia`).
+*   **Build executado com sucesso:**
+    - `npm run build:mobile` (Vite build + `npx cap sync`) → ✅ concluído
+    - `gradlew assembleDebug` → ✅ **BUILD SUCCESSFUL in 13s**
+*   **Data e hora da alteração:** 28/07/2026 às 08:22 (Horário Local)
+*   **Arquivos modificados:** [`src/pages/ProposalGenerator.tsx`](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/src/pages/ProposalGenerator.tsx), [`src/pages/WhatsApp.tsx`](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/src/pages/WhatsApp.tsx), `RESUMO_MESTRE.md`
+
+> ⚠️ **BACKLOG — Bug separado NÃO corrigido nesta tarefa (WhatsApp.tsx, L871):**
+> A função `handleDownloadMedia` chama `Share.share({ url: fileName, ... })` passando apenas o nome relativo do arquivo (`fileName`) em vez da URI absoluta retornada por `Filesystem.getUri()`. Isso faz o compartilhamento falhar silenciosamente no Android porque o `@capacitor/share` precisa de uma URI do tipo `file://` ou `content://`. A correção correta seria:
+> ```typescript
+> const uriResult = await Filesystem.getUri({ directory: Directory.Cache, path: fileName });
+> await Share.share({ url: uriResult.uri, title: fileName });
+> ```
+> Esse bug está documentado aqui como débito técnico para ser tratado em tarefa futura separada.
+
+---
+
 ## Alterações — Sessão 22/07/2026 (Otimização de Polling do Chat e Logs do Realtime)
 
 ### Otimização e Rede de Segurança no Chat do WhatsApp
