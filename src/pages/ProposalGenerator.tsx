@@ -2592,6 +2592,15 @@ export default function ProposalGenerator() {
           );
           await logStep('uploadFullPDF: Promise.all de imgs concluído');
 
+          await logStep(`htmlContent contém 'class="page"': ${htmlContent.includes('class="page"')}`);
+          await logStep(`Ocorrências de 'class="page"' no htmlContent: ${(htmlContent.match(/class="page"/g) || []).length}`);
+          await logStep(`bodyContent contém 'class="page"': ${bodyContent.includes('class="page"')}`);
+          await logStep(`Ocorrências de 'class="page"' no bodyContent: ${(bodyContent.match(/class="page"/g) || []).length}`);
+          const totalDivs = container.querySelectorAll('div').length;
+          await logStep(`Total de <div> no container: ${totalDivs}`);
+          const divsComClassPage = container.getElementsByClassName('page').length;
+          await logStep(`Divs via getElementsByClassName('page'): ${divsComClassPage}`);
+
           // ETAPA 3: Capturar cada página com html2canvas
           // As páginas principais usam a classe .page (definida no <style> do HTML gerado)
           // A página de fotos usa div com min-height:297mm no style inline
