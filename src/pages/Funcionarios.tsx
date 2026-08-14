@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { Pencil, Clock, Plus, X, UserMinus, UserCheck, Search, Loader2 } from 'lucide-react';
+import { Pencil, Clock, Plus, X, UserMinus, UserCheck, Search, Loader2, FileText, Download, Trash, FileSpreadsheet } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 type UserProfile = {
@@ -46,6 +46,20 @@ export default function Funcionarios() {
     data_admissao: '',
   });
   const [submitting, setSubmitting] = useState(false);
+  
+  // Atestados states
+  const [isAtestadoModalOpen, setIsAtestadoModalOpen] = useState(false);
+  const [selectedUserForCert, setSelectedUserForCert] = useState<UserProfile | null>(null);
+  const [certsList, setCertsList] = useState<any[]>([]);
+  const [loadingCerts, setLoadingCerts] = useState(false);
+  const [certFormData, setCertFormData] = useState({
+    start_date: '',
+    days_off: '1',
+    cid: '',
+    notes: '',
+  });
+  const [certFile, setCertFile] = useState<File | null>(null);
+  const [savingCert, setSavingCert] = useState(false);
 
   const formatCPF = (value: string) => {
     return value
@@ -336,6 +350,29 @@ export default function Funcionarios() {
                             <Pencil size={18} />
                           </button>
                           <button
+                            onClick={() => {
+                              setSelectedUserForCert(u);
+                              setCertFormData({
+                                start_date: new Date().toISOString().split('T')[0],
+                                days_off: '1',
+                                cid: '',
+                                notes: '',
+                              });
+                              setCertFile(null);
+                              setIsAtestadoModalOpen(true);
+                              // Carrega o histórico
+                              setLoadingCerts(true);
+                              api.get(`/api/medical-certificates?userId=${u.id}`)
+                                .then((res) => setCertsList(res.data ?? []))
+                                .catch(() => toast.error('Erro ao carregar atestados'))
+                                .finally(() => setLoadingCerts(false));
+                            }}
+                            className="p-2 text-gray-600 hover:text-teal-900 rounded-lg hover:bg-teal-50 transition-all border border-transparent hover:border-teal-100"
+                            title="Atestados Médicos"
+                          >
+                            <FileText size={18} />
+                          </button>
+                          <button
                             onClick={() => handleToggleStatus(u)}
                             className={`p-2 rounded-lg border border-transparent transition-all ${
                               u.active 
@@ -464,7 +501,20 @@ export default function Funcionarios() {
                   type="date"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-blue-900 focus:outline-none transition-all"
                   value={formData.data_admissao ? formData.data_admissao.split('T')[0] : ''}
-                  onChange={(e) => setFormData({ ...formData, data_admissao: e.target.value })}
+                  onChange={(e) => {
+                    const dateVal = e.target.value; // YYYY-MM-DD
+                    if (!dateVal) {
+                      setFormData({ ...formData, data_admissao: '' });
+                      return;
+                    }
+                    const parts = dateVal.split('-');
+                    const year = parseInt(parts[0], 10);
+                    const month = parseInt(parts[1], 10) - 1;
+                    const day = parseInt(parts[2], 10);
+                    const localDate = new Date(year, month, day);
+                    const formatted = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+                    setFormData({ ...formData, data_admissao: formatted });
+                  }}
                 />
               </div>
 
@@ -504,6 +554,204 @@ export default function Funcionarios() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Modal Atestados Médicos (CEO/ADMIN) */}
+      {isAtestadoModalOpen && selectedUserForCert && (
+        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl border border-gray-100 overflow-hidden transform transition-all flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center px-6 py-4 bg-gray-50 border-b border-gray-150">
+              <div>
+                <h2 className="text-lg font-bold text-gray-800">Atestados Médicos</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Colaborador(a): <strong className="text-gray-700">{selectedUserForCert.name}</strong></p>
+              </div>
+              <button
+                onClick={() => setIsAtestadoModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-6 flex-1">
+              {/* Formulário Novo Atestado */}
+              <div className="bg-gray-50 border rounded-xl p-4 space-y-4">
+                <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">Lançar Novo Atestado / Afastamento</p>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Início Afastamento *</label>
+                    <input
+                      type="date"
+                      required
+                      value={certFormData.start_date}
+                      onChange={e => setCertFormData(p => ({ ...p, start_date: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Dias Afastado *</label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      value={certFormData.days_off}
+                      onChange={e => setCertFormData(p => ({ ...p, days_off: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">CID (Opcional)</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: M54.5"
+                      maxLength={10}
+                      value={certFormData.cid}
+                      onChange={e => setCertFormData(p => ({ ...p, cid: e.target.value.toUpperCase() }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Exibição automática do cálculo do término */}
+                {certFormData.start_date && parseInt(certFormData.days_off, 10) > 0 && (
+                  <div className="text-xs bg-teal-50 border border-teal-100 rounded-lg p-2 text-teal-800 font-medium">
+                    🗓️ Período de Afastamento: {(() => {
+                      const parts = certFormData.start_date.split('-');
+                      const start = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                      const end = new Date(start);
+                      end.setDate(end.getDate() + parseInt(certFormData.days_off, 10) - 1);
+                      
+                      const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                      return `${fmt(start)} até ${fmt(end)}`;
+                    })()}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 font-mono">Upload do Documento (Imagem ou PDF) *</label>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={e => {
+                      const files = e.target.files;
+                      if (files && files.length > 0) setCertFile(files[0]);
+                    }}
+                    className="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-900 hover:file:bg-blue-100 cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Observações</label>
+                  <textarea
+                    placeholder="Descrição opcional do afastamento..."
+                    value={certFormData.notes}
+                    onChange={e => setCertFormData(p => ({ ...p, notes: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-h-[60px]"
+                  />
+                </div>
+
+                <button
+                  onClick={async () => {
+                    if (!certFormData.start_date || !certFormData.days_off || !certFile) {
+                      toast.error('Data de início, dias afastado e o arquivo são obrigatórios.');
+                      return;
+                    }
+
+                    // Validação CID leve: se preenchido, valida formato Básico
+                    if (certFormData.cid && !/^[A-Z]\d{2}(\.\d)?$/.test(certFormData.cid)) {
+                      if (!confirm('O formato do CID parece fora do padrão (ex: A00.0). Deseja prosseguir assim mesmo?')) {
+                        return;
+                      }
+                    }
+
+                    try {
+                      setSavingCert(true);
+                      
+                      const fd = new FormData();
+                      fd.append('user_id', String(selectedUserForCert.id));
+                      fd.append('start_date', certFormData.start_date);
+                      fd.append('days_off', certFormData.days_off);
+                      fd.append('cid', certFormData.cid);
+                      fd.append('notes', certFormData.notes);
+                      fd.append('document', certFile);
+
+                      await api.post('/api/medical-certificates', fd, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                      });
+
+                      toast.success('Atestado cadastrado com sucesso!');
+                      
+                      // Limpa formulário
+                      setCertFormData({ start_date: new Date().toISOString().split('T')[0], days_off: '1', cid: '', notes: '' });
+                      setCertFile(null);
+                      
+                      // Recarrega histórico
+                      const res = await api.get(`/api/medical-certificates?userId=${selectedUserForCert.id}`);
+                      setCertsList(res.data ?? []);
+                    } catch (err: any) {
+                      toast.error(err.response?.data?.error || 'Erro ao salvar atestado.');
+                    } finally {
+                      setSavingCert(false);
+                    }
+                  }}
+                  disabled={savingCert || !certFormData.start_date || !certFile}
+                  className="bg-blue-900 hover:bg-blue-800 text-white font-semibold py-2 px-4 rounded-lg text-xs disabled:opacity-50 flex items-center gap-2"
+                >
+                  {savingCert ? 'Salvando Atestado...' : 'Gravar Atestado'}
+                </button>
+              </div>
+
+              {/* Histórico de Atestados */}
+              <div className="space-y-3">
+                <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">Histórico de Atestados</p>
+                {loadingCerts ? (
+                  <p className="text-center text-xs text-gray-400 py-4">Carregando histórico...</p>
+                ) : certsList.length === 0 ? (
+                  <p className="text-center text-xs text-gray-400 py-6 italic border rounded-xl">Nenhum atestado registrado para este colaborador.</p>
+                ) : (
+                  <div className="border rounded-xl overflow-hidden divide-y">
+                    {certsList.map((c: any) => {
+                      const parts = c.start_date.split('-');
+                      const eParts = c.end_date.split('-');
+                      const fmt = (p: string[]) => `${p[2]}/${p[1]}/${p[0]}`;
+                      return (
+                        <div key={c.id} className="p-3 text-xs flex justify-between items-start gap-4 hover:bg-gray-50 transition-colors">
+                          <div className="space-y-1">
+                            <p className="font-semibold text-gray-800">
+                              📅 Período: {fmt(parts)} a {fmt(eParts)} ({c.days_off} dia{c.days_off > 1 ? 's' : ''})
+                            </p>
+                            <p className="text-gray-500 font-medium">CID: <span className="text-gray-700 font-bold">{c.cid || 'Não informado'}</span></p>
+                            {c.notes && <p className="text-gray-400 mt-1 italic">Obs: {c.notes}</p>}
+                          </div>
+                          {c.document_url && (
+                            <a
+                              href={c.document_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="bg-teal-50 border border-teal-100 hover:bg-teal-100 text-teal-800 font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
+                              title="Visualizar Atestado"
+                            >
+                              <Download size={14} /> Baixar
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="px-6 py-4 bg-gray-50 border-t flex justify-end">
+              <button
+                onClick={() => setIsAtestadoModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}

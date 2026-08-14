@@ -2,6 +2,197 @@
 
 ---
 
+## Alterações — Sessão 14/08/2026 — 13:30 (Geolocalização Obrigatória e Notificações de Ponto Sem GPS)
+
+### Data/Hora
+2026-08-14 — Sessão 6
+
+### Arquivos modificados
+- `src/pages/Ponto.tsx` — Refatoração de `capturarLocalizacao` com fallback para W3C Geolocation API em navegadores normais, modal de erro de localização com "Tentar novamente", constante `BLOQUEAR_PONTO_SEM_LOCALIZACAO` e badge `🚫 SEM LOCALIZAÇÃO` na aba Verificar Fotos.
+- `api/index.ts` — Rota `POST /api/ponto/registrar` com emissão de alerta no console e inserção automática de notificações na tabela `notifications` para CEO/ADMIN da empresa.
+- **Banco de Dados Supabase** — Criação da tabela `public.notifications` com suporte a RLS e políticas por usuário.
+
+### O que foi feito
+1. **Fallback Web para Geolocalização**: Refatorada a função `capturarLocalizacao` para verificar `Capacitor.isNativePlatform()`. Caso falso, utiliza a API nativa `navigator.geolocation` com tratamento detalhado de erros (permissão negada, GPS desativado, timeout).
+2. **Modal de Erros com Retentativas**: Se a captura falhar, abre um modal interativo informando a tentativa (1 de 2), explicando o erro e oferecendo o botão **🔄 Tentar novamente**.
+3. **Bloqueio Total / Exceção Controlada**: Criada a constante `BLOQUEAR_PONTO_SEM_LOCALIZACAO = true`. Se ativo, impede a batida sem localização. Se for desativado (`false`), após 2 tentativas fracassadas, permite bater o ponto sem GPS, marcando as coordenadas como nulas no banco de dados.
+4. **Notificação de Ponto Sem GPS (Backend & Banco)**: Criada a tabela de banco de dados `public.notifications`. Quando o backend grava coordenadas nulas em `time_records`, notifica imediatamente todos os usuários `CEO`/`ADMIN` ativos da empresa com a mensagem de alerta.
+5. **Destaque Visual nos Relatórios e Fotos**: Adicionado o badge visual vermelho `🚫 SEM LOCALIZAÇÃO` na listagem de registros da aba Verificar Fotos do gestor para os pontos sem localização.
+
+---
+
+## Alterações — Sessão 14/08/2026 — 10:13 (Solicitações de Folgas/Compensações e Lançamento Manual no Banco de Horas)
+
+### Data/Hora
+2026-08-14 — Sessão 5
+
+### Arquivos modificados
+- `api/index.ts` — Rota `PUT /api/time-off-requests/:id` (inserção automática no banco de horas ao aprovar)
+- `src/pages/Ponto.tsx` — Adição das abas "Extrato Banco" (pessoal do funcionário) e "Folgas/Compensações" (solicitações pendentes + formulário + lançamento manual para gestores)
+
+### O que foi feito
+1. **Fluxo de Aprovação Automatizado no Backend**: Atualizada a rota de avaliação de folgas/compensações. Ao aprovar uma solicitação do tipo `folga_abate_banco`, é registrado automaticamente um débito de horas (horas negativas, tipo `folga_abatida`) na tabela `hour_bank` do funcionário.
+2. **Visualização do Extrato do Banco de Horas (Funcionário)**: Adicionada a aba **📊 Extrato Banco** na tela do funcionário que exibe o saldo acumulado total e a listagem detalhada de todos os créditos (horas extras normal/fim de semana) e débitos (faltas, folgas abatidas) aplicados.
+3. **Solicitação de Folga (Funcionário)**: Adicionado na aba **✈️ Folgas/Compensações** um formulário simples para o colaborador solicitar afastamento/folga informando a data, o tipo de ausência (compensação de horas ou folga abatida no banco), horas estimadas e justificativa.
+4. **Painel de Avaliação de Pendências (Gestor)**: Na aba **✈️ Folgas/Compensações** (apenas CEO/ADMIN), é listada toda solicitação pendente com botões rápidos para Aprovar (que credita/debita as horas) ou Rejeitar (solicitando justificativa de reprovação).
+5. **Lançamento Manual Direto (Gestor)**: No rodapé do painel de gestores na aba **✈️ Folgas/Compensações**, foi criado um formulário para lançamento manual direto (positivo ou negativo) no banco de horas de qualquer colaborador. Indicado para correções pontuais, ajustes retroativos e abonos customizados, exigindo justificativa obrigatória.
+
+---
+
+## Alterações — Sessão 14/08/2026 — 10:11 (Gestão e Bloqueio de Ponto por Atestados Médicos)
+
+### Data/Hora
+2026-08-14 — Sessão 4
+
+### Arquivos modificados
+- `api/index.ts` — Rota `GET /api/medical-certificates/active`, bloqueio de batidas em `POST /api/ponto/registrar`
+- `src/pages/Funcionarios.tsx` — Interface com botão de ação, formulário de upload R2, cálculo de dias em tempo real e histórico de atestados
+- `src/pages/Ponto.tsx` — Validação prévia de atestado ativo hoje com desabilitação de botão e mensagem de boa recuperação
+
+### O que foi feito
+1. **Bloqueio no Backend**: Implementada verificação na rota `POST /api/ponto/registrar` que barra qualquer batida de ponto caso a data atual esteja entre o intervalo de início e término de um atestado médico ativo do usuário. Retorna erro `403`.
+2. **Nova Rota de Verificação**: Criado endpoint `GET /api/medical-certificates/active` que retorna se o colaborador logado está em licença hoje.
+3. **Melhoria na UI de Bater Ponto**: O botão de registrar ponto é desabilitado caso haja atestado ativo e é exibido um card explicativo amigável recomendando boa recuperação.
+4. **Interface Administrativa (Atestados)**: A interface de gerenciamento foi acoplada ao painel de colaboradores ([`Funcionarios.tsx`](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/src/pages/Funcionarios.tsx)), adicionando a ação "Atestados Médicos". Ela abre um modal para:
+   - Cadastrar afastamento informando data inicial, dias (com cálculo automático de término em tempo real), CID opcional e notas.
+   - Fazer upload da imagem ou PDF do atestado direto para a pasta `/atestados` no Cloudflare R2.
+   - Listar o histórico de atestados registrados daquele colaborador e baixar os arquivos.
+
+---
+
+## Alterações — Sessão 14/08/2026 — 13:04 (Lógica Central de Cálculo do Banco de Horas)
+
+### Data/Hora
+2026-08-14 — Sessão 3
+
+### Arquivos modificados
+- `api/index.ts` — função `calculateHourBankForPeriod`, rota `GET /api/hour-bank/summary`, refatoração de `GET /api/ponto/relatorio/:userId`
+- `src/pages/Ponto.tsx` — novos estados `hourBankEntries`/`hourBankSummary`, `fetchReport` atualizado (novo formato `{records, hourBank}`), cards de resumo, PDF com coluna Tipo do Dia e bloco de Banco de Horas
+
+### Lógica de Cálculo (`calculateHourBankForPeriod`)
+Função chamada **sob demanda** ao gerar relatório (sem cronjob). Para cada dia do período, a ordem de verificação é:
+1. **Feriado (`holidays`)** → `feriado_abonado` (0h) ou `hora_extra_fds_feriado` multiplier=2.0 se trabalhou.
+2. **Atestado (`medical_certificates`)** → `atestado_abonado` (0h). Não gera falta.
+3. **Folga c/ abate (`time_off_requests` tipo `folga_abate_banco`)** → `folga_abatida` (hours negativo).
+4. **Domingo com ponto** → `hora_extra_fds_feriado` multiplier=2.0 (ou 1.0 se `compensacao_horas` aprovado).
+5. **Dia útil c/ horas extras** → `hora_extra_normal` multiplier=1.5.
+6. **Dia útil sem ponto ou incompleto** → `falta` (hours negativo = jornada esperada ou diferença).
+
+### Multiplicadores CLT
+| Situação | Tipo | Mult. | Base Legal |
+|---|---|---|---|
+| Hora extra dia útil | `hora_extra_normal` | **1.5** | Art. 7º, XVI CF/88 (mínimo legal) |
+| Trabalho dom/feriado | `hora_extra_fds_feriado` | **2.0** | Lei 605/49 + Súmula 146 TST |
+| Dom/feriado c/ compensação | `hora_extra_fds_feriado` | **1.0** | Acordo individual |
+
+> ⚠️ Para ajustar por acordo coletivo: procurar `// adicional mínimo de 50% legal` em `api/index.ts` e alterar o valor `1.5` ou `2.0`.
+
+### Idempotência
+Lançamentos verificados por `(company_id, user_id, reference_date, type)` antes de inserir/atualizar. Ajustes manuais de gestores são preservados.
+
+### Novas Rotas
+- `GET /api/hour-bank/summary` — Resumo agregado (extras 50%/100%, faltas, abonados, saldo).
+- `GET /api/ponto/relatorio/:userId` — Agora retorna `{ records: [...], hourBank: [...] }`.
+
+### Frontend
+- **5 Cards de Resumo** na aba Relatórios: H.Extra 50%, H.Extra 100%, Faltas, Dias Abonados, Saldo Banco.
+- **PDF** atualizado: coluna "Tipo do Dia" com cores (verde=extra, vermelho=falta, azul=abonado) + bloco de resumo do banco de horas com nota de base legal.
+
+---
+
+## Alterações — Sessão 14/08/2026 (Expansão do Ponto Eletrônico — Fundação de Banco de Dados e CRUD)
+
+### O que foi feito
+
+**Fundação de dados e rotas CRUD para 4 novos módulos do Ponto Eletrônico:**
+
+**1. Arquivo criado:** [`supabase/migrations/20260814_create_ponto_extensions.sql`](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/supabase/migrations/20260814_create_ponto_extensions.sql)
+
+Cria 4 novas tabelas seguindo o padrão do projeto (company_id UUID, RLS habilitada, índices, `NOTIFY pgrst, 'reload schema'`):
+
+| Tabela | Propósito |
+|---|---|
+| `public.holidays` | Feriados nacionais/estaduais/municipais por empresa. UNIQUE(company_id, date). `recurring` distingue fixos de móveis. |
+| `public.medical_certificates` | Atestados médicos com link R2 (`document_url`), CID, `start_date`, `days_off` e `end_date` calculado (start + days_off-1). |
+| `public.time_off_requests` | Solicitações de folga (`folga_abate_banco`) e compensação (`compensacao_horas`) com fluxo pending→approved/rejected e `approved_by`. |
+| `public.hour_bank` | Livro-razão de créditos (positivos) e débitos (negativos) de horas com `multiplier` CLT (1.0/1.5/2.0) e FK para `time_records`. |
+
+Políticas RLS por tabela:
+- **holidays:** CEO/ADMIN todas as ops; todos os autenticados da empresa podem ler.
+- **medical_certificates:** CEO/ADMIN todas as ops; funcionário vê apenas os próprios.
+- **time_off_requests:** CEO/ADMIN todas as ops; funcionário vê e cria apenas os próprios.
+- **hour_bank:** CEO/ADMIN todas as ops; funcionário vê apenas os próprios lançamentos.
+
+**2. Arquivo modificado:** [`api/index.ts`](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/api/index.ts)
+
+Adicionadas 10 novas rotas após a seção de Ajustes de Ponto e antes dos Cron jobs:
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
+| GET | `/api/holidays` | Todos | Lista feriados, filtro `?year=YYYY` |
+| POST | `/api/holidays` | CEO/ADMIN | Cria feriado; trata erro 409 de data duplicada |
+| PUT | `/api/holidays/:id` | CEO/ADMIN | Atualiza feriado (PATCH parcial) |
+| DELETE | `/api/holidays/:id` | CEO/ADMIN | Remove feriado |
+| GET | `/api/medical-certificates` | CEO/ADMIN | Lista atestados, filtro `?userId=X` |
+| POST | `/api/medical-certificates` | CEO/ADMIN | Cria atestado + upload de arquivo via `upload.single('document')` → R2 (caminho `atestados/<company>/<user>/<ts>-<nome>`) |
+| GET | `/api/time-off-requests` | Todos | CEO/ADMIN vê todos; funcionário vê apenas os próprios. Filtros: `?userId=X&status=Y` |
+| POST | `/api/time-off-requests` | Todos | Cria solicitação (`pending`); CEO/ADMIN pode criar para outro usuário |
+| PUT | `/api/time-off-requests/:id` | CEO/ADMIN | Aprova ou rejeita (guarda `approved_by`); valida que status atual é `pending` |
+| GET | `/api/hour-bank` | Todos | Lista lançamentos e retorna `{ entries, balance }`. CEO/ADMIN vê todos; funcionário vê apenas os próprios. Filtros: `?userId=X&startDate=Y&endDate=Z` |
+| POST | `/api/hour-bank` | CEO/ADMIN | Lançamento manual com validação de `type` e cálculo de `multiplier` |
+
+### Causa Raiz / Contexto
+O módulo de Ponto Eletrônico existente (time_records, work_schedules, time_adjustments) não suportava feriados, atestados, folgas compensadas nem banco de horas. Esta sessão cria a fundação de dados e as rotas CRUD. A lógica de cálculo automático (hora extra, falta, abono por atestado) será implementada em sessões seguintes.
+
+### ⚠️ AÇÃO MANUAL NECESSÁRIA no Supabase
+Execute o script SQL abaixo no **SQL Editor do Supabase** para criar as 4 tabelas:
+
+```
+supabase/migrations/20260814_create_ponto_extensions.sql
+```
+
+Alternativamente, use o SQL direto do arquivo de migration. Após executar, o `NOTIFY pgrst, 'reload schema'` no final do script fará o PostgREST reconhecer as tabelas imediatamente.
+
+*   **Data e hora da alteração:** 14/08/2026 às 09:47 (Horário Local)
+*   **Arquivos criados/modificados:**
+    *   [`supabase/migrations/20260814_create_ponto_extensions.sql`](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/supabase/migrations/20260814_create_ponto_extensions.sql) (**NOVO**)
+    *   [`api/index.ts`](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/api/index.ts) (10 novas rotas adicionadas)
+    *   [`RESUMO_MESTRE.md`](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/RESUMO_MESTRE.md)
+
+---
+
+## Alterações — Sessão 14/08/2026 (Correção de CPF, Data de Admissão, Cargo no Perfil e PDF de Ponto)
+
+### Diagnóstico e Correções Aplicadas
+
+1.  **Criação das Colunas no Supabase:**
+    *   **Problema:** As colunas `cpf`, `data_admissao` e `cargo` não existiam fisicamente na tabela `public.users` no Supabase, gerando erros PGRST204 e 42703 silenciosos.
+    *   **Solução:** Executado comando SQL idempotente para criar as colunas que estavam faltando na tabela:
+        *   `cpf` como `TEXT`
+        *   `data_admissao` como `TIMESTAMP WITH TIME ZONE`
+        *   `cargo` como `TEXT`
+
+2.  **Ajuste das Rotas de Usuário (`api/index.ts`):**
+    *   **GET `/api/users`:** Atualizado para selecionar e retornar `cpf`, `cargo` e `data_admissao`. Removidos os fallbacks silenciosos que tentavam re-selecionar os campos sem essas colunas em caso de erro PGRST204 / 42703.
+    *   **POST `/api/users`:** Removida a desestruturação com fallbacks silenciosos em caso de coluna ausente. Agora insere diretamente o payload contendo os novos campos no banco e lança erros reais no log caso ocorram.
+    *   **PUT `/api/users/:id`:** Removido o fallback silencioso e atualizado para atualizar os campos opcionais diretamente.
+
+3.  **Auditoria e Correções no Frontend (`Funcionarios.tsx`):**
+    *   Confirmado o uso da máscara no CPF e seu envio correto.
+    *   Ajustado o input de data de admissão para construir e formatar a data localmente (`YYYY-MM-DD`) a partir de `getFullYear`, `getMonth` e `getDate`, prevenindo erros de fuso horário UTC (conversões baseadas em `toISOString` que às vezes recuam a data em um dia).
+
+4.  **Auditoria no Relatório de Ponto (`Ponto.tsx` e `api/index.ts`):**
+    *   **API:** A rota `GET /api/ponto/relatorio/:userId` foi atualizada para trazer os campos `cpf`, `cargo` e `data_admissao` no `SELECT` com a relação de `users`.
+    *   **Frontend (`Ponto.tsx`):** O frontend já extraía corretamente as propriedades `cpf`, `cargo` e `data_admissao` do colaborador selecionado e as desenhava no PDF, mas como a API não retornava esses campos no join de usuário e o banco de dados não os persistia, o PDF exibia traços ou dados vazios. Com a persistência e a query corrigidas, o PDF agora exibe todas as informações perfeitamente.
+
+*   **Data e hora da alteração:** 14/08/2026 às 09:50 (Horário Local)
+*   **Arquivos modificados:**
+    *   [`api/index.ts`](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/api/index.ts)
+    *   [`src/pages/Funcionarios.tsx`](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/src/pages/Funcionarios.tsx)
+    *   [`RESUMO_MESTRE.md`](file:///c:/Users/aurel/Downloads/MTsolar/Gest-o-MTSolar/RESUMO_MESTRE.md)
+
+---
+
 ## Alterações — Sessão 28/07/2026 (Correção de Ícone do App — Conformidade Google Play)
 
 ### Inconsistência de Ícone Identificada pelo Google Play (Política de Declarações Enganosas)

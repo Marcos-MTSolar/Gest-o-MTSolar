@@ -272,23 +272,12 @@ app.get('/api/users/vendedores', authenticateToken, async (req: any, res) => {
 app.get('/api/users', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CEO' && req.user.role !== 'ADMIN') return res.sendStatus(403);
 
-  // Tenta buscar com campos opcionais (cpf, cargo, data_admissao)
   let { data: users, error } = await supabase
     .from('users')
     .select('id, name, email, role, active, created_at, cpf, cargo, data_admissao, recebe_leads')
     .eq('company_id', req.user.company_id);
 
-  // Se falhar por colunas inexistentes no banco (PGRST204 ou 42703), retenta sem os campos opcionais
-  if (error?.code === 'PGRST204' || error?.code === '42703' || String(error?.code) === '42703') {
-    console.warn('[users GET] Colunas opcionais ausentes no schema — retentando sem cpf/cargo/data_admissao');
-    const fallback = await supabase
-      .from('users')
-      .select('id, name, email, role, active, created_at, recebe_leads')
-      .eq('company_id', req.user.company_id);
-    users = fallback.data as any[];
-    error = fallback.error;
-  }
-
+  if (error) return res.status(400).json({ error: error.message });
   res.json(users ?? []);
 });
 
@@ -297,29 +286,18 @@ app.post('/api/users', authenticateToken, async (req: any, res) => {
   const { name, email, password, role, cpf, cargo, data_admissao } = req.body;
   const hash = bcrypt.hashSync(password, 10);
 
-  // Payload base — campos obrigatórios (sempre existem na tabela)
-  const baseInsert: any = {
+  const fullInsert: any = {
     name,
     email,
     password_hash: hash,
     role,
     company_id: req.user.company_id,
+    cpf: cpf || null,
+    cargo: cargo || null,
+    data_admissao: data_admissao || null
   };
 
-  // Payload completo — inclui campos opcionais se preenchidos
-  const fullInsert: any = { ...baseInsert };
-  if (cpf != null && cpf !== '') fullInsert.cpf = cpf;
-  if (cargo != null && cargo !== '') fullInsert.cargo = cargo;
-  if (data_admissao != null && data_admissao !== '') fullInsert.data_admissao = data_admissao;
-
-  // Tenta inserir com campos opcionais
   let { data, error } = await supabase.from('users').insert(fullInsert).select().single();
-
-  // Se falhar por coluna inexistente no banco (PGRST204 ou 42703), retenta sem os campos opcionais
-  if (error?.code === 'PGRST204' || error?.code === '42703' || String(error?.code) === '42703') {
-    console.warn('[users POST] Colunas opcionais ausentes no schema — retentando sem cpf/cargo/data_admissao');
-    ({ data, error } = await supabase.from('users').insert(baseInsert).select().single());
-  }
 
   if (error) return res.status(400).json({ error: error.message });
   res.json({ id: data.id });
@@ -330,34 +308,22 @@ app.put('/api/users/:id', authenticateToken, async (req: any, res) => {
 
   const { name, email, role, active, password, cpf, cargo, data_admissao, recebe_leads } = req.body;
 
-  // Payload base — campos obrigatórios
-  const baseUpdate: any = {
+  const fullUpdate: any = {
     name,
     email,
     role,
     active: active ? true : false,
-    recebe_leads: recebe_leads === true || recebe_leads === 'true'
+    recebe_leads: recebe_leads === true || recebe_leads === 'true',
+    cpf: cpf || null,
+    cargo: cargo || null,
+    data_admissao: data_admissao || null
   };
 
-  // Payload completo — inclui campos opcionais se preenchidos
-  const fullUpdate: any = { ...baseUpdate };
-  if (cpf != null && cpf !== '') fullUpdate.cpf = cpf;
-  if (cargo != null && cargo !== '') fullUpdate.cargo = cargo;
-  if (data_admissao != null && data_admissao !== '') fullUpdate.data_admissao = data_admissao;
-
   if (password) {
-    baseUpdate.password_hash = bcrypt.hashSync(password, 10);
-    fullUpdate.password_hash = baseUpdate.password_hash;
+    fullUpdate.password_hash = bcrypt.hashSync(password, 10);
   }
 
-  // Tenta atualizar com campos opcionais
   let { error } = await supabase.from('users').update(fullUpdate).eq('id', req.params.id).eq('company_id', req.user.company_id);
-
-  // Se falhar por coluna inexistente no banco (PGRST204 ou 42703), retenta sem os campos opcionais
-  if (error?.code === 'PGRST204' || error?.code === '42703' || String(error?.code) === '42703') {
-    console.warn('[users PUT] Colunas opcionais ausentes no schema — retentando sem cpf/cargo/data_admissao');
-    ({ error } = await supabase.from('users').update(baseUpdate).eq('id', req.params.id).eq('company_id', req.user.company_id));
-  }
 
   if (error) return res.status(400).json({ error: error.message });
   res.json({ success: true });
@@ -4036,6 +4002,76 @@ app.post('/api/cron/mensagem-fim-expediente', async (req, res) => {
 // MÓDULO: PONTO ELETRÔNICO
 // ============================================================
 
+// =============================================================================
+// UTILITÁRIO: isHoliday(date, companyId)
+// Verifica se uma determinada data é feriado para a empresa.
+// Lógica:
+//   - Feriados com recurring = TRUE: comparação por mês e dia (independente do ano).
+//   - Feriados com recurring = FALSE: comparação por data exata (YYYY-MM-DD).
+// Retorna: boolean (true = é feriado)
+// =============================================================================
+async function isHoliday(date: Date, companyId: string): Promise<boolean> {
+  // Formata a data como YYYY-MM-DD (horário local, sem risco de UTC shift)
+  const year  = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day   = String(date.getDate()).padStart(2, '0');
+  const dateStr = `${year}-${month}-${day}`;
+
+  // Busca todos os feriados da empresa
+  const { data: holidays, error } = await supabaseAdmin
+    .from('holidays')
+    .select('date, recurring')
+    .eq('company_id', companyId);
+
+  if (error || !holidays) return false;
+
+  for (const h of holidays) {
+    const hDate = h.date as string; // YYYY-MM-DD
+    if (h.recurring) {
+      // Feriado fixo: compara apenas mês e dia (ignora o ano cadastrado)
+      const [, hMonth, hDay] = hDate.split('-');
+      if (hMonth === month && hDay === day) return true;
+    } else {
+      // Feriado móvel: compara a data completa (deve estar cadastrado para o ano correto)
+      if (hDate === dateStr) return true;
+    }
+  }
+
+  return false;
+}
+
+// =============================================================================
+// UTILITÁRIO: getHolidayName(date, companyId)
+// Retorna o nome do feriado se a data for feriado, ou null caso contrário.
+// Útil para exibir o nome do feriado nos relatórios e no PDF de ponto.
+// =============================================================================
+async function getHolidayName(date: Date, companyId: string): Promise<string | null> {
+  const year  = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day   = String(date.getDate()).padStart(2, '0');
+  const dateStr = `${year}-${month}-${day}`;
+
+  const { data: holidays, error } = await supabaseAdmin
+    .from('holidays')
+    .select('date, name, recurring')
+    .eq('company_id', companyId);
+
+  if (error || !holidays) return null;
+
+  for (const h of holidays) {
+    const hDate = h.date as string;
+    if (h.recurring) {
+      const [, hMonth, hDay] = hDate.split('-');
+      if (hMonth === month && hDay === day) return h.name as string;
+    } else {
+      if (hDate === dateStr) return h.name as string;
+    }
+  }
+
+  return null;
+}
+
+
 // GET /api/ponto/schedules — Retorna horários configurados da empresa
 app.get('/api/ponto/schedules', authenticateToken, async (req: any, res) => {
   try {
@@ -4095,9 +4131,49 @@ app.put('/api/ponto/schedules', authenticateToken, async (req: any, res) => {
   }
 });
 
+// GET /api/medical-certificates/active — Verifica se o usuário logado está sob atestado ativo hoje
+app.get('/api/medical-certificates/active', authenticateToken, async (req: any, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+
+    const { data: cert, error } = await supabaseAdmin
+      .from('medical_certificates')
+      .select('end_date')
+      .eq('company_id', req.user.company_id)
+      .eq('user_id', req.user.id)
+      .lte('start_date', today)
+      .gte('end_date', today)
+      .maybeSingle();
+
+    if (error) throw error;
+    res.json({ active: !!cert, end_date: cert?.end_date || null });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/ponto/registrar — Registra batida com selfie + GPS
 app.post('/api/ponto/registrar', authenticateToken, async (req: any, res) => {
   try {
+    // ⚠️ Bloqueio de batida de ponto caso o funcionário esteja de atestado médico
+    const today = new Date().toISOString().split('T')[0];
+    const { data: activeCert } = await supabaseAdmin
+      .from('medical_certificates')
+      .select('end_date')
+      .eq('company_id', req.user.company_id)
+      .eq('user_id', req.user.id)
+      .lte('start_date', today)
+      .gte('end_date', today)
+      .maybeSingle();
+
+    if (activeCert) {
+      const parts = activeCert.end_date.split('-');
+      const formattedEndDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+      return res.status(403).json({
+        error: `Você está em atestado médico até ${formattedEndDate}. Não é possível bater ponto.`
+      });
+    }
+
     const { type, latitude, longitude, selfie_base64 } = req.body;
 
     if (!type || !selfie_base64) {
@@ -4137,7 +4213,43 @@ app.post('/api/ponto/registrar', authenticateToken, async (req: any, res) => {
       .single();
 
     if (error) throw error;
+
+    // Alerta de ponto sem localização: notifica gestores (CEO/ADMIN) da empresa
+    if (latitude === null || longitude === null) {
+      const horaFormatada = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Recife' });
+      const tipoLabel: Record<string, string> = { entry: 'Entrada', lunch_start: 'Saída Almoço', lunch_end: 'Retorno Almoço', exit: 'Saída' };
+      const mensagem = `⚠️ Ponto sem GPS: ${req.user.name ?? 'Funcionário'} registrou "${tipoLabel[type] ?? type}" às ${horaFormatada} sem localização capturada.`;
+
+      console.warn(`[PONTO_SEM_LOCALIZACAO] company=${req.user.company_id} user=${req.user.id} type=${type} ts=${new Date().toISOString()}`);
+
+      // Busca gestores da empresa para notificação
+      const { data: gestores } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('company_id', req.user.company_id)
+        .in('role', ['CEO', 'ADMIN'])
+        .eq('active', true);
+
+      if (gestores && gestores.length > 0) {
+        const notifs = gestores.map((g: any) => ({
+          company_id: req.user.company_id,
+          user_id: g.id,
+          message: mensagem,
+          type: 'ponto_sem_localizacao',
+          read: false,
+          created_at: new Date().toISOString(),
+        }));
+        // Ignora erros de notificação para não bloquear a resposta
+        try {
+          await supabaseAdmin.from('notifications').insert(notifs);
+        } catch (e: any) {
+          console.warn('[PONTO_SEM_LOCALIZACAO] Erro ao inserir notificações:', e?.message);
+        }
+      }
+    }
+
     res.json(data);
+
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -4198,6 +4310,337 @@ app.get('/api/ponto/historico', authenticateToken, async (req: any, res) => {
   }
 });
 
+
+// =============================================================================
+// FUNÇÃO CENTRAL: calculateHourBankForPeriod(userId, startDateStr, endDateStr, companyId)
+// Lógica de cálculo conforme as regras CLT da MT Solar:
+// - Percorre cada dia no período.
+// - Verifica se é feriado, atestado médico, folga com abate de banco.
+// - Se houver ponto, calcula o total de horas trabalhadas no dia.
+// - Se for feriado ou domingo (sem compensação_horas cadastrado e aprovado):
+//   - Todas as horas trabalhadas são horas extras 100% (multiplier = 2.0).
+//   - Se não trabalhar, é feriado abonado (type = 'feriado_abonado', hours = 0).
+// - Se for dia útil (segunda a sábado, conforme o expediente esperado da função):
+//   - Se tiver ponto trabalhado:
+//     - Compara o total de horas trabalhadas com a jornada diária prevista.
+//     - Se for maior, a diferença é hora extra útil 50% (multiplier = 1.5).
+//     - Se for menor, a diferença é debitada (hours negativo, type = 'compensacao' ou similar).
+//   - Se não tiver ponto trabalhado:
+//     - Se for coberto por atestado aprovado: 'atestado_abonado' (hours = 0).
+//     - Se for coberto por folga aprovada: lança débito equivalente à jornada ('folga_abatida', hours negativo).
+//     - Caso contrário, lança falta (hours negativo correspondente à jornada, type = 'falta').
+// - Grava ou atualiza os lançamentos na tabela `hour_bank` de forma idempotente.
+// =============================================================================
+async function calculateHourBankForPeriod(userId: number, startDateStr: string, endDateStr: string, companyId: string, actorId?: number) {
+  // Obter detalhes do usuário para saber a role/jornada
+  const { data: user, error: userErr } = await supabaseAdmin
+    .from('users')
+    .select('role')
+    .eq('id', userId)
+    .single();
+  if (userErr || !user) throw new Error('Usuário não encontrado.');
+
+  const role = user.role;
+
+  // Obter o expediente esperado da role do usuário
+  const { data: schedule, error: schedErr } = await supabaseAdmin
+    .from('work_schedules')
+    .select('*')
+    .eq('company_id', companyId)
+    .eq('role', role)
+    .maybeSingle();
+
+  // Jornada padrão diária: 8 horas (se não configurado)
+  let expectedDailyHours = 8;
+  let isSaturdayWorkDay = false; // Por padrão, sábado não é dia útil, a menos que configurado na jornada ou se queira estender.
+  if (schedule) {
+    const parseTime = (t: string) => {
+      const [h, m] = t.split(':').map(Number);
+      return h + m / 60;
+    };
+    const entry = parseTime(schedule.entry_time);
+    const lunchStart = parseTime(schedule.lunch_start);
+    const lunchEnd = parseTime(schedule.lunch_end);
+    const exit = parseTime(schedule.exit_time);
+    expectedDailyHours = (lunchStart - entry) + (exit - lunchEnd);
+  }
+
+  // Parse datas
+  const start = new Date(startDateStr.split('T')[0] + 'T00:00:00');
+  const end = new Date(endDateStr.split('T')[0] + 'T23:59:59');
+
+  // Buscar todos os registros de ponto do usuário no período
+  const { data: timeRecords } = await supabaseAdmin
+    .from('time_records')
+    .select('*')
+    .eq('company_id', companyId)
+    .eq('user_id', userId)
+    .eq('status', 'approved') // Apenas batidas aprovadas contam para o cálculo
+    .gte('timestamp', start.toISOString())
+    .lte('timestamp', end.toISOString());
+
+  // Buscar feriados
+  const { data: holidays } = await supabaseAdmin
+    .from('holidays')
+    .select('*')
+    .eq('company_id', companyId);
+
+  // Buscar atestados médicos do usuário que cruzam o período
+  const { data: certificates } = await supabaseAdmin
+    .from('medical_certificates')
+    .select('*')
+    .eq('company_id', companyId)
+    .eq('user_id', userId)
+    .gte('end_date', startDateStr.split('T')[0])
+    .lte('start_date', endDateStr.split('T')[0]);
+
+  // Buscar folgas/compensações aprovadas
+  const { data: timeOffRequests } = await supabaseAdmin
+    .from('time_off_requests')
+    .select('*')
+    .eq('company_id', companyId)
+    .eq('user_id', userId)
+    .eq('status', 'approved')
+    .gte('date', startDateStr.split('T')[0])
+    .lte('date', endDateStr.split('T')[0]);
+
+  // Agrupar registros de ponto por dia (YYYY-MM-DD local)
+  const recordsByDay: Record<string, any[]> = {};
+  if (timeRecords) {
+    timeRecords.forEach(r => {
+      const d = new Date(r.timestamp);
+      const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (!recordsByDay[dayKey]) recordsByDay[dayKey] = [];
+      recordsByDay[dayKey].push(r);
+    });
+  }
+
+  const currentDate = new Date(start);
+  while (currentDate <= end) {
+    const year = currentDate.getFullYear();
+    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+    const day = String(currentDate.getDate()).padStart(2, '0');
+    const dayKey = `${year}-${month}-${day}`;
+
+    const dayOfWeek = currentDate.getDay(); // 0 = Domingo, 6 = Sábado
+    const isSunday = dayOfWeek === 0;
+    const isSaturday = dayOfWeek === 6;
+
+    // 1. Verificar se é feriado
+    let holidayName: string | null = null;
+    if (holidays) {
+      const match = holidays.find(h => {
+        if (h.recurring) {
+          const [, hM, hD] = h.date.split('-');
+          return hM === month && hD === day;
+        } else {
+          return h.date === dayKey;
+        }
+      });
+      if (match) holidayName = match.name;
+    }
+    const isHolidayDay = holidayName !== null;
+
+    // 2. Verificar se está de atestado
+    const isMedicalDay = certificates ? certificates.some(c => dayKey >= c.start_date && dayKey <= c.end_date) : false;
+
+    // 3. Verificar folgas aprovadas
+    const approvedTimeOff = timeOffRequests ? timeOffRequests.find(t => t.date === dayKey) : null;
+
+    // Jornada esperada para este dia específico
+    // Sábado pode ou não ser dia de trabalho. Por convenção básica da CLT/empresa, assumimos segunda a sexta como úteis (jornada inteira).
+    const isWorkDay = !isSunday && !isSaturday && !isHolidayDay;
+    const currentExpectedHours = isWorkDay ? expectedDailyHours : 0;
+
+    // Processamento de batidas
+    const dayPoints = recordsByDay[dayKey] || [];
+    let workedHours = 0;
+    if (dayPoints.length >= 2) {
+      // Ordenar batidas pelo timestamp
+      dayPoints.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      
+      const byType: Record<string, Date> = {};
+      dayPoints.forEach(p => {
+        byType[p.type] = new Date(p.timestamp);
+      });
+
+      if (byType['entry'] && byType['lunch_start']) {
+        workedHours += (byType['lunch_start'].getTime() - byType['entry'].getTime()) / 3600000;
+      }
+      if (byType['lunch_end'] && byType['exit']) {
+        workedHours += (byType['exit'].getTime() - byType['lunch_end'].getTime()) / 3600000;
+      }
+      // Caso o funcionário só tenha batido entrada e saída direto (sem almoço)
+      if (byType['entry'] && byType['exit'] && !byType['lunch_start']) {
+        workedHours = (byType['exit'].getTime() - byType['entry'].getTime()) / 3600000;
+      }
+    }
+
+    // Determinar o tipo de lançamento a fazer
+    let insertHours = 0;
+    let insertType: string | null = null;
+    let multiplier = 1.0;
+    let description = '';
+
+    if (workedHours > 0) {
+      // Funcionário trabalhou neste dia
+      if (isSunday || isHolidayDay) {
+        // Horas extras 100% em domingos/feriados
+        insertHours = workedHours;
+        insertType = 'hora_extra_fds_feriado';
+        
+        // Verifica se tem compensacao_horas aprovado para esse dia
+        const isCompensated = approvedTimeOff && approvedTimeOff.type === 'compensacao_horas';
+        multiplier = isCompensated ? 1.0 : 2.0;
+        description = isHolidayDay ? `Trabalho no feriado: ${holidayName}` : 'Trabalho no domingo';
+      } else {
+        // Dia de semana / Sábado
+        const diff = workedHours - currentExpectedHours;
+        if (diff > 0) {
+          // Fez hora extra em dia útil (50%)
+          insertHours = diff;
+          insertType = 'hora_extra_normal';
+          multiplier = 1.5; // adicional mínimo de 50% legal. Ajustar se acordo coletivo estipular outro valor.
+          description = `Hora extra em dia útil. Carga: ${workedHours.toFixed(2)}h (Esperado: ${currentExpectedHours.toFixed(2)}h)`;
+        } else if (diff < 0) {
+          // Trabalhou menos do que deveria -> Débito
+          insertHours = diff; // Valor negativo
+          insertType = 'falta';
+          multiplier = 1.0;
+          description = `Jornada incompleta. Carga: ${workedHours.toFixed(2)}h (Esperado: ${currentExpectedHours.toFixed(2)}h)`;
+        }
+      }
+    } else {
+      // Funcionário NÃO trabalhou neste dia
+      if (isHolidayDay) {
+        // Feriado abonado
+        insertHours = 0;
+        insertType = 'feriado_abonado';
+        description = `Feriado abonado: ${holidayName}`;
+      } else if (isMedicalDay) {
+        // Atestado médico
+        insertHours = 0;
+        insertType = 'atestado_abonado';
+        description = 'Atestado médico abonado';
+      } else if (approvedTimeOff && approvedTimeOff.type === 'folga_abate_banco') {
+        // Folga aprovada que abate do banco de horas
+        insertHours = -approvedTimeOff.hours; // Débito da folga
+        insertType = 'folga_abatida';
+        multiplier = 1.0;
+        description = `Folga compensada aprovada. Observações: ${approvedTimeOff.notes || ''}`;
+      } else if (currentExpectedHours > 0) {
+        // Dia útil comum de trabalho e não apareceu -> Falta total
+        insertHours = -currentExpectedHours;
+        insertType = 'falta';
+        multiplier = 1.0;
+        description = `Falta sem justificativa. Jornada esperada: ${currentExpectedHours.toFixed(2)}h`;
+      }
+    }
+
+    // Se identificou um lançamento relevante, grava de forma idempotente (upsert por user_id, reference_date e type)
+    if (insertType) {
+      // Verifica se já existe um lançamento automático para esse dia + tipo
+      // Para evitar sobrescrever ajustes manuais criados pelo ADM, filtramos apenas por lançamentos gerados pelo sistema ou substituímos.
+      const { data: existingHB } = await supabaseAdmin
+        .from('hour_bank')
+        .select('id, created_by')
+        .eq('company_id', companyId)
+        .eq('user_id', userId)
+        .eq('reference_date', dayKey)
+        .eq('type', insertType)
+        .maybeSingle();
+
+      const payload: any = {
+        company_id: companyId,
+        user_id: userId,
+        reference_date: dayKey,
+        hours: Math.round(insertHours * 100) / 100,
+        type: insertType,
+        multiplier,
+        description,
+      };
+
+      if (existingHB) {
+        // Apenas atualiza se o lançamento anterior não foi um ajuste manual de outro ADM (created_by é nulo ou igual ao sistema)
+        if (!existingHB.created_by || existingHB.created_by === actorId) {
+          await supabaseAdmin
+            .from('hour_bank')
+            .update(payload)
+            .eq('id', existingHB.id);
+        }
+      } else {
+        if (actorId) payload.created_by = actorId;
+        await supabaseAdmin
+          .from('hour_bank')
+          .insert(payload);
+      }
+    }
+
+    // Avança 1 dia
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+}
+
+// GET /api/hour-bank/summary — Retorna resumo agregado do banco de horas no período
+app.get('/api/hour-bank/summary', authenticateToken, async (req: any, res) => {
+  try {
+    const { userId, startDate, endDate } = req.query;
+    const isManager = ['CEO', 'ADMIN'].includes(req.user.role);
+
+    const targetUserId = isManager && userId ? parseInt(userId, 10) : req.user.id;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: 'startDate e endDate são obrigatórios.' });
+    }
+
+    // Garante que o banco de horas está atualizado rodando o cálculo sob demanda
+    await calculateHourBankForPeriod(targetUserId, startDate, endDate, req.user.company_id);
+
+    const { data: entries, error } = await supabaseAdmin
+      .from('hour_bank')
+      .select('*')
+      .eq('company_id', req.user.company_id)
+      .eq('user_id', targetUserId)
+      .gte('reference_date', startDate)
+      .lte('reference_date', endDate);
+
+    if (error) throw error;
+
+    let extraNormal = 0; // multiplier 1.5
+    let extraFds = 0;    // multiplier 2.0
+    let devendo = 0;     // negativo
+    let abonados = 0;    // dias de feriado/atestado
+    let totalBalance = 0;
+
+    (entries || []).forEach(e => {
+      const hrs = parseFloat(e.hours);
+      totalBalance += hrs;
+
+      if (hrs > 0) {
+        if (parseFloat(e.multiplier) === 1.5) {
+          extraNormal += hrs;
+        } else if (parseFloat(e.multiplier) === 2.0) {
+          extraFds += hrs;
+        }
+      } else if (hrs < 0) {
+        devendo += Math.abs(hrs);
+      } else if (e.type === 'feriado_abonado' || e.type === 'atestado_abonado') {
+        abonados += 1;
+      }
+    });
+
+    res.json({
+      extraNormal: Math.round(extraNormal * 100) / 100,
+      extraFds: Math.round(extraFds * 100) / 100,
+      devendo: Math.round(devendo * 100) / 100,
+      abonados,
+      balance: Math.round(totalBalance * 100) / 100
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/ponto/relatorio/:userId — Consolidado mensal (CEO/ADMIN)
 app.get('/api/ponto/relatorio/:userId', authenticateToken, async (req: any, res) => {
   try {
@@ -4208,23 +4651,45 @@ app.get('/api/ponto/relatorio/:userId', authenticateToken, async (req: any, res)
     const { userId } = req.params;
     const { start, end } = req.query;
 
-    let query = supabaseAdmin
+    if (!start || !end) {
+      return res.status(400).json({ error: 'Parâmetros start e end são obrigatórios.' });
+    }
+
+    const uId = parseInt(userId, 10);
+
+    // Roda o cálculo dinâmico do banco de horas para garantir consistência
+    await calculateHourBankForPeriod(uId, start as string, end as string, req.user.company_id);
+
+    // Busca as batidas de ponto
+    const { data: records, error } = await supabaseAdmin
       .from('time_records')
-      .select('*, users(name, role)')
+      .select('*, users(name, role, cpf, cargo, data_admissao)')
       .eq('company_id', req.user.company_id)
-      .eq('user_id', userId)
+      .eq('user_id', uId)
+      .gte('timestamp', start)
+      .lte('timestamp', end)
       .order('timestamp', { ascending: true });
 
-    if (start) query = query.gte('timestamp', start);
-    if (end) query = query.lte('timestamp', end);
-
-    const { data, error } = await query;
     if (error) throw error;
-    res.json(data);
+
+    // Busca os lançamentos detalhados do banco de horas para cruzar no relatório
+    const { data: hbEntries } = await supabaseAdmin
+      .from('hour_bank')
+      .select('*')
+      .eq('company_id', req.user.company_id)
+      .eq('user_id', uId)
+      .gte('reference_date', (start as string).split('T')[0])
+      .lte('reference_date', (end as string).split('T')[0]);
+
+    res.json({
+      records: records || [],
+      hourBank: hbEntries || []
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // DELETE /api/ponto/usuario/:userId/registros — Exclui todos os registros de ponto de um usuário (apenas CEO)
 app.delete('/api/ponto/usuario/:userId/registros', authenticateToken, async (req: any, res) => {
@@ -4400,6 +4865,496 @@ app.get('/api/ponto/ajustes', authenticateToken, async (req: any, res) => {
       .eq('company_id', req.user.company_id)
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================================
+// MÓDULO: FERIADOS (holidays)
+// =============================================================================
+
+// GET /api/holidays — Lista feriados da empresa (todos autenticados)
+app.get('/api/holidays', authenticateToken, async (req: any, res) => {
+  try {
+    const { year } = req.query;
+
+    let query = supabaseAdmin
+      .from('holidays')
+      .select('*')
+      .eq('company_id', req.user.company_id)
+      .order('date', { ascending: true });
+
+    if (year) {
+      query = query
+        .gte('date', `${year}-01-01`)
+        .lte('date', `${year}-12-31`);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data ?? []);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/holidays — Cria feriado (CEO/ADMIN)
+app.post('/api/holidays', authenticateToken, async (req: any, res) => {
+  try {
+    if (!['CEO', 'ADMIN'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Acesso restrito a gestores.' });
+    }
+
+    const { date, name, type, recurring } = req.body;
+
+    if (!date || !name) {
+      return res.status(400).json({ error: 'Campos date e name são obrigatórios.' });
+    }
+
+    const validTypes = ['nacional', 'estadual', 'municipal'];
+    if (type && !validTypes.includes(type)) {
+      return res.status(400).json({ error: 'Tipo de feriado inválido.' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('holidays')
+      .insert({
+        company_id: req.user.company_id,
+        date,
+        name,
+        type: type ?? 'nacional',
+        recurring: recurring !== false,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    // UNIQUE violation (company_id, date)
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Já existe um feriado cadastrado nesta data.' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/holidays/:id — Atualiza feriado (CEO/ADMIN)
+app.put('/api/holidays/:id', authenticateToken, async (req: any, res) => {
+  try {
+    if (!['CEO', 'ADMIN'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Acesso restrito a gestores.' });
+    }
+
+    const { id } = req.params;
+    const { date, name, type, recurring } = req.body;
+
+    const validTypes = ['nacional', 'estadual', 'municipal'];
+    if (type && !validTypes.includes(type)) {
+      return res.status(400).json({ error: 'Tipo de feriado inválido.' });
+    }
+
+    const updatePayload: any = {};
+    if (date !== undefined) updatePayload.date = date;
+    if (name !== undefined) updatePayload.name = name;
+    if (type !== undefined) updatePayload.type = type;
+    if (recurring !== undefined) updatePayload.recurring = recurring;
+
+    const { data, error } = await supabaseAdmin
+      .from('holidays')
+      .update(updatePayload)
+      .eq('id', id)
+      .eq('company_id', req.user.company_id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Feriado não encontrado.' });
+    res.json(data);
+  } catch (err: any) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Já existe um feriado cadastrado nesta data.' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/holidays/:id — Remove feriado (CEO/ADMIN)
+app.delete('/api/holidays/:id', authenticateToken, async (req: any, res) => {
+  try {
+    if (!['CEO', 'ADMIN'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Acesso restrito a gestores.' });
+    }
+
+    const { id } = req.params;
+
+    const { error } = await supabaseAdmin
+      .from('holidays')
+      .delete()
+      .eq('id', id)
+      .eq('company_id', req.user.company_id);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================================
+// MÓDULO: ATESTADOS MÉDICOS (medical_certificates)
+// =============================================================================
+
+// GET /api/medical-certificates — Lista atestados (?userId=X) (CEO/ADMIN)
+app.get('/api/medical-certificates', authenticateToken, async (req: any, res) => {
+  try {
+    if (!['CEO', 'ADMIN'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Acesso restrito a gestores.' });
+    }
+
+    const { userId } = req.query;
+
+    let query = supabaseAdmin
+      .from('medical_certificates')
+      .select('*, users!medical_certificates_user_id_fkey(name, role)')
+      .eq('company_id', req.user.company_id)
+      .order('start_date', { ascending: false });
+
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data ?? []);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/medical-certificates — Cria atestado com upload de documento (CEO/ADMIN)
+app.post('/api/medical-certificates', authenticateToken, upload.single('document'), async (req: any, res) => {
+  try {
+    if (!['CEO', 'ADMIN'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Acesso restrito a gestores.' });
+    }
+
+    const { user_id, cid, start_date, days_off, notes } = req.body;
+
+    if (!user_id || !start_date || !days_off) {
+      return res.status(400).json({ error: 'Campos user_id, start_date e days_off são obrigatórios.' });
+    }
+
+    const daysOffNum = parseInt(days_off, 10);
+    if (isNaN(daysOffNum) || daysOffNum < 1) {
+      return res.status(400).json({ error: 'days_off deve ser um número inteiro maior que 0.' });
+    }
+
+    // Calcula end_date: start_date + (days_off - 1) dias
+    const startParts = start_date.split('-');
+    const startDateObj = new Date(
+      parseInt(startParts[0], 10),
+      parseInt(startParts[1], 10) - 1,
+      parseInt(startParts[2], 10)
+    );
+    startDateObj.setDate(startDateObj.getDate() + daysOffNum - 1);
+    const endYear = startDateObj.getFullYear();
+    const endMonth = String(startDateObj.getMonth() + 1).padStart(2, '0');
+    const endDay = String(startDateObj.getDate()).padStart(2, '0');
+    const end_date = `${endYear}-${endMonth}-${endDay}`;
+
+    // Upload do documento para o R2 (se enviado)
+    let document_url: string | null = null;
+    let document_path: string | null = null;
+
+    if (req.file) {
+      const sanitizedName = sanitizeFileName(req.file.originalname);
+      const filePath = `atestados/${req.user.company_id}/${user_id}/${Date.now()}-${sanitizedName}`;
+      document_url = await uploadToR2(req.file.buffer, filePath, req.file.mimetype);
+      document_path = filePath;
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('medical_certificates')
+      .insert({
+        company_id: req.user.company_id,
+        user_id: parseInt(user_id, 10),
+        document_url,
+        document_path,
+        cid: cid ?? null,
+        start_date,
+        days_off: daysOffNum,
+        end_date,
+        notes: notes ?? null,
+        uploaded_by: req.user.id,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================================
+// MÓDULO: FOLGAS E COMPENSAÇÕES (time_off_requests)
+// =============================================================================
+
+// GET /api/time-off-requests — Lista solicitações (?userId=X&status=Y) (CEO/ADMIN)
+// Funcionários comuns veem apenas as próprias solicitações.
+app.get('/api/time-off-requests', authenticateToken, async (req: any, res) => {
+  try {
+    const { userId, status } = req.query;
+    const isManager = ['CEO', 'ADMIN'].includes(req.user.role);
+
+    let query = supabaseAdmin
+      .from('time_off_requests')
+      .select('*, users!time_off_requests_user_id_fkey(name, role)')
+      .eq('company_id', req.user.company_id)
+      .order('created_at', { ascending: false });
+
+    // Funcionários não-gestores só veem os próprios registros
+    if (!isManager) {
+      query = query.eq('user_id', req.user.id);
+    } else if (userId) {
+      query = query.eq('user_id', userId);
+    }
+
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data ?? []);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/time-off-requests — Solicita folga ou compensação (todos autenticados)
+app.post('/api/time-off-requests', authenticateToken, async (req: any, res) => {
+  try {
+    const { user_id, date, type, hours, notes } = req.body;
+    const isManager = ['CEO', 'ADMIN'].includes(req.user.role);
+
+    // Gestores podem solicitar para outros; funcionários só para si mesmos
+    const targetUserId = isManager && user_id ? parseInt(user_id, 10) : req.user.id;
+
+    if (!date || !type || !hours) {
+      return res.status(400).json({ error: 'Campos date, type e hours são obrigatórios.' });
+    }
+
+    const validTypes = ['folga_abate_banco', 'compensacao_horas'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ error: 'Tipo de solicitação inválido.' });
+    }
+
+    const hoursNum = parseFloat(hours);
+    if (isNaN(hoursNum) || hoursNum <= 0) {
+      return res.status(400).json({ error: 'hours deve ser um número positivo.' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('time_off_requests')
+      .insert({
+        company_id: req.user.company_id,
+        user_id: targetUserId,
+        date,
+        type,
+        hours: hoursNum,
+        status: 'pending',
+        requested_by: req.user.id,
+        notes: notes ?? null,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/time-off-requests/:id — Aprova ou rejeita solicitação (CEO/ADMIN)
+app.put('/api/time-off-requests/:id', authenticateToken, async (req: any, res) => {
+  try {
+    if (!['CEO', 'ADMIN'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Acesso restrito a gestores.' });
+    }
+
+    const { id } = req.params;
+    const { status, notes } = req.body;
+
+    const validStatuses = ['approved', 'rejected'];
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Status deve ser "approved" ou "rejected".' });
+    }
+
+    // Verifica se a solicitação existe e pertence à empresa
+    const { data: existing } = await supabaseAdmin
+      .from('time_off_requests')
+      .select('id, status')
+      .eq('id', id)
+      .eq('company_id', req.user.company_id)
+      .single();
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Solicitação não encontrada.' });
+    }
+
+    if (existing.status !== 'pending') {
+      return res.status(409).json({ error: 'Apenas solicitações pendentes podem ser avaliadas.' });
+    }
+
+    const updatePayload: any = {
+      status,
+      approved_by: req.user.id,
+    };
+    if (notes !== undefined) updatePayload.notes = notes;
+
+    const { data: requestToApprove, error: findError } = await supabaseAdmin
+      .from('time_off_requests')
+      .select('*')
+      .eq('id', id)
+      .eq('company_id', req.user.company_id)
+      .single();
+
+    if (findError || !requestToApprove) {
+      return res.status(404).json({ error: 'Solicitação não encontrada.' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('time_off_requests')
+      .update(updatePayload)
+      .eq('id', id)
+      .eq('company_id', req.user.company_id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Se aprovado, cria o lançamento correspondente no hour_bank
+    if (status === 'approved') {
+      const typeMap: Record<string, string> = {
+        folga_abate_banco: 'folga_abatida',
+        compensacao_horas: 'compensacao'
+      };
+
+      const insertHours = requestToApprove.type === 'folga_abate_banco' 
+        ? -parseFloat(requestToApprove.hours) 
+        : parseFloat(requestToApprove.hours);
+
+      await supabaseAdmin
+        .from('hour_bank')
+        .insert({
+          company_id: req.user.company_id,
+          user_id: requestToApprove.user_id,
+          reference_date: requestToApprove.date,
+          hours: insertHours,
+          type: typeMap[requestToApprove.type] || 'compensacao',
+          multiplier: 1.0,
+          description: `Aprovado via solicitação de folga/compensação. Obs: ${requestToApprove.notes || '—'}`,
+          created_by: req.user.id
+        });
+    }
+
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================================
+// MÓDULO: BANCO DE HORAS (hour_bank)
+// =============================================================================
+
+// GET /api/hour-bank — Lista lançamentos do banco de horas (?userId=X&startDate=Y&endDate=Z)
+// CEO/ADMIN podem consultar qualquer funcionário; funcionários veem apenas o próprio saldo.
+app.get('/api/hour-bank', authenticateToken, async (req: any, res) => {
+  try {
+    const { userId, startDate, endDate } = req.query;
+    const isManager = ['CEO', 'ADMIN'].includes(req.user.role);
+
+    let query = supabaseAdmin
+      .from('hour_bank')
+      .select('*')
+      .eq('company_id', req.user.company_id)
+      .order('reference_date', { ascending: false });
+
+    if (!isManager) {
+      // Funcionário vê apenas os próprios lançamentos
+      query = query.eq('user_id', req.user.id);
+    } else if (userId) {
+      query = query.eq('user_id', userId);
+    }
+
+    if (startDate) query = query.gte('reference_date', startDate);
+    if (endDate) query = query.lte('reference_date', endDate);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    // Calcula saldo total para retornar junto
+    const balance = (data ?? []).reduce((sum: number, row: any) => sum + parseFloat(row.hours), 0);
+
+    res.json({ entries: data ?? [], balance: Math.round(balance * 100) / 100 });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/hour-bank — Lançamento manual de horas (CEO/ADMIN)
+app.post('/api/hour-bank', authenticateToken, async (req: any, res) => {
+  try {
+    if (!['CEO', 'ADMIN'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Acesso restrito a gestores.' });
+    }
+
+    const { user_id, reference_date, hours, type, multiplier, description, time_record_id } = req.body;
+
+    if (!user_id || !reference_date || hours === undefined || !type) {
+      return res.status(400).json({ error: 'Campos user_id, reference_date, hours e type são obrigatórios.' });
+    }
+
+    const validTypes = [
+      'hora_extra_normal', 'hora_extra_fds_feriado', 'falta',
+      'folga_abatida', 'compensacao', 'ajuste_manual',
+      'atestado_abonado', 'feriado_abonado'
+    ];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ error: 'Tipo de lançamento inválido.' });
+    }
+
+    const hoursNum = parseFloat(hours);
+    if (isNaN(hoursNum)) {
+      return res.status(400).json({ error: 'hours deve ser um número válido.' });
+    }
+
+    const multiplierNum = multiplier !== undefined ? parseFloat(multiplier) : 1.0;
+
+    const { data, error } = await supabaseAdmin
+      .from('hour_bank')
+      .insert({
+        company_id: req.user.company_id,
+        user_id: parseInt(user_id, 10),
+        reference_date,
+        hours: hoursNum,
+        type,
+        multiplier: multiplierNum,
+        description: description ?? null,
+        time_record_id: time_record_id ? parseInt(time_record_id, 10) : null,
+        created_by: req.user.id,
+      })
+      .select()
+      .single();
 
     if (error) throw error;
     res.json(data);

@@ -194,7 +194,7 @@ export default function Obra() {
 
       for (const [campo, file] of Object.entries(newPhotoFiles)) {
         if (file) {
-          const result = await uploadNewPhoto(campo, file);
+          const result = await uploadNewPhoto(campo, file as File);
           if (result) {
             extraUrls[campo] = result.url;
             newUploadsAt[campo] = result.uploadedAt;
