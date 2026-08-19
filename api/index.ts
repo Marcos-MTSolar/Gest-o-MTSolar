@@ -4342,6 +4342,24 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
 
   const role = user.role;
 
+  // Deleta os lançamentos automáticos anteriores no período para garantir idempotência e recálculo limpo
+  const startDateClean = startDateStr.split('T')[0];
+  const endDateClean = endDateStr.split('T')[0];
+  const { error: cleanErr } = await supabaseAdmin
+    .from('hour_bank')
+    .delete()
+    .eq('company_id', companyId)
+    .eq('user_id', userId)
+    .is('created_by', null)
+    .gte('reference_date', startDateClean)
+    .lte('reference_date', endDateClean);
+
+  if (cleanErr) {
+    console.error(`[HB_CALC] Erro ao limpar lançamentos automáticos do user ${userId}:`, cleanErr.message);
+  } else {
+    console.log(`[HB_CALC] Lançamentos automáticos anteriores limpos para o user ${userId} de ${startDateClean} a ${endDateClean}`);
+  }
+
   // Obter o expediente esperado da role do usuário
   const { data: schedule, error: schedErr } = await supabaseAdmin
     .from('work_schedules')
@@ -4602,6 +4620,9 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
       }
     }
 
+    // Log temporário detalhado para fins de diagnóstico (tarefa 4 do diagnóstico)
+    console.log(`[HB_CALC_DAY] user=${userId} | dia=${dayKey} | trabalhadas=${workedHours.toFixed(2)}h | esperado=${currentExpectedHours.toFixed(2)}h | excedente=${insertHours.toFixed(2)}h | lancado=${insertType || 'nenhum'} | mult=${multiplier}`);
+
     // Avança 1 dia
     currentDate.setDate(currentDate.getDate() + 1);
   }
@@ -4645,10 +4666,17 @@ app.get('/api/hour-bank/summary', authenticateToken, async (req: any, res) => {
       totalBalance += valueWithMultiplier;
 
       if (hrs > 0) {
-        if (mult === 1.5) {
-          extraNormal += hrs * 1.5;
-        } else if (mult === 2.0) {
-          extraFds += hrs * 2.0;
+        if (e.type === 'hora_extra_normal') {
+          extraNormal += hrs * mult;
+        } else if (e.type === 'hora_extra_fds_feriado') {
+          extraFds += hrs * mult;
+        } else {
+          // Fallback por multiplicador para compatibilidade
+          if (mult === 1.5) {
+            extraNormal += hrs * 1.5;
+          } else if (mult === 2.0) {
+            extraFds += hrs * 2.0;
+          }
         }
       } else if (hrs < 0) {
         devendo += Math.abs(hrs); // Faltas/débitos (normalmente multiplicador 1.0)
@@ -5474,7 +5502,7 @@ app.post('/api/hour-bank/recalculate', authenticateToken, async (req: any, res) 
     const resultadosPorUsuario: any[] = [];
 
     for (const uid of targetUserIds) {
-      // 1. Deletar APENAS lançamentos automáticos de 'falta' no período
+      // 1. Deletar todos os lançamentos automáticos (created_by IS NULL) no período
       //    Critério de segurança: created_by IS NULL = gerado automaticamente pela rotina
       //    lançamentos com created_by NOT NULL = criados manualmente por ADM/CEO, nunca apagar
       const { data: deletedEntries, error: deleteErr } = await supabaseAdmin
@@ -5482,14 +5510,13 @@ app.post('/api/hour-bank/recalculate', authenticateToken, async (req: any, res) 
         .delete()
         .eq('company_id', companyId)
         .eq('user_id', uid)
-        .eq('type', 'falta')
         .is('created_by', null)
         .gte('reference_date', startDateStr)
         .lte('reference_date', endDateStr)
         .select('id');
 
       if (deleteErr) {
-        console.error(`[RECALCULATE] Erro ao deletar faltas do user ${uid}:`, deleteErr.message);
+        console.error(`[RECALCULATE] Erro ao deletar lançamentos automáticos do user ${uid}:`, deleteErr.message);
         continue;
       }
 

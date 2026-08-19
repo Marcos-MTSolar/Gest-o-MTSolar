@@ -495,8 +495,15 @@ export default function Ponto() {
         const valueWithMultiplier = hrs * mult;
         balance += valueWithMultiplier;
         if (hrs > 0) {
-          if (mult === 1.5) extraNormal += hrs * 1.5;
-          else if (mult === 2.0) extraFds += hrs * 2.0;
+          if (e.type === 'hora_extra_normal') {
+            extraNormal += hrs * mult;
+          } else if (e.type === 'hora_extra_fds_feriado') {
+            extraFds += hrs * mult;
+          } else {
+            // Fallback por multiplicador para compatibilidade
+            if (mult === 1.5) extraNormal += hrs * 1.5;
+            else if (mult === 2.0) extraFds += hrs * 2.0;
+          }
         } else if (hrs < 0) {
           devendo += Math.abs(hrs);
         } else if (e.type === 'feriado_abonado' || e.type === 'atestado_abonado') {

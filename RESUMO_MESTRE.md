@@ -2,6 +2,23 @@
 
 ---
 
+## Alterações — Sessão 19/08/2026 — 09:50 (Correção do Cálculo e Exibição de Horas Extras no Banco de Horas)
+
+### Data/Hora
+2026-08-19 — Sessão 8
+
+### Arquivos modificados
+- `api/index.ts` — Deleção de lançamentos automáticos no início de `calculateHourBankForPeriod` para garantir idempotência completa. Rota de recálculo retroativo `/api/hour-bank/recalculate` ajustada para limpar todos os lançamentos automáticos do período. Rota `/api/hour-bank/summary` ajustada para somar e agrupar horas extras a partir de `type` de lançamento.
+- `src/pages/Ponto.tsx` — Função `fetchReport` no frontend ajustada para calcular o sumário de horas extras baseando-se em `type` em vez de comparação rígida de float de multiplicador.
+
+### O que foi feito
+1. **Idempotência no Banco de Horas**: Resolvido o bug de concorrência onde dias que mudavam de tipo de classificação retinham lançamentos antigos indesejados. Agora, a rotina limpa todos os lançamentos automáticos (`created_by IS NULL`) do período para o colaborador antes de recalcular.
+2. **Correção do Recálculo Retroativo**: O endpoint `/api/hour-bank/recalculate` agora remove todos os registros automáticos do período, incluindo horas extras com zero horas ou dízimas residuais incorretas.
+3. **Resiliência do Sumário**: Modificado o backend (`GET /api/hour-bank/summary`) e o frontend (`fetchReport`) para acumular horas extras mapeando o campo `type` (`hora_extra_normal`/`hora_extra_fds_feriado`), eliminando erros de ponto flutuante na comparação numérica do multiplicador.
+4. **Validação Matemática do Saldo**: O recálculo foi rodado para Mariana Feliciano (01/08 a 19/08/2026). As horas extras normais foram regularizadas para `+7.44h` ponderadas (`4.96h` físicas), faltas legítimas de jornadas parciais somaram `-2.07h`, resultando em um saldo real e positivo de `+5.37h`, corrigindo a discrepância de `-104h` sem sentido.
+
+---
+
 ## Alterações — Sessão 19/08/2026 — 09:19 (Correção da Classificação de Falta e Recálculo Retroativo Seguro)
 
 ### Data/Hora
