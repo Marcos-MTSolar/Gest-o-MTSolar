@@ -2,6 +2,27 @@
 
 ---
 
+## Alterações — Sessão 19/08/2026 — 09:19 (Correção da Classificação de Falta e Recálculo Retroativo Seguro)
+
+### Data/Hora
+2026-08-19 — Sessão 7
+
+### Arquivos modificados
+- `api/index.ts` — Alteração no filtro de consulta de `time_records` na função `calculateHourBankForPeriod`, adição de recálculo automático de dia afetado ao aprovar ajustes e criação da nova rota segura `POST /api/hour-bank/recalculate`.
+- `src/pages/Ponto.tsx` — Adição do botão "Recalcular Período", controle de carregamento, modal de confirmação para recálculo em lote de todos os colaboradores, e cards informativos pós-recálculo.
+
+### O que foi feito
+1. **Correção do Bug de Falta Incorreta**: Substituído o filtro `.eq('status', 'approved')` por `.in('status', ['pending', 'approved', 'adjustment_requested'])` em `calculateHourBankForPeriod`. O sistema agora considera as batidas normais que permanecem com o status `pending` por padrão, resolvendo o problema que marcava todo dia trabalhado como falta.
+2. **Uso de Timestamp Original**: Validado que a classificação utiliza o `timestamp` das batidas, incluindo as que estão com solicitação de ajuste em andamento (`adjustment_requested`), garantindo cálculos baseados no horário efetivamente registrado.
+3. **Recálculo no Fluxo de Ajuste**: Adicionado gatilho de recálculo automático para o dia específico afetado assim que uma solicitação de ajuste de ponto é aprovada via `PUT /api/ponto/ajuste/:id`.
+4. **Rastreabilidade no Banco de Horas**: Validado que a distinção entre registros automáticos e manuais é feita com base no campo `created_by` (lançamentos automáticos da rotina possuem `created_by IS NULL` e lançamentos manuais do ADM possuem o ID do autor).
+5. **Rota de Recálculo Retroativo Seguro**: Desenvolvida a rota `POST /api/hour-bank/recalculate` para deletar exclusivamente lançamentos automáticos de `type = 'falta'` no período e recalcular o saldo dos colaboradores de forma isolada ou em lote.
+6. **Controle na Interface do Gestor**: Criado o botão **⟳ Recalcular Período** no frontend, protegido para gestores, com confirmação contra disparos gerais indesejados, tratamento de loading e exibição de resumo do processamento.
+7. **Backup e Execução Retroativa**: Exportados todos os 37 registros anteriores da tabela `hour_bank` para `scratch/hour_bank_backup_pre_fix.json`. O recálculo foi disparado para todos os 13 colaboradores ativos no período de 01/08/2026 a 19/08/2026. A colaboradora Mariana Feliciano teve suas 13 faltas incorretas regularizadas para horas extras e débitos de jornadas parciais legítimos.
+
+---
+
+
 ## Alterações — Sessão 14/08/2026 — 13:30 (Geolocalização Obrigatória e Notificações de Ponto Sem GPS)
 
 ### Data/Hora

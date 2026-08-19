@@ -305,6 +305,15 @@ export default function Ponto() {
   const [fotoLoading, setFotoLoading] = useState(false);
   const [fotoModalUrl, setFotoModalUrl] = useState<string | null>(null);
 
+  // Estado do recálculo retroativo do banco de horas
+  const [recalculating, setRecalculating] = useState(false);
+  const [recalcResult, setRecalcResult] = useState<{
+    faltasRemovidasIncorretas: number;
+    novasFaltasRegistradas: number;
+    novoSaldoPeriodo: number;
+    nome: string;
+  } | null>(null);
+  const [showRecalcConfirmAll, setShowRecalcConfirmAll] = useState(false);
 
   useEffect(() => {
     async function fetchCompanyInfo() {
@@ -478,14 +487,16 @@ export default function Ponto() {
       setReportRecords(records);
       setHourBankEntries(hb);
 
-      // Calcula o resumo localmente a partir dos lançamentos retornados
+      // Calcula o resumo localmente a partir dos lançamentos retornados aplicando o multiplier da CLT
       let extraNormal = 0, extraFds = 0, devendo = 0, abonados = 0, balance = 0;
       hb.forEach((e: any) => {
         const hrs = parseFloat(e.hours);
-        balance += hrs;
+        const mult = parseFloat(e.multiplier) || 1.0;
+        const valueWithMultiplier = hrs * mult;
+        balance += valueWithMultiplier;
         if (hrs > 0) {
-          if (parseFloat(e.multiplier) === 1.5) extraNormal += hrs;
-          else if (parseFloat(e.multiplier) === 2.0) extraFds += hrs;
+          if (mult === 1.5) extraNormal += hrs * 1.5;
+          else if (mult === 2.0) extraFds += hrs * 2.0;
         } else if (hrs < 0) {
           devendo += Math.abs(hrs);
         } else if (e.type === 'feriado_abonado' || e.type === 'atestado_abonado') {
@@ -508,6 +519,53 @@ export default function Ponto() {
       setLoading(false);
     }
   }
+
+  /**
+   * handleRecalculate: chama POST /api/hour-bank/recalculate para corrigir
+   * lançamentos automáticos incorretos de 'falta' no período selecionado.
+   * @param recalcAllUsers - se true, recalcula todos os funcionários da empresa
+   */
+  async function handleRecalculate(recalcAllUsers = false) {
+    if (!startDate || !endDate) return;
+    if (!recalcAllUsers && !selectedUser) return;
+
+    try {
+      setRecalculating(true);
+      setRecalcResult(null);
+      setShowRecalcConfirmAll(false);
+
+      const payload: any = { startDate, endDate };
+      if (!recalcAllUsers && selectedUser) {
+        payload.userId = selectedUser;
+      }
+
+      const res = await api.post('/api/hour-bank/recalculate', payload);
+      const data = res.data;
+
+      // Para exibição do resultado: usa o primeiro (e provavelmente único) usuário recalculado
+      const resultadoUsuario = recalcAllUsers
+        ? {
+            faltasRemovidasIncorretas: data.totalFaltasInCorretasRemovidas,
+            novasFaltasRegistradas: (data.resultadosPorUsuario ?? []).reduce((s: number, u: any) => s + u.novasFaltasRegistradas, 0),
+            novoSaldoPeriodo: (data.resultadosPorUsuario ?? []).reduce((s: number, u: any) => s + u.novoSaldoPeriodo, 0),
+            nome: `${data.usuariosRecalculados} funcionário(s)`,
+          }
+        : (data.resultadosPorUsuario ?? [])[0] ?? null;
+
+      setRecalcResult(resultadoUsuario);
+
+      // Recarrega o relatório automaticamente se havia um usuário selecionado
+      if (selectedUser) {
+        await fetchReport(selectedUser);
+      }
+    } catch (err: any) {
+      const errMsg = err?.response?.data?.error ?? 'Erro ao recalcular banco de horas.';
+      setMessage({ text: errMsg, type: 'error' });
+    } finally {
+      setRecalculating(false);
+    }
+  }
+
 
   async function handleDeleteAllRecords() {
     if (!selectedUser) return;
@@ -1230,6 +1288,10 @@ export default function Ponto() {
                   className="border rounded-lg px-3 py-2 text-sm"
                 />
               </div>
+            </div>
+
+            {/* Botões de ação: Carregar, Recalcular, Excluir */}
+            <div className="flex gap-2 flex-wrap items-center">
               <button
                 onClick={() => selectedUser && fetchReport(selectedUser)}
                 disabled={!selectedUser || loading}
@@ -1237,6 +1299,33 @@ export default function Ponto() {
               >
                 {loading ? 'Carregando...' : 'Carregar'}
               </button>
+
+              {/* Botão Recalcular Período — corrige lançamentos de falta incorretos */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (!selectedUser) {
+                    // Sem usuário selecionado: confirma antes de recalcular todos
+                    setShowRecalcConfirmAll(true);
+                  } else {
+                    handleRecalculate(false);
+                  }
+                }}
+                disabled={recalculating || loading}
+                className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50 transition-colors"
+                title={selectedUser ? 'Recalcular banco de horas deste funcionário no período' : 'Recalcular banco de horas de TODOS os funcionários no período'}
+              >
+                {recalculating ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                    </svg>
+                    Recalculando...
+                  </>
+                ) : '⟳ Recalcular Período'}
+              </button>
+
               {user?.role === 'CEO' && selectedUser && (
                 <button
                   type="button"
@@ -1248,6 +1337,63 @@ export default function Ponto() {
                 </button>
               )}
             </div>
+
+            {/* Modal de confirmação: recalcular TODOS os funcionários */}
+            {showRecalcConfirmAll && (
+              <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col gap-3">
+                <p className="text-sm text-amber-800 font-semibold">
+                  ⚠️ Nenhum funcionário selecionado.
+                </p>
+                <p className="text-sm text-amber-700">
+                  Isso vai recalcular o banco de horas de <strong>TODOS os funcionários</strong> no período {startDate} a {endDate}.<br/>
+                  Lançamentos manuais feitos por gestores <strong>não serão apagados</strong>.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleRecalculate(true)}
+                    disabled={recalculating}
+                    className="bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50"
+                  >
+                    Confirmar — Recalcular Todos
+                  </button>
+                  <button
+                    onClick={() => setShowRecalcConfirmAll(false)}
+                    className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Resultado do recálculo */}
+            {recalcResult && (
+              <div className="mt-3 bg-green-50 border border-green-200 rounded-xl p-4">
+                <p className="text-sm font-semibold text-green-800 mb-2">✅ Recálculo concluído — {recalcResult.nome}</p>
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div className="bg-white rounded-lg p-3 border border-green-100">
+                    <p className="text-xs text-gray-500 mb-1">Faltas incorretas removidas</p>
+                    <p className="text-lg font-bold text-red-600">{recalcResult.faltasRemovidasIncorretas}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 border border-green-100">
+                    <p className="text-xs text-gray-500 mb-1">Novas faltas reais</p>
+                    <p className="text-lg font-bold text-orange-600">{recalcResult.novasFaltasRegistradas}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 border border-green-100">
+                    <p className="text-xs text-gray-500 mb-1">Novo saldo do período</p>
+                    <p className={`text-lg font-bold ${recalcResult.novoSaldoPeriodo >= 0 ? 'text-green-600' : 'text-orange-600'}`}>
+                      {recalcResult.novoSaldoPeriodo >= 0 ? '+' : ''}{recalcResult.novoSaldoPeriodo.toFixed(2)}h
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setRecalcResult(null)}
+                  className="mt-3 text-xs text-green-600 hover:underline"
+                >
+                  Fechar
+                </button>
+              </div>
+            )}
 
             {/* Configurar horários */}
             <div className="border-t pt-4">

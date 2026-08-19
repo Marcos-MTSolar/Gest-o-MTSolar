@@ -4370,12 +4370,18 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
   const end = new Date(endDateStr.split('T')[0] + 'T23:59:59');
 
   // Buscar todos os registros de ponto do usuário no período
+  // CORREÇÃO BUG (2026-08-19): O filtro anterior .eq('status', 'approved') excluía
+  // todas as batidas normais (que ficam em 'pending' por padrão), fazendo o sistema
+  // tratar todos os dias úteis como falta. Agora incluímos todos os statuses válidos:
+  // - 'pending': batida registrada normalmente (maioria dos casos)
+  // - 'approved': batida cujo ajuste de timestamp foi aprovado pelo gestor
+  // - 'adjustment_requested': batida com pedido de ajuste em andamento (ponto existe e é válido)
   const { data: timeRecords } = await supabaseAdmin
     .from('time_records')
     .select('*')
     .eq('company_id', companyId)
     .eq('user_id', userId)
-    .eq('status', 'approved') // Apenas batidas aprovadas contam para o cálculo
+    .in('status', ['pending', 'approved', 'adjustment_requested'])
     .gte('timestamp', start.toISOString())
     .lte('timestamp', end.toISOString());
 
@@ -4537,6 +4543,26 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
       }
     }
 
+    // Trava para o dia atual em andamento (Evita classificar como Falta ou Jornada Incompleta prematuramente)
+    const nowBrazil = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+    const todayKey = `${nowBrazil.getFullYear()}-${String(nowBrazil.getMonth() + 1).padStart(2, '0')}-${String(nowBrazil.getDate()).padStart(2, '0')}`;
+    if (dayKey === todayKey) {
+      let exitTimeVal = 18.0; // Padrão 18:00
+      if (schedule && schedule.exit_time) {
+        const [h, m] = schedule.exit_time.split(':').map(Number);
+        exitTimeVal = h + m / 60;
+      }
+      const currentHour = nowBrazil.getHours();
+      const currentMinute = nowBrazil.getMinutes();
+      const currentTimeVal = currentHour + currentMinute / 60;
+
+      // Se o expediente de hoje ainda não acabou, impede lançamentos de débito (falta ou jornada incompleta)
+      if (currentTimeVal < exitTimeVal && (insertHours < 0 || insertType === 'falta')) {
+        insertType = null;
+        insertHours = 0;
+      }
+    }
+
     // Se identificou um lançamento relevante, grava de forma idempotente (upsert por user_id, reference_date e type)
     if (insertType) {
       // Verifica se já existe um lançamento automático para esse dia + tipo
@@ -4614,16 +4640,18 @@ app.get('/api/hour-bank/summary', authenticateToken, async (req: any, res) => {
 
     (entries || []).forEach(e => {
       const hrs = parseFloat(e.hours);
-      totalBalance += hrs;
+      const mult = parseFloat(e.multiplier) || 1.0;
+      const valueWithMultiplier = hrs * mult;
+      totalBalance += valueWithMultiplier;
 
       if (hrs > 0) {
-        if (parseFloat(e.multiplier) === 1.5) {
-          extraNormal += hrs;
-        } else if (parseFloat(e.multiplier) === 2.0) {
-          extraFds += hrs;
+        if (mult === 1.5) {
+          extraNormal += hrs * 1.5;
+        } else if (mult === 2.0) {
+          extraFds += hrs * 2.0;
         }
       } else if (hrs < 0) {
-        devendo += Math.abs(hrs);
+        devendo += Math.abs(hrs); // Faltas/débitos (normalmente multiplicador 1.0)
       } else if (e.type === 'feriado_abonado' || e.type === 'atestado_abonado') {
         abonados += 1;
       }
@@ -4839,6 +4867,30 @@ app.put('/api/ponto/ajuste/:id', authenticateToken, async (req: any, res) => {
           status: 'approved',
         })
         .eq('id', adjustment.time_record_id);
+
+      // Recálculo automático do dia afetado após aprovação do ajuste:
+      // garante que o banco de horas reflita imediatamente o horário corrigido.
+      try {
+        const dayOfAdjustment = adjustment.new_timestamp.split('T')[0];
+        // Busca o usuário do registro de ponto para obter company_id e user_id
+        const { data: affectedRecord } = await supabaseAdmin
+          .from('time_records')
+          .select('user_id, company_id')
+          .eq('id', adjustment.time_record_id)
+          .single();
+        if (affectedRecord) {
+          await calculateHourBankForPeriod(
+            affectedRecord.user_id,
+            dayOfAdjustment,
+            dayOfAdjustment,
+            affectedRecord.company_id,
+            req.user.id
+          );
+        }
+      } catch (recalcErr: any) {
+        // Não bloqueia a resposta se o recálculo falhar — apenas loga
+        console.warn('[AJUSTE_APROVADO] Falha no recálculo automático do banco de horas:', recalcErr?.message);
+      }
     } else {
       await supabaseAdmin
         .from('time_records')
@@ -5302,8 +5354,12 @@ app.get('/api/hour-bank', authenticateToken, async (req: any, res) => {
     const { data, error } = await query;
     if (error) throw error;
 
-    // Calcula saldo total para retornar junto
-    const balance = (data ?? []).reduce((sum: number, row: any) => sum + parseFloat(row.hours), 0);
+    // Calcula saldo total para retornar junto, aplicando o multiplicador
+    const balance = (data ?? []).reduce((sum: number, row: any) => {
+      const hrs = parseFloat(row.hours);
+      const mult = parseFloat(row.multiplier) || 1.0;
+      return sum + (hrs * mult);
+    }, 0);
 
     res.json({ entries: data ?? [], balance: Math.round(balance * 100) / 100 });
   } catch (err: any) {
@@ -5359,6 +5415,129 @@ app.post('/api/hour-bank', authenticateToken, async (req: any, res) => {
     if (error) throw error;
     res.json(data);
   } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================================
+// POST /api/hour-bank/recalculate — Recálculo retroativo seguro do banco de horas
+// Deleta APENAS lançamentos automáticos de 'falta' (created_by IS NULL) no período
+// e roda calculateHourBankForPeriod com a lógica corrigida.
+// NUNCA remove lançamentos manuais feitos por ADM/CEO (created_by NOT NULL).
+// Restrito a CEO/ADMIN.
+// =============================================================================
+app.post('/api/hour-bank/recalculate', authenticateToken, async (req: any, res) => {
+  try {
+    if (!['CEO', 'ADMIN'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Acesso restrito a gestores (CEO/ADMIN).' });
+    }
+
+    const { userId, startDate, endDate } = req.body;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: 'startDate e endDate são obrigatórios.' });
+    }
+
+    const companyId = req.user.company_id;
+    const startDateStr = startDate.split('T')[0];
+    const endDateStr = endDate.split('T')[0];
+
+    // Determinar quais usuários recalcular
+    let targetUserIds: number[] = [];
+    if (userId) {
+      // Recalcula apenas o funcionário informado (validando que pertence à empresa)
+      const { data: targetUser } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('id', parseInt(userId, 10))
+        .eq('company_id', companyId)
+        .maybeSingle();
+      if (!targetUser) {
+        return res.status(404).json({ error: 'Usuário não encontrado ou não pertence a esta empresa.' });
+      }
+      targetUserIds = [parseInt(userId, 10)];
+    } else {
+      // Recalcula TODOS os funcionários ativos da empresa
+      const { data: allCompanyUsers } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('company_id', companyId)
+        .eq('active', true);
+      targetUserIds = (allCompanyUsers ?? []).map((u: any) => u.id);
+    }
+
+    if (targetUserIds.length === 0) {
+      return res.status(404).json({ error: 'Nenhum usuário encontrado para recalcular.' });
+    }
+
+    let totalRemovidos = 0;
+    const resultadosPorUsuario: any[] = [];
+
+    for (const uid of targetUserIds) {
+      // 1. Deletar APENAS lançamentos automáticos de 'falta' no período
+      //    Critério de segurança: created_by IS NULL = gerado automaticamente pela rotina
+      //    lançamentos com created_by NOT NULL = criados manualmente por ADM/CEO, nunca apagar
+      const { data: deletedEntries, error: deleteErr } = await supabaseAdmin
+        .from('hour_bank')
+        .delete()
+        .eq('company_id', companyId)
+        .eq('user_id', uid)
+        .eq('type', 'falta')
+        .is('created_by', null)
+        .gte('reference_date', startDateStr)
+        .lte('reference_date', endDateStr)
+        .select('id');
+
+      if (deleteErr) {
+        console.error(`[RECALCULATE] Erro ao deletar faltas do user ${uid}:`, deleteErr.message);
+        continue;
+      }
+
+      const qtdRemovidos = (deletedEntries ?? []).length;
+      totalRemovidos += qtdRemovidos;
+
+      // 2. Rodar calculateHourBankForPeriod com a lógica corrigida
+      await calculateHourBankForPeriod(uid, startDateStr, endDateStr, companyId, undefined);
+
+      // 3. Calcular novo saldo do período para retornar no resumo
+      const { data: newEntries } = await supabaseAdmin
+        .from('hour_bank')
+        .select('hours, type')
+        .eq('company_id', companyId)
+        .eq('user_id', uid)
+        .gte('reference_date', startDateStr)
+        .lte('reference_date', endDateStr);
+
+      const novoSaldo = (newEntries ?? []).reduce((sum: number, e: any) => sum + parseFloat(e.hours), 0);
+      const novasFaltas = (newEntries ?? []).filter((e: any) => e.type === 'falta').length;
+
+      // Busca nome do usuário para o resumo
+      const { data: userInfo } = await supabaseAdmin
+        .from('users')
+        .select('name')
+        .eq('id', uid)
+        .single();
+
+      resultadosPorUsuario.push({
+        userId: uid,
+        nome: userInfo?.name ?? `Usuário ${uid}`,
+        faltasRemovidasIncorretas: qtdRemovidos,
+        novasFaltasRegistradas: novasFaltas,
+        novoSaldoPeriodo: Math.round(novoSaldo * 100) / 100,
+      });
+
+      console.log(`[RECALCULATE] user=${uid} | faltas_removidas=${qtdRemovidos} | novo_saldo=${novoSaldo.toFixed(2)}h`);
+    }
+
+    res.json({
+      success: true,
+      periodo: { inicio: startDateStr, fim: endDateStr },
+      usuariosRecalculados: targetUserIds.length,
+      totalFaltasInCorretasRemovidas: totalRemovidos,
+      resultadosPorUsuario,
+    });
+  } catch (err: any) {
+    console.error('[RECALCULATE] Erro geral:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
