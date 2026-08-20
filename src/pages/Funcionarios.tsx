@@ -200,6 +200,18 @@ export default function Funcionarios() {
     }
   };
 
+  // Exclui um atestado médico e atualiza a lista local
+  const handleDeleteCert = async (certId: number) => {
+    if (!confirm('Tem certeza que deseja excluir este atestado? Esta ação não pode ser desfeita.')) return;
+    try {
+      await api.delete(`/api/medical-certificates/${certId}`);
+      setCertsList(prev => prev.filter(c => c.id !== certId));
+      toast.success('Atestado excluído com sucesso.');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Erro ao excluir atestado.');
+    }
+  };
+
   // Filter users by search term
   const filteredUsers = users.filter((u) => {
     const searchLower = searchTerm.toLowerCase();
@@ -725,17 +737,26 @@ export default function Funcionarios() {
                             <p className="text-gray-500 font-medium">CID: <span className="text-gray-700 font-bold">{c.cid || 'Não informado'}</span></p>
                             {c.notes && <p className="text-gray-400 mt-1 italic">Obs: {c.notes}</p>}
                           </div>
-                          {c.document_url && (
-                            <a
-                              href={c.document_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="bg-teal-50 border border-teal-100 hover:bg-teal-100 text-teal-800 font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
-                              title="Visualizar Atestado"
+                          <div className="flex items-center gap-2">
+                            {c.document_url && (
+                              <a
+                                href={c.document_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="bg-teal-50 border border-teal-100 hover:bg-teal-100 text-teal-800 font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
+                                title="Visualizar Atestado"
+                              >
+                                <Download size={14} /> Baixar
+                              </a>
+                            )}
+                            <button
+                              onClick={() => handleDeleteCert(c.id)}
+                              className="bg-red-50 border border-red-100 hover:bg-red-100 text-red-700 font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
+                              title="Excluir Atestado"
                             >
-                              <Download size={14} /> Baixar
-                            </a>
-                          )}
+                              <Trash size={14} /> Excluir
+                            </button>
+                          </div>
                         </div>
                       );
                     })}

@@ -5182,6 +5182,54 @@ app.post('/api/medical-certificates', authenticateToken, upload.single('document
   }
 });
 
+// DELETE /api/medical-certificates/:id — Remove atestado e arquivo do R2 (CEO/ADMIN)
+app.delete('/api/medical-certificates/:id', authenticateToken, async (req: any, res) => {
+  try {
+    if (!['CEO', 'ADMIN'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Acesso restrito a gestores.' });
+    }
+
+    const { id } = req.params;
+    const certId = parseInt(id, 10);
+    if (isNaN(certId)) {
+      return res.status(400).json({ error: 'ID inválido.' });
+    }
+
+    // Busca o registro para verificar company_id e obter o caminho do arquivo no R2
+    const { data: cert, error: fetchError } = await supabaseAdmin
+      .from('medical_certificates')
+      .select('document_path, company_id')
+      .eq('id', certId)
+      .eq('company_id', req.user.company_id)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+    if (!cert) {
+      return res.status(404).json({ error: 'Atestado não encontrado ou sem permissão para excluir.' });
+    }
+
+    // Remove o arquivo do R2 — falha silenciosa para não bloquear a exclusão do registro
+    if (cert.document_path) {
+      await deleteFromR2(cert.document_path).catch((r2Err: any) => {
+        console.warn(`[DELETE medical_certificates] Falha ao remover arquivo R2 "${cert.document_path}":`, r2Err?.message ?? r2Err);
+      });
+    }
+
+    // Remove o registro do banco
+    const { error: deleteError } = await supabaseAdmin
+      .from('medical_certificates')
+      .delete()
+      .eq('id', certId)
+      .eq('company_id', req.user.company_id);
+
+    if (deleteError) throw deleteError;
+
+    res.json({ success: true, message: 'Atestado excluído com sucesso.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // =============================================================================
 // MÓDULO: FOLGAS E COMPENSAÇÕES (time_off_requests)
 // =============================================================================

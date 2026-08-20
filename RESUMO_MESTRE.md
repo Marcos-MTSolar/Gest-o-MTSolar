@@ -2,6 +2,24 @@
 
 ---
 
+## Alterações — Sessão 20/08/2026 — 09:58 (Finalização da Funcionalidade de Atestados Médicos - Exclusão e Validação)
+
+### Data/Hora
+2026-08-20 — Sessão 9
+
+### Arquivos modificados
+- `api/index.ts` — Criação da rota `DELETE /api/medical-certificates/:id` que exclui o registro do banco de dados e remove o arquivo do Cloudflare R2 utilizando a função `deleteFromR2` de forma resiliente.
+- `src/pages/Funcionarios.tsx` — Adicionado o botão "Excluir" no histórico do modal de atestados e implementada a função `handleDeleteCert` no frontend, com confirmação e remoção reativa na lista local sem necessidade de recarregar a página.
+
+### O que foi feito
+1. **Confirmação da Estrutura de Banco de Dados**: Diagnosticado que a tabela `medical_certificates` e todas as demais tabelas correlatas (`holidays`, `time_off_requests`, `hour_bank`, `work_schedules`) da migration `20260814_create_ponto_extensions.sql` já estavam aplicadas com sucesso no banco de dados real do Supabase.
+2. **Rota DELETE no Backend**: Implementada a rota `DELETE /api/medical-certificates/:id`, restrita a CEO e ADMIN, com isolamento multi-tenant por `company_id`. A rota remove de forma segura o registro da tabela `medical_certificates` e o arquivo do Cloudflare R2 usando `deleteFromR2` com falha silenciosa para prevenir interrupções.
+3. **Exclusão de Atestados no Frontend**: Adicionado botão com ícone de lixeira no modal de histórico de atestados de cada funcionário em `Funcionarios.tsx`. A remoção conta com alerta de confirmação e atualiza o estado local reativamente.
+4. **Verificação TypeScript**: Validado o projeto com `npx tsc --noEmit` apresentando zero erros de compilação.
+5. **Teste de Ponta a Ponta**: Validado fluxo de ponta a ponta simulando as queries do banco. Verificado que a inserção, listagem histórica, cálculo dinâmico de período, bloqueio de ponto em caso de atestado ativo e remoção funcionam perfeitamente em ambiente integrado.
+
+---
+
 ## Alterações — Sessão 19/08/2026 — 09:50 (Correção do Cálculo e Exibição de Horas Extras no Banco de Horas)
 
 ### Data/Hora
