@@ -86,20 +86,26 @@ function calcDayHours(records: TimeRecord[]): number {
   const sorted = [...(records ?? [])].sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
-  const byType: Record<string, Date> = {};
-  sorted.forEach((r) => {
-    byType[r.type] = new Date(r.timestamp);
-  });
+  
+  const firstEntry = sorted.find(p => p.type === 'entry');
+  const firstLunchStart = sorted.find(p => p.type === 'lunch_start');
+  const firstLunchEnd = sorted.find(p => p.type === 'lunch_end');
+  const lastExit = [...sorted].reverse().find(p => p.type === 'exit');
+
+  const entryTime = firstEntry ? new Date(firstEntry.timestamp) : null;
+  const lunchStartTime = firstLunchStart ? new Date(firstLunchStart.timestamp) : null;
+  const lunchEndTime = firstLunchEnd ? new Date(firstLunchEnd.timestamp) : null;
+  const exitTime = lastExit ? new Date(lastExit.timestamp) : null;
 
   let total = 0;
-  if (byType['entry'] && byType['lunch_start']) {
-    total += (byType['lunch_start'].getTime() - byType['entry'].getTime()) / 3600000;
+  if (entryTime && lunchStartTime && lunchStartTime > entryTime) {
+    total += (lunchStartTime.getTime() - entryTime.getTime()) / 3600000;
   }
-  if (byType['lunch_end'] && byType['exit']) {
-    total += (byType['exit'].getTime() - byType['lunch_end'].getTime()) / 3600000;
+  if (lunchEndTime && exitTime && exitTime > lunchEndTime) {
+    total += (exitTime.getTime() - lunchEndTime.getTime()) / 3600000;
   }
-  if (byType['entry'] && byType['exit'] && !byType['lunch_start']) {
-    total = (byType['exit'].getTime() - byType['entry'].getTime()) / 3600000;
+  if (entryTime && exitTime && !lunchStartTime && exitTime > entryTime) {
+    total = (exitTime.getTime() - entryTime.getTime()) / 3600000;
   }
   return total;
 }
@@ -870,6 +876,7 @@ export default function Ponto() {
     const HB_TYPE_LABEL: Record<string, string> = {
       hora_extra_normal: 'H.Extra 50%',
       hora_extra_fds_feriado: 'H.Extra 100%',
+      jornada_incompleta: 'Jornada Incompleta',
       falta: 'Falta',
       folga_abatida: 'Folga',
       atestado_abonado: 'Atestado',
@@ -882,10 +889,21 @@ export default function Ponto() {
     let totalHours = 0;
 
     Object.entries(grouped).sort().forEach(([day, recs]) => {
-      const byType: Record<string, string> = {};
-      (recs ?? []).forEach((r) => {
-        byType[r.type] = new Date(r.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      });
+      const sortedRecs = [...(recs ?? [])].sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+      
+      const firstEntry = sortedRecs.find(p => p.type === 'entry');
+      const firstLunchStart = sortedRecs.find(p => p.type === 'lunch_start');
+      const firstLunchEnd = sortedRecs.find(p => p.type === 'lunch_end');
+      const lastExit = [...sortedRecs].reverse().find(p => p.type === 'exit');
+
+      const formatTime = (p?: TimeRecord) => p ? new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-';
+
+      const entryStr = formatTime(firstEntry);
+      const lunchStartStr = formatTime(firstLunchStart);
+      const lunchEndStr = formatTime(firstLunchEnd);
+      const exitStr = formatTime(lastExit);
 
       const hours = calcDayHours(recs);
       totalHours += hours;
@@ -897,12 +915,26 @@ export default function Ponto() {
       const dateStr = `${dateParts[2]}/${dateParts[1]}`;
 
       const hbEntry = hbByDate[day];
-      const tipoDia = hbEntry ? (HB_TYPE_LABEL[hbEntry.type] ?? hbEntry.type) : (hours > 0 ? 'Normal' : '-');
+      let tipoDia = '-';
+      if (hbEntry) {
+        if (hbEntry.type === 'falta' && (recs ?? []).length > 0) {
+          tipoDia = 'Jornada Incompleta';
+        } else {
+          tipoDia = HB_TYPE_LABEL[hbEntry.type] ?? hbEntry.type;
+        }
+      } else if (hours > 0) {
+        tipoDia = 'Normal';
+      }
+
       const hasMissingLocation = (recs ?? []).some((r) => r.latitude === null || r.longitude === null);
-      const obs = hasMissingLocation ? 'Sem GPS' : 'Com GPS';
+      const hasExtraPunches = (recs ?? []).length > 4;
+      let obs = hasMissingLocation ? 'Sem GPS' : 'Com GPS';
+      if (hasExtraPunches) {
+        obs += ' (Inconsistente)';
+      }
 
       // Colorir linha por tipo de dia
-      if (hbEntry?.type === 'falta') {
+      if (hbEntry?.type === 'falta' || hbEntry?.type === 'jornada_incompleta') {
         doc.setTextColor(200, 50, 50);
       } else if (hbEntry?.type === 'feriado_abonado' || hbEntry?.type === 'atestado_abonado') {
         doc.setTextColor(50, 130, 200);
@@ -915,10 +947,10 @@ export default function Ponto() {
       doc.setFontSize(7.5);
       doc.text(dateStr, 14, y);
       doc.text(dayOfWeekName, 28, y);
-      doc.text(byType['entry'] ?? '-', 50, y);
-      doc.text(byType['lunch_start'] ?? '-', 66, y);
-      doc.text(byType['lunch_end'] ?? '-', 80, y);
-      doc.text(byType['exit'] ?? '-', 94, y);
+      doc.text(entryStr, 50, y);
+      doc.text(lunchStartStr, 66, y);
+      doc.text(lunchEndStr, 80, y);
+      doc.text(exitStr, 94, y);
       doc.text(hours > 0 ? `${hours.toFixed(1)}h` : '-', 108, y);
       doc.text(tipoDia, 120, y);
       doc.text(obs, 158, y);
@@ -1518,7 +1550,9 @@ export default function Ponto() {
                     </span>
                     <div className="flex gap-4 flex-wrap text-gray-500">
                       {TYPE_ORDER.map((t) => {
-                        const rec = (recs ?? []).find((r) => r.type === t);
+                        const rec = t === 'exit' 
+                          ? [...(recs ?? [])].reverse().find((r) => r.type === t)
+                          : (recs ?? []).find((r) => r.type === t);
                         return (
                           <span key={t} className="flex items-start gap-1">
                             {TYPE_LABELS[t].split(' ')[0]}: {rec ? (
@@ -1610,6 +1644,7 @@ export default function Ponto() {
                     const labelMap: Record<string, string> = {
                       hora_extra_normal: 'H. Extra 50%',
                       hora_extra_fds_feriado: 'H. Extra 100%',
+                      jornada_incompleta: 'Jornada Incompleta',
                       falta: 'Falta',
                       folga_abatida: 'Folga Abatida',
                       compensacao: 'Compensação',
@@ -1617,6 +1652,10 @@ export default function Ponto() {
                       atestado_abonado: 'Atestado',
                       feriado_abonado: 'Feriado',
                     };
+                    let label = labelMap[e.type] ?? e.type;
+                    if (e.type === 'falta' && (e.description?.toLowerCase().includes('jornada incompleta') || e.description?.includes('Carga:'))) {
+                      label = 'Jornada Incompleta';
+                    }
                     return (
                       <tr key={e.id} className="hover:bg-gray-50 transition-colors">
                         <td className="p-3 text-gray-700 font-medium">{formattedDate}</td>
@@ -1624,7 +1663,7 @@ export default function Ponto() {
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                             val > 0 ? 'bg-green-100 text-green-700' : val < 0 ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
                           }`}>
-                            {labelMap[e.type] ?? e.type}
+                            {label}
                           </span>
                         </td>
                         <td className="p-3 text-gray-500 max-w-[250px] truncate" title={e.description}>{e.description || '—'}</td>

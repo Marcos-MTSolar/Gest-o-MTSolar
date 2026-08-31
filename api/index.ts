@@ -4501,20 +4501,25 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
       // Ordenar batidas pelo timestamp
       dayPoints.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
       
-      const byType: Record<string, Date> = {};
-      dayPoints.forEach(p => {
-        byType[p.type] = new Date(p.timestamp);
-      });
+      const firstEntry = dayPoints.find(p => p.type === 'entry');
+      const firstLunchStart = dayPoints.find(p => p.type === 'lunch_start');
+      const firstLunchEnd = dayPoints.find(p => p.type === 'lunch_end');
+      const lastExit = [...dayPoints].reverse().find(p => p.type === 'exit');
 
-      if (byType['entry'] && byType['lunch_start']) {
-        workedHours += (byType['lunch_start'].getTime() - byType['entry'].getTime()) / 3600000;
+      const entryTime = firstEntry ? new Date(firstEntry.timestamp) : null;
+      const lunchStartTime = firstLunchStart ? new Date(firstLunchStart.timestamp) : null;
+      const lunchEndTime = firstLunchEnd ? new Date(firstLunchEnd.timestamp) : null;
+      const exitTime = lastExit ? new Date(lastExit.timestamp) : null;
+
+      if (entryTime && lunchStartTime && lunchStartTime > entryTime) {
+        workedHours += (lunchStartTime.getTime() - entryTime.getTime()) / 3600000;
       }
-      if (byType['lunch_end'] && byType['exit']) {
-        workedHours += (byType['exit'].getTime() - byType['lunch_end'].getTime()) / 3600000;
+      if (lunchEndTime && exitTime && exitTime > lunchEndTime) {
+        workedHours += (exitTime.getTime() - lunchEndTime.getTime()) / 3600000;
       }
       // Caso o funcionário só tenha batido entrada e saída direto (sem almoço)
-      if (byType['entry'] && byType['exit'] && !byType['lunch_start']) {
-        workedHours = (byType['exit'].getTime() - byType['entry'].getTime()) / 3600000;
+      if (entryTime && exitTime && !lunchStartTime && exitTime > entryTime) {
+        workedHours = (exitTime.getTime() - entryTime.getTime()) / 3600000;
       }
     }
 
@@ -4545,9 +4550,9 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
           multiplier = 1.5; // adicional mínimo de 50% legal. Ajustar se acordo coletivo estipular outro valor.
           description = `Hora extra em dia útil. Carga: ${workedHours.toFixed(2)}h (Esperado: ${currentExpectedHours.toFixed(2)}h)`;
         } else if (diff < 0) {
-          // Trabalhou menos do que deveria -> Débito
+          // Trabalhou menos do que deveria -> Débito de Jornada Incompleta
           insertHours = diff; // Valor negativo
-          insertType = 'falta';
+          insertType = 'jornada_incompleta';
           multiplier = 1.0;
           description = `Jornada incompleta. Carga: ${workedHours.toFixed(2)}h (Esperado: ${currentExpectedHours.toFixed(2)}h)`;
         }
@@ -4593,7 +4598,7 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
       const currentTimeVal = currentHour + currentMinute / 60;
 
       // Se o expediente de hoje ainda não acabou, impede lançamentos de débito (falta ou jornada incompleta)
-      if (currentTimeVal < exitTimeVal && (insertHours < 0 || insertType === 'falta')) {
+      if (currentTimeVal < exitTimeVal && (insertHours < 0 || insertType === 'falta' || insertType === 'jornada_incompleta')) {
         insertType = null;
         insertHours = 0;
       }

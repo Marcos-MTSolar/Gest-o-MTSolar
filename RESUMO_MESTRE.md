@@ -2,6 +2,53 @@
 
 ---
 
+## Alterações — Sessão 31/08/2026 — 16:45 (Resolução de Horários do Dia 19/08 e Terminologia 'Jornada Incompleta')
+
+### Data/Hora
+2026-08-31 — Sessão 11
+
+### Arquivos modificados
+- `api/index.ts` — Lógica de agrupar batidas em `calculateHourBankForPeriod` ajustada para utilizar o primeiro `entry`, primeiro `lunch_start`, primeiro `lunch_end` e o último `exit` em ordem cronológica; alteração do tipo de lançamento de saldo negativo quando há presença para `jornada_incompleta` em vez de `falta`.
+- `src/pages/Ponto.tsx` — Atualização de `calcDayHours`, da tabela web do relatório e da geração de PDF (`generatePDF`) para agrupar horários sem sobrescrever batidas duplicadas, tratar terminologia `'Jornada Incompleta'` (distinguindo ausência total de jornada parcial) e sinalizar dias inconsistentes (com mais de 4 batidas).
+
+### O que foi feito
+
+#### TAREFA A — Diagnóstico e Correção do Dia 19/08/2026
+
+1. **Investigação no Banco de Dados (`time_records`):**
+   - Foram encontrados 5 registros de ponto no dia 19/08/2026 para a usuária Mariana Feliciano:
+     1. `08:16:04 BRT` (`type: entry`) -> Batida inicial de entrada.
+     2. `12:27:23 BRT` (`type: lunch_start`) -> Saída para almoço.
+     3. `13:18:01 BRT` (`type: lunch_end`) -> Retorno do almoço.
+     4. `14:54:14 BRT` (`type: entry`) -> Batida duplicada/extra de entrada.
+     5. `14:54:28 BRT` (`type: exit`) -> Batida de saída.
+
+2. **Causa Raiz do Bug:**
+   - O código antigo fazia `byType[r.type] = timestamp` iterando sobre os registros.
+   - Como a batida duplicada de `entry` ocorreu às 14:54 (id 193), ela **sobrescreveu** a batida de `entry` original das 08:16 (id 187).
+   - Isso fez com que o PDF e o cálculo vissem `Entrada: 14:54` e `Saída Almoço: 12:27` (horário de entrada posterior ao almoço), gerando um cálculo negativo de `-2.45h` no primeiro turno.
+
+3. **Correção Implementada:**
+   - O agrupamento de horários no backend (`api/index.ts`) e frontend (`Ponto.tsx`) foi alterado para:
+     - `Entrada`: Primeiro registro de `entry` do dia (`08:16`).
+     - `S.Almoço`: Primeiro registro de `lunch_start` do dia (`12:27`).
+     - `R.Almoço`: Primeiro registro de `lunch_end` do dia (`13:18`).
+     - `Saída`: Último registro de `exit` do dia (`14:54`).
+   - Com isso, os horários do dia 19/08 foram organizados perfeitamente em ordem lógica (08:16 | 12:27 | 13:18 | 14:54), calculando **5.80h trabalhadas**.
+   - Se o dia tiver batidas excedentes (> 4 batidas), o sistema adiciona uma observação `(Inconsistente)` para alertar o gestor.
+
+#### TAREFA B — Troca de Terminologia: "Falta" por "Jornada Incompleta"
+
+1. **Diferenciação no Banco de Horas (`api/index.ts`):**
+   - **Falta Total (`type: 'falta'`):** Quando o funcionário NÃO possui nenhum registro de ponto no dia útil (`workedHours === 0`).
+   - **Jornada Incompleta (`type: 'jornada_incompleta'`):** Quando o funcionário esteve presente (`workedHours > 0`), mas cumpriu carga menor que a esperada (ex: 7.8h em vez de 8.0h).
+
+2. **Ajuste na Exibição (`Ponto.tsx`):**
+   - O mapa de rótulos (`HB_TYPE_LABEL` e `labelMap`) agora inclui `'Jornada Incompleta'`.
+   - Lançamentos históricos antigos com `type: 'falta'` que possuem registros de ponto no dia ou descrição contendo jornada parcial são exibidos automaticamente como `'Jornada Incompleta'`, garantindo 100% de compatibilidade retroativa.
+
+---
+
 ## Alterações — Sessão 31/08/2026 — 16:25 (Correção de Regressão: CPF e Data de Admissão Sobrescritos por NULL)
 
 ### Data/Hora
