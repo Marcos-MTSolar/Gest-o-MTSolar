@@ -141,16 +141,16 @@ const capturarLocalizacao = async (): Promise<{ latitude: number; longitude: num
         (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
         (err) => {
           if (err.code === err.PERMISSION_DENIED) {
-            reject(new Error('Permissão de localização negada pelo usuário. Verifique as configurações do seu navegador.'));
+            reject(new Error('Permissão de localização negada pelo usuário. Por favor, habilite a geolocalização no seu navegador para bater o ponto.'));
           } else if (err.code === err.POSITION_UNAVAILABLE) {
-            reject(new Error('Localização indisponível no momento. Verifique se o GPS/Wi-Fi estão ativos.'));
+            reject(new Error('Localização GPS indisponível no momento. Verifique se o GPS/Wi-Fi estão ativos.'));
           } else if (err.code === err.TIMEOUT) {
-            reject(new Error('Tempo esgotado ao obter localização. Tente novamente.'));
+            reject(new Error('Tempo esgotado (10s) ao obter localização GPS. Tente novamente.'));
           } else {
-            reject(new Error('Erro ao obter localização.'));
+            reject(new Error('Erro ao obter localização GPS obrigatória.'));
           }
         },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     });
   }
@@ -248,6 +248,7 @@ export default function Ponto() {
     setGeocodeCache((prev) => ({ ...prev, [key]: address }));
   const [loading, setLoading] = useState(false);
   const [punching, setPunching] = useState(false);
+  const isPunchingRef = useRef(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [activeTab, setActiveTab] = useState<'ponto' | 'historico' | 'gestor' | 'ajustes' | 'fotos' | 'feriados' | 'folgas' | 'bancohoras'>('ponto');
 
@@ -602,8 +603,7 @@ export default function Ponto() {
 
 
   /**
-   * registrarPontoComLocalizacao: envia as batidas ao backend após a localização
-   * ter sido capturada (ou após a decisão de excepcionalmente dispensá-la).
+   * registrarPontoComLocalizacao: envia as batidas ao backend com localização obrigatoriamente capturada.
    */
   async function registrarPontoComLocalizacao(
     photo: { base64String?: string },
@@ -611,22 +611,28 @@ export default function Ponto() {
     longitude: number | null,
     type: string
   ) {
+    if (latitude === null || longitude === null) {
+      throw new Error('Localização GPS não obtida. O registro de ponto exige localização obrigatória.');
+    }
     await api.post('/api/ponto/registrar', {
       type,
       latitude,
       longitude,
       selfie_base64: `data:image/jpeg;base64,${photo.base64String}`,
     });
-    setMessage({ text: `${TYPE_LABELS[type]} registrada com sucesso!${latitude === null ? ' ⚠️ Sem localização — gestor notificado.' : ''}`, type: latitude === null ? 'error' : 'success' });
+    setMessage({ text: `${TYPE_LABELS[type]} registrada com sucesso!`, type: 'success' });
     setGeoErrorModal({ visible: false, mensagem: '', pendingType: null, pendingPhoto: null, tentativas: 0 });
     fetchHistory();
   }
 
   async function handlePunch() {
-    try {
-      setPunching(true);
-      setMessage(null);
+    // 🔒 Trava síncrona imediata para ignorar cliques adicionais (duplo-submit/duplo-clique)
+    if (isPunchingRef.current || punching) return;
+    isPunchingRef.current = true;
+    setPunching(true);
+    setMessage(null);
 
+    try {
       const photo = await Camera.getPhoto({
         quality: 60,
         allowEditing: false,
@@ -652,7 +658,7 @@ export default function Ponto() {
         // Falha ao capturar localização: exibe modal com opção de tentar novamente
         setGeoErrorModal({
           visible: true,
-          mensagem: geoErr?.message ?? 'Não foi possível obter a localização.',
+          mensagem: geoErr?.message ?? 'Não foi possível obter a localização GPS.',
           pendingType: type,
           pendingPhoto: photo.base64String ?? null,
           tentativas: 1,
@@ -663,14 +669,17 @@ export default function Ponto() {
       const msg = err?.response?.data?.error ?? err?.message ?? 'Erro ao registrar ponto.';
       setMessage({ text: msg, type: 'error' });
     } finally {
-      setPunching(false);
+      // 🔒 Debounce de 2.5s antes de liberar o botão para novos cliques
+      setTimeout(() => {
+        isPunchingRef.current = false;
+        setPunching(false);
+      }, 2500);
     }
   }
 
   /**
    * handleGeoRetry: tentativa de nova captura de localização.
-   * Após 2 tentativas, se BLOQUEAR_PONTO_SEM_LOCALIZACAO=true → bloqueia;
-   * se false → permite registrar com lat/lng nulos (exceção controlada).
+   * Exige geolocalização obrigatória em todas as tentativas.
    */
   async function handleGeoRetry() {
     if (!geoErrorModal.pendingType || !geoErrorModal.pendingPhoto) return;
@@ -686,27 +695,12 @@ export default function Ponto() {
         geoErrorModal.pendingType
       );
     } catch (geoErr: any) {
-      if (novasTentativas >= 2 && !BLOQUEAR_PONTO_SEM_LOCALIZACAO) {
-        // Exceção controlada: registra sem localização e notifica gestor via backend
-        try {
-          await registrarPontoComLocalizacao(
-            { base64String: geoErrorModal.pendingPhoto },
-            null,
-            null,
-            geoErrorModal.pendingType
-          );
-        } catch (apiErr: any) {
-          setMessage({ text: apiErr?.response?.data?.error ?? 'Erro ao registrar ponto.', type: 'error' });
-          setGeoErrorModal({ visible: false, mensagem: '', pendingType: null, pendingPhoto: null, tentativas: 0 });
-        }
-      } else {
-        // Atualiza contagem de tentativas e mantém modal aberto
-        setGeoErrorModal(prev => ({
-          ...prev,
-          mensagem: geoErr?.message ?? 'Localização indisponível.',
-          tentativas: novasTentativas,
-        }));
-      }
+      // Geolocalização é estritamente obrigatória — mantém o aviso com mensagem atualizada
+      setGeoErrorModal(prev => ({
+        ...prev,
+        mensagem: geoErr?.message ?? 'Localização GPS indisponível. Por favor, ative a localização no seu dispositivo/navegador.',
+        tentativas: novasTentativas,
+      }));
     }
   }
 

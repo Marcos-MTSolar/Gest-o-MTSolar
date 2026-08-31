@@ -4198,12 +4198,56 @@ app.post('/api/ponto/registrar', authenticateToken, async (req: any, res) => {
       return res.status(400).json({ error: 'Tipo e selfie são obrigatórios' });
     }
 
+    // 📍 Validação de geolocalização obrigatória
+    if (latitude === null || longitude === null || latitude === undefined || longitude === undefined) {
+      return res.status(400).json({
+        error: 'A localização (GPS) é obrigatória para registrar o ponto. Por favor, habilite a geolocalização no seu dispositivo ou navegador e tente novamente.'
+      });
+    }
+
     const validTypes = ['entry', 'lunch_start', 'lunch_end', 'exit'];
     if (!validTypes.includes(type)) {
       return res.status(400).json({ error: 'Tipo de batida inválido' });
     }
 
     const now = new Date();
+
+    // 🔒 Proteção contra duplicação de requisições nos últimos 20 segundos (Race condition / Double submit)
+    const twentySecondsAgo = new Date(now.getTime() - 20000).toISOString();
+    const { data: recentRecord } = await supabaseAdmin
+      .from('time_records')
+      .select('id, timestamp')
+      .eq('company_id', req.user.company_id)
+      .eq('user_id', req.user.id)
+      .gte('timestamp', twentySecondsAgo)
+      .maybeSingle();
+
+    if (recentRecord) {
+      return res.status(409).json({
+        error: 'Uma batida de ponto já foi registrada há alguns segundos. Aguarde um momento para evitar duplicidade.'
+      });
+    }
+
+    // 🔒 Proteção contra registrar o mesmo tipo de batida duas vezes no mesmo dia
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
+    const { data: existingTypeToday } = await supabaseAdmin
+      .from('time_records')
+      .select('id')
+      .eq('company_id', req.user.company_id)
+      .eq('user_id', req.user.id)
+      .eq('type', type)
+      .gte('timestamp', todayStart)
+      .lte('timestamp', todayEnd)
+      .maybeSingle();
+
+    if (existingTypeToday) {
+      const tipoLabelMap: Record<string, string> = { entry: 'Entrada', lunch_start: 'Saída Almoço', lunch_end: 'Retorno Almoço', exit: 'Saída' };
+      return res.status(400).json({
+        error: `A batida de ${tipoLabelMap[type] ?? type} já foi registrada hoje.`
+      });
+    }
+
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const timestamp = now.getTime();

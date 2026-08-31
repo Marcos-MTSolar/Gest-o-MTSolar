@@ -2,6 +2,35 @@
 
 ---
 
+## Alterações — Sessão 31/08/2026 — 17:00 (Prevenção de Duplo-Clique, Race Condition e Geolocalização Obrigatória)
+
+### Data/Hora
+2026-08-31 — Sessão 12
+
+### Arquivos modificados
+- `api/index.ts` — Adicionada validação de geolocalização estritamente obrigatória no backend (`HTTP 400` se `latitude` ou `longitude` forem nulos); adicionada trava contra requisições consecutivas nos últimos 20 segundos (`HTTP 409`) para impedir race condition; adicionada trava de duplicação de tipo no mesmo dia (`HTTP 400`).
+- `src/pages/Ponto.tsx` — Implementada trava síncrona imediata (`isPunchingRef`) e debounce de 2.5s no botão de bater ponto; ajustado o timeout de captura de GPS no navegador web para 10s com mensagens explicativas; bloqueada a gravação sem coordenadas no fluxo web.
+
+### O que foi feito
+
+#### 1. Diagnóstico da Causa Raiz da Duplicação
+- **Causa Primária (Frontend):** Ausência de trava síncrona no manipulador de cliques. O estado `punching = true` do React é assíncrono. Cliques múltiplos rápidos (duplo-clique) antes da re-renderização disparavam requisições HTTP paralelas.
+- **Causa Secundária (Backend Race Condition):** O endpoint `POST /api/ponto/registrar` não possuía verificação de debounce temporal ou unicidade por tipo/dia. Ao receber duas requisições com milissegundos de diferença antes da resposta do banco, ambas eram inseridas.
+
+#### 2. Proteção Aplicada (Defesa em Profundidade)
+1. **Frontend (`Ponto.tsx`):**
+   - Trava síncrona via `isPunchingRef.current` que ignora novos cliques imediatamente no momento do disparo.
+   - Debounce de `2500ms` reabilitando o botão somente após a conclusão completa e tempo de segurança.
+2. **Backend (`api/index.ts`):**
+   - Rejeição imediata (`HTTP 409`) se o mesmo usuário tentar registrar qualquer batida nos últimos `20 segundos`.
+   - Rejeição imediata (`HTTP 400`) se a batida daquele `type` já tiver sido gravada no dia de hoje.
+
+#### 3. Geolocalização Obrigatória na Versão Web
+- **Backend:** `POST /api/ponto/registrar` agora rejeita com `HTTP 400` qualquer requisição sem `latitude` e `longitude`.
+- **Frontend:** `capturarLocalizacao` no navegador web possui timeout de 10s. Em caso de negação/falha/timeout, o registro é interrompido com instrução clara para habilitar o GPS no navegador, reabilitando o botão sem gerar batidas parciais ou sem localização no banco.
+
+---
+
 ## Alterações — Sessão 31/08/2026 — 16:45 (Resolução de Horários do Dia 19/08 e Terminologia 'Jornada Incompleta')
 
 ### Data/Hora
