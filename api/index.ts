@@ -308,16 +308,34 @@ app.put('/api/users/:id', authenticateToken, async (req: any, res) => {
 
   const { name, email, role, active, password, cpf, cargo, data_admissao, recebe_leads } = req.body;
 
+  // Campos base que sempre são enviados no PUT
   const fullUpdate: any = {
     name,
     email,
     role,
     active: active ? true : false,
-    recebe_leads: recebe_leads === true || recebe_leads === 'true',
-    cpf: cpf || null,
-    cargo: cargo || null,
-    data_admissao: data_admissao || null
   };
+
+  // Proteção contra sobrescrita acidental: só atualiza cpf se ele veio explicitamente no body
+  // Isso evita que cpf='' (string vazia) converta para null e apague o CPF salvo no banco
+  if ('cpf' in req.body) {
+    fullUpdate.cpf = cpf || null;
+  }
+
+  // Mesmo tratamento para cargo
+  if ('cargo' in req.body) {
+    fullUpdate.cargo = cargo || null;
+  }
+
+  // Mesmo tratamento para data_admissao
+  if ('data_admissao' in req.body) {
+    fullUpdate.data_admissao = data_admissao || null;
+  }
+
+  // recebe_leads só é atualizado se vier explicitamente no body
+  if ('recebe_leads' in req.body) {
+    fullUpdate.recebe_leads = recebe_leads === true || recebe_leads === 'true';
+  }
 
   if (password) {
     fullUpdate.password_hash = bcrypt.hashSync(password, 10);

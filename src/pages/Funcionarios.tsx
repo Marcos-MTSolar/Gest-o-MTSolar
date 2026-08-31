@@ -135,6 +135,7 @@ export default function Funcionarios() {
         cpf: user.cpf || '',
         cargo: user.cargo || user.role,
         data_admissao: user.data_admissao || null,
+        recebe_leads: user.recebe_leads ?? false,
       });
       toast.success(`Funcionário ${nextActive ? 'reativado' : 'desativado'} com sucesso!`);
       fetchUsers();
@@ -176,6 +177,8 @@ export default function Funcionarios() {
         cpf: formData.cpf,
         cargo: formData.cargo,
         data_admissao: formData.data_admissao || null,
+        // Preserva recebe_leads do usuário original ao editar
+        recebe_leads: editingUser?.recebe_leads ?? false,
       };
 
       if (editingUser) {

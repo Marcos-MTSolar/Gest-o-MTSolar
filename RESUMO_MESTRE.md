@@ -2,6 +2,68 @@
 
 ---
 
+## Alterações — Sessão 31/08/2026 — 16:25 (Correção de Regressão: CPF e Data de Admissão Sobrescritos por NULL)
+
+### Data/Hora
+2026-08-31 — Sessão 10
+
+### Arquivos modificados
+- `api/index.ts` — Correção crítica na rota `PUT /api/users/:id`: campos `cpf`, `data_admissao`, `cargo` e `recebe_leads` agora só são incluídos no UPDATE do banco se estiverem **explicitamente presentes** no body da requisição (`'campo' in req.body`).
+- `src/pages/Funcionarios.tsx` — `handleToggleStatus` agora inclui `recebe_leads` no payload enviado ao backend; `handleSubmit` agora inclui `recebe_leads` preservando o valor atual do `editingUser`.
+
+### O que foi feito
+
+#### 1. Diagnóstico — Confirmação no banco
+Query REST direta no Supabase confirmou: `cpf = null` e `data_admissao = null` para Mariana Feliciano — dados **fisicamente apagados**, não era bug de exibição.
+
+#### 2. Causa raiz — Rota PUT sobrescrevendo com NULL
+**Bug primário em `api/index.ts`, rota `PUT /api/users/:id`:**
+```ts
+// ANTES (bugado):
+cpf: cpf || null,  // '' || null = null → APAGAVA o CPF!
+data_admissao: data_admissao || null,
+recebe_leads: recebe_leads === true || recebe_leads === 'true',  // sempre false quando não enviado
+```
+**Vetor confirmado:** `handleToggleStatus` (ativar/desativar funcionário) chamava `PUT /api/users/:id` enviando `cpf: user.cpf || ''`. Quando `user.cpf` era falsy (ex: usuário sem CPF cadastrado ou estado local não inicializado), chegava `cpf: ''` ao backend → `'' || null = null` → **sobrescrevia o CPF real no banco**.
+
+**Bug secundário:** `recebe_leads` não era enviado no `handleToggleStatus`, fazendo o backend resetar `recebe_leads = false` em qualquer ativação/desativação.
+
+#### 3. Funcionários com CPF/data_admissao NULL após o bug
+| ID | Nome | Status |
+|----|------|--------|
+| 5  | Mariana Feliciano | ⚠️ NULL — re-cadastro manual necessário |
+| 21 | Agleson | ⚠️ NULL — re-cadastro manual necessário |
+| 2  | Sandra Feliciano | ⚠️ NULL — re-cadastro manual necessário |
+| 13 | Sandra Feliciano da Silva do Nascimento | ⚠️ NULL — re-cadastro manual necessário |
+| 3  | Tiago Henrique | ⚠️ NULL — re-cadastro manual necessário |
+| 10 | Wellen Matias | ⚠️ NULL — re-cadastro manual necessário |
+| 14 | Marcos Aurelio Silva do Nascimento | ⚠️ NULL — re-cadastro manual necessário |
+
+**Funcionários NÃO afetados (dados preservados):** Italo Angelo, Manoel Jordão, Manuela Sampaio, Marcos Aurélio, Marcos Douglas, Soraia Castro, Witally Bruno.
+
+#### 4. Correção backend (`api/index.ts`)
+```ts
+// DEPOIS (corrigido):
+// Só inclui o campo no UPDATE se vier explicitamente no body da requisição
+if ('cpf' in req.body) { fullUpdate.cpf = cpf || null; }
+if ('cargo' in req.body) { fullUpdate.cargo = cargo || null; }
+if ('data_admissao' in req.body) { fullUpdate.data_admissao = data_admissao || null; }
+if ('recebe_leads' in req.body) { fullUpdate.recebe_leads = recebe_leads === true || recebe_leads === 'true'; }
+```
+
+#### 5. Correção frontend (`src/pages/Funcionarios.tsx`)
+- `handleToggleStatus`: adicionado `recebe_leads: user.recebe_leads ?? false` ao payload
+- `handleSubmit`: adicionado `recebe_leads: editingUser?.recebe_leads ?? false` para preservar o valor ao salvar via modal
+
+#### 6. Re-cadastro
+Usuário optou por re-cadastrar manualmente os CPF e datas de admissão via sistema após deploy.
+
+### ⚠️ ATENÇÃO
+- Dados perdidos no banco para os 7 funcionários listados. Recuperação só com fonte externa (planilha/contrato).
+- **Teste obrigatório pós-deploy:** Cadastrar CPF → ativar/desativar → confirmar que CPF continua preenchido.
+
+---
+
 ## Alterações — Sessão 20/08/2026 — 09:58 (Finalização da Funcionalidade de Atestados Médicos - Exclusão e Validação)
 
 ### Data/Hora
