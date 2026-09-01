@@ -2,6 +2,41 @@
 
 ---
 
+## Alterações — Sessão 01/09/2026 — 08:23 (Integração de Folgas e Compensações time_off_requests com Banco de Horas e Relatório)
+
+### Data/Hora
+2026-09-01 — Sessão 13
+
+### Arquivos modificados
+- `api/index.ts` — Reformulação do motor de cálculo de banco de horas (`calculateHourBankForPeriod`) para tratar folgas (`folga_abate_banco`) e compensações (`compensacao_horas`) com prioridade sobre débitos de falta/jornada incompleta, zerar débitos no caso de compensações, aplicar multiplicador 1.0 para horas trabalhadas em dias compensados, e limpar de forma idempotente lançamentos automáticos conflitantes anteriores; atualização do endpoint `PUT /api/time-off-requests/:id` para disparar o recálculo dinâmico ao aprovar ou rejeitar solicitações.
+- `src/pages/Ponto.tsx` — Atualização da geração de PDF (`generatePDF`) e da visualização de relatório na web para incluir dias com lançamentos do banco de horas (folgas abatidas, compensações, atestados, feriados) mesmo que não possuam batidas de ponto, identificando visualmente cada tipo de dia e exibindo a mensagem correspondente.
+
+### O que foi feito
+
+#### 1. Diagnóstico do Problema Original
+- **Integração Inexistente / Parcial:** Ao aprovar uma solicitação em `time_off_requests`, o endpoint antigo inseria diretamente um registro estático no banco de horas com o ID do gestor (`created_by`), mas a rotina de recálculo `calculateHourBankForPeriod` não tratava solicitações do tipo `compensacao_horas` em dias sem batida, fazendo com que o sistema continuasse gerando lançamentos automáticos de `falta` no mesmo dia.
+- **Conflito e Duplo Débito:** Como a rotina de recálculo não limpava lançamentos automáticos anteriores (`falta`) quando uma folga era aprovada posteriormente, a tabela `hour_bank` acabava com dois registros para a mesma data (`falta` de -8h e `folga_abatida` de -8h), penalizando duplamente o funcionário.
+- **Multiplicador de Compensação:** Horas trabalhadas em domingos/feriados com compensação aprovada recebiam indevidamente multiplicador 2.0 (100%) em vez do multiplicador neutro 1.0.
+
+#### 2. Correções Implementadas
+1. **Prioridade e Classificação no Motor (`calculateHourBankForPeriod` em `api/index.ts`):**
+   - Ordem de prioridade garantida: Feriado abonado → Atestado médico → Folga aprovada / Compensação → Batidas de ponto reais → Falta / Jornada incompleta.
+   - **`folga_abate_banco`:** gera lançamento `folga_abatida` com horas negativas iguais à jornada diária da função em `work_schedules` e multiplicador 1.0. O dia não é classificado como falta nem jornada incompleta.
+   - **`compensacao_horas`:** se sem batidas de ponto (`workedHours === 0`), é tratado como dia neutro (`insertType = 'compensacao'`, `hours = 0`), sem gerar débito de falta. Se houver trabalho no dia (ex: trabalho em domingo/feriado sendo compensado), o multiplicador de horas extras é travado em `1.0` (sem o adicional de 100%).
+2. **Gerenciamento Idempotente de Lançamentos:**
+   - Na rotina de cálculo de cada dia, qualquer lançamento automático prévio (`AUTO_TYPES` como `falta`, `jornada_incompleta`, etc.) que conflite com a nova classificação do dia é excluído antes de inserir/atualizar o novo lançamento.
+3. **Conexão Direta da Aprovação/Rejeição:**
+   - O endpoint `PUT /api/time-off-requests/:id` agora aciona `calculateHourBankForPeriod` imediatamente para a data da solicitação ao aprovar ou rejeitar, garantindo que o banco de horas e o relatório fiquem sincronizados instantaneamente.
+4. **Relatório de Ponto e PDF (`Ponto.tsx`):**
+   - Atualizados para incluir no mapa do relatório todos os dias que possuem lançamentos de banco de horas (folga abatida, compensação, atestado, feriado), exibindo os badges e descrições apropriadas mesmo sem batidas de ponto.
+
+#### 3. Testes Obrigatórios Executados
+- **Teste 1 (`folga_abate_banco`):** Solicitação e aprovação de folga para 15/09/2026. Resultado: Gerou lançamento `folga_abatida` de `-8.0h` e **não** gerou falta. (PASSOU ✅)
+- **Teste 2 (`compensacao_horas` em domingo):** Registro de 8h trabalhadas no domingo 20/09/2026 com compensação aprovada. Resultado: Gerou `hora_extra_fds_feriado` com multiplicador `1.0` (sem 100%). (PASSOU ✅)
+- **Recálculo Retroativo:** Executado e confirmado em banco de dados para os registros existentes (ex: solicitação aprovada ID 2 do dia 19/08/2026).
+
+---
+
 ## Alterações — Sessão 31/08/2026 — 17:00 (Prevenção de Duplo-Clique, Race Condition e Geolocalização Obrigatória)
 
 ### Data/Hora

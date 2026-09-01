@@ -880,6 +880,11 @@ export default function Ponto() {
     };
 
     const grouped = groupByDay(reportRecords ?? []);
+    (hourBankEntries || []).forEach(e => {
+      if (e.reference_date && !grouped[e.reference_date]) {
+        grouped[e.reference_date] = [];
+      }
+    });
     let totalHours = 0;
 
     Object.entries(grouped).sort().forEach(([day, recs]) => {
@@ -1535,58 +1540,91 @@ export default function Ponto() {
                 </button>
               </div>
 
-              {Object.entries(groupByDay(reportRecords ?? [])).sort().map(([day, recs]) => {
-                const hours = calcDayHours(recs ?? []);
-                return (
-                  <div key={day} className="flex justify-between items-center py-2 border-b border-gray-100 text-sm">
-                    <span className="text-gray-600 w-32">
-                      {new Date(day + 'T12:00:00').toLocaleDateString('pt-BR')}
-                    </span>
-                    <div className="flex gap-4 flex-wrap text-gray-500">
-                      {TYPE_ORDER.map((t) => {
-                        const rec = t === 'exit' 
-                          ? [...(recs ?? [])].reverse().find((r) => r.type === t)
-                          : (recs ?? []).find((r) => r.type === t);
-                        return (
-                          <span key={t} className="flex items-start gap-1">
-                            {TYPE_LABELS[t].split(' ')[0]}: {rec ? (
-                              <>
-                                <div className="flex flex-col">
-                                  <span>{new Date(rec.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-                                  <AddressDisplay
-                                    latitude={rec.latitude}
-                                    longitude={rec.longitude}
-                                    cache={geocodeCache}
-                                    onAddressFetched={handleAddressFetched}
-                                  />
-                                </div>
-                                {rec.latitude !== null && rec.longitude !== null ? (
-                                  <a
-                                    href={`https://www.google.com/maps?q=${rec.latitude},${rec.longitude}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-green-500 hover:text-green-600 inline-flex items-center"
-                                    title="Ver localização no mapa"
-                                  >
-                                    <MapPin size={14} />
-                                  </a>
-                                ) : (
-                                  <span className="text-gray-400 inline-flex items-center" title="Sem geolocalização">
-                                    <MapPin size={14} />
-                                  </span>
-                                )}
-                              </>
-                            ) : (
-                              '—'
-                            )}
+              {(() => {
+                const grouped = groupByDay(reportRecords ?? []);
+                (hourBankEntries || []).forEach((e: any) => {
+                  if (e.reference_date && !grouped[e.reference_date]) {
+                    grouped[e.reference_date] = [];
+                  }
+                });
+                return Object.entries(grouped).sort().map(([day, recs]) => {
+                  const hours = calcDayHours(recs ?? []);
+                  const hbEntry = (hourBankEntries || []).find((e: any) => e.reference_date === day);
+                  const HB_TYPE_LABEL: Record<string, string> = {
+                    hora_extra_normal: 'H.Extra 50%',
+                    hora_extra_fds_feriado: 'H.Extra 100%',
+                    jornada_incompleta: 'Jornada Incompleta',
+                    falta: 'Falta',
+                    folga_abatida: 'Folga',
+                    atestado_abonado: 'Atestado',
+                    feriado_abonado: 'Feriado',
+                    compensacao: 'Compensação',
+                    ajuste_manual: 'Ajuste Manual',
+                  };
+                  return (
+                    <div key={day} className="flex justify-between items-center py-2 border-b border-gray-100 text-sm">
+                      <div className="flex items-center gap-2 w-44">
+                        <span className="text-gray-600">
+                          {new Date(day + 'T12:00:00').toLocaleDateString('pt-BR')}
+                        </span>
+                        {hbEntry && (recs ?? []).length === 0 && (
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
+                            hbEntry.type === 'folga_abatida' ? 'bg-purple-100 text-purple-800' :
+                            hbEntry.type === 'compensacao' ? 'bg-indigo-100 text-indigo-800' :
+                            hbEntry.type === 'falta' ? 'bg-red-100 text-red-800' :
+                            hbEntry.type === 'atestado_abonado' ? 'bg-teal-100 text-teal-800' :
+                            hbEntry.type === 'feriado_abonado' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700'
+                          }`}>
+                            {HB_TYPE_LABEL[hbEntry.type] ?? hbEntry.type}
                           </span>
-                        );
-                      })}
+                        )}
+                      </div>
+                      <div className="flex gap-4 flex-wrap text-gray-500">
+                        {TYPE_ORDER.map((t) => {
+                          const rec = t === 'exit' 
+                            ? [...(recs ?? [])].reverse().find((r) => r.type === t)
+                            : (recs ?? []).find((r) => r.type === t);
+                          return (
+                            <span key={t} className="flex items-start gap-1">
+                              {TYPE_LABELS[t].split(' ')[0]}: {rec ? (
+                                <>
+                                  <div className="flex flex-col">
+                                    <span>{new Date(rec.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                    <AddressDisplay
+                                      latitude={rec.latitude}
+                                      longitude={rec.longitude}
+                                      cache={geocodeCache}
+                                      onAddressFetched={handleAddressFetched}
+                                    />
+                                  </div>
+                                  {rec.latitude !== null && rec.longitude !== null ? (
+                                    <a
+                                      href={`https://www.google.com/maps?q=${rec.latitude},${rec.longitude}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-green-500 hover:text-green-600 inline-flex items-center"
+                                      title="Ver localização no mapa"
+                                    >
+                                      <MapPin size={14} />
+                                    </a>
+                                  ) : (
+                                    <span className="text-gray-400 inline-flex items-center" title="Sem geolocalização">
+                                      <MapPin size={14} />
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                '—'
+                              )}
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <span className="font-medium text-blue-600 w-12 text-right">{hours > 0 ? `${hours.toFixed(1)}h` : '—'}</span>
                     </div>
-                    <span className="font-medium text-blue-600 w-12 text-right">{hours > 0 ? `${hours.toFixed(1)}h` : '—'}</span>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
 
               <div className="pt-3 text-right font-bold text-gray-800">
                 Total: {Object.values(groupByDay(reportRecords ?? [])).reduce((sum, recs) => sum + calcDayHours(recs ?? []), 0).toFixed(1)}h

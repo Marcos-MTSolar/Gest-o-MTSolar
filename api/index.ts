@@ -4576,33 +4576,47 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
     if (workedHours > 0) {
       // Funcionário trabalhou neste dia
       if (isSunday || isHolidayDay) {
-        // Horas extras 100% em domingos/feriados
+        // Horas extras em domingos/feriados
         insertHours = workedHours;
         insertType = 'hora_extra_fds_feriado';
         
-        // Verifica se tem compensacao_horas aprovado para esse dia
+        // Se houver compensacao_horas aprovado para esse dia, multiplicador é 1.0 (sem adicional de 100%)
         const isCompensated = approvedTimeOff && approvedTimeOff.type === 'compensacao_horas';
         multiplier = isCompensated ? 1.0 : 2.0;
-        description = isHolidayDay ? `Trabalho no feriado: ${holidayName}` : 'Trabalho no domingo';
+        description = isHolidayDay 
+          ? `Trabalho no feriado: ${holidayName}${isCompensated ? ' (Compensado)' : ''}` 
+          : `Trabalho no domingo${isCompensated ? ' (Compensado)' : ''}`;
       } else {
         // Dia de semana / Sábado
         const diff = workedHours - currentExpectedHours;
+        const isCompensated = approvedTimeOff && approvedTimeOff.type === 'compensacao_horas';
+        const isFolgaAbatida = approvedTimeOff && approvedTimeOff.type === 'folga_abate_banco';
+
         if (diff > 0) {
-          // Fez hora extra em dia útil (50%)
+          // Fez hora extra em dia útil
           insertHours = diff;
           insertType = 'hora_extra_normal';
-          multiplier = 1.5; // adicional mínimo de 50% legal. Ajustar se acordo coletivo estipular outro valor.
-          description = `Hora extra em dia útil. Carga: ${workedHours.toFixed(2)}h (Esperado: ${currentExpectedHours.toFixed(2)}h)`;
+          multiplier = isCompensated ? 1.0 : 1.5;
+          description = `Hora extra em dia útil${isCompensated ? ' (Compensado)' : ''}. Carga: ${workedHours.toFixed(2)}h (Esperado: ${currentExpectedHours.toFixed(2)}h)`;
         } else if (diff < 0) {
-          // Trabalhou menos do que deveria -> Débito de Jornada Incompleta
-          insertHours = diff; // Valor negativo
-          insertType = 'jornada_incompleta';
-          multiplier = 1.0;
-          description = `Jornada incompleta. Carga: ${workedHours.toFixed(2)}h (Esperado: ${currentExpectedHours.toFixed(2)}h)`;
+          if (isCompensated || isFolgaAbatida) {
+            // Se tem compensação de horas ou folga aprovada, não gera débito de jornada incompleta
+            insertType = isFolgaAbatida ? 'folga_abatida' : 'compensacao';
+            const hoursToAbate = (approvedTimeOff?.hours && parseFloat(approvedTimeOff.hours) > 0) ? parseFloat(approvedTimeOff.hours) : currentExpectedHours;
+            insertHours = isFolgaAbatida ? -hoursToAbate : 0;
+            multiplier = 1.0;
+            description = `Jornada parcial em dia de ${isFolgaAbatida ? 'folga' : 'compensação'} aprovada.`;
+          } else {
+            // Trabalhou menos do que deveria -> Débito de Jornada Incompleta
+            insertHours = diff; // Valor negativo
+            insertType = 'jornada_incompleta';
+            multiplier = 1.0;
+            description = `Jornada incompleta. Carga: ${workedHours.toFixed(2)}h (Esperado: ${currentExpectedHours.toFixed(2)}h)`;
+          }
         }
       }
     } else {
-      // Funcionário NÃO trabalhou neste dia
+      // Funcionário NÃO trabalhou neste dia (workedHours === 0)
       if (isHolidayDay) {
         // Feriado abonado
         insertHours = 0;
@@ -4615,10 +4629,19 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
         description = 'Atestado médico abonado';
       } else if (approvedTimeOff && approvedTimeOff.type === 'folga_abate_banco') {
         // Folga aprovada que abate do banco de horas
-        insertHours = -approvedTimeOff.hours; // Débito da folga
+        const hoursToAbate = (approvedTimeOff.hours && parseFloat(approvedTimeOff.hours) > 0) 
+          ? parseFloat(approvedTimeOff.hours) 
+          : currentExpectedHours;
+        insertHours = -hoursToAbate; // Débito da folga (jornada prevista em work_schedules)
         insertType = 'folga_abatida';
         multiplier = 1.0;
-        description = `Folga compensada aprovada. Observações: ${approvedTimeOff.notes || ''}`;
+        description = `Folga compensada aprovada. Observações: ${approvedTimeOff.notes || '—'}`;
+      } else if (approvedTimeOff && approvedTimeOff.type === 'compensacao_horas') {
+        // Compensação de horas aprovada para um dia sem trabalho -> dia neutro (não gera falta)
+        insertHours = 0;
+        insertType = 'compensacao';
+        multiplier = 1.0;
+        description = `Compensação de horas aprovada (dia neutro). Observações: ${approvedTimeOff.notes || '—'}`;
       } else if (currentExpectedHours > 0) {
         // Dia útil comum de trabalho e não apareceu -> Falta total
         insertHours = -currentExpectedHours;
@@ -4648,19 +4671,35 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
       }
     }
 
-    // Se identificou um lançamento relevante, grava de forma idempotente (upsert por user_id, reference_date e type)
-    if (insertType) {
-      // Verifica se já existe um lançamento automático para esse dia + tipo
-      // Para evitar sobrescrever ajustes manuais criados pelo ADM, filtramos apenas por lançamentos gerados pelo sistema ou substituímos.
-      const { data: existingHB } = await supabaseAdmin
-        .from('hour_bank')
-        .select('id, created_by')
-        .eq('company_id', companyId)
-        .eq('user_id', userId)
-        .eq('reference_date', dayKey)
-        .eq('type', insertType)
-        .maybeSingle();
+    const AUTO_TYPES = [
+      'falta', 'jornada_incompleta', 'hora_extra_normal', 
+      'hora_extra_fds_feriado', 'folga_abatida', 'compensacao', 
+      'feriado_abonado', 'atestado_abonado'
+    ];
 
+    // Busca todos os lançamentos existentes no banco de horas para a data
+    const { data: existingHBList } = await supabaseAdmin
+      .from('hour_bank')
+      .select('id, type, created_by')
+      .eq('company_id', companyId)
+      .eq('user_id', userId)
+      .eq('reference_date', dayKey);
+
+    // Deleta lançamentos automáticos anteriores que conflitem com o novo insertType
+    if (existingHBList && existingHBList.length > 0) {
+      for (const hb of existingHBList) {
+        const isAuto = !hb.created_by || AUTO_TYPES.includes(hb.type);
+        if (isAuto && hb.type !== insertType) {
+          await supabaseAdmin
+            .from('hour_bank')
+            .delete()
+            .eq('id', hb.id);
+        }
+      }
+    }
+
+    // Se identificou um lançamento relevante, grava de forma idempotente
+    if (insertType) {
       const payload: any = {
         company_id: companyId,
         user_id: userId,
@@ -4671,15 +4710,13 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
         description,
       };
 
-      if (existingHB) {
-        // Apenas atualiza se o lançamento anterior não foi um ajuste manual de outro ADM (created_by é nulo ou igual ao sistema)
-        if (!existingHB.created_by || existingHB.created_by === actorId) {
-          await supabaseAdmin
-            .from('hour_bank')
-            .update(payload)
-            .eq('id', existingHB.id);
-        }
-      } else {
+      const match = (existingHBList ?? []).find((hb: any) => hb.type === insertType);
+      if (match && (!match.created_by || match.created_by === actorId || AUTO_TYPES.includes(match.type))) {
+        await supabaseAdmin
+          .from('hour_bank')
+          .update(payload)
+          .eq('id', match.id);
+      } else if (!match) {
         if (actorId) payload.created_by = actorId;
         await supabaseAdmin
           .from('hour_bank')
@@ -5436,30 +5473,14 @@ app.put('/api/time-off-requests/:id', authenticateToken, async (req: any, res) =
 
     if (error) throw error;
 
-    // Se aprovado, cria o lançamento correspondente no hour_bank
-    if (status === 'approved') {
-      const typeMap: Record<string, string> = {
-        folga_abate_banco: 'folga_abatida',
-        compensacao_horas: 'compensacao'
-      };
-
-      const insertHours = requestToApprove.type === 'folga_abate_banco' 
-        ? -parseFloat(requestToApprove.hours) 
-        : parseFloat(requestToApprove.hours);
-
-      await supabaseAdmin
-        .from('hour_bank')
-        .insert({
-          company_id: req.user.company_id,
-          user_id: requestToApprove.user_id,
-          reference_date: requestToApprove.date,
-          hours: insertHours,
-          type: typeMap[requestToApprove.type] || 'compensacao',
-          multiplier: 1.0,
-          description: `Aprovado via solicitação de folga/compensação. Obs: ${requestToApprove.notes || '—'}`,
-          created_by: req.user.id
-        });
-    }
+    // Recalcula dinamicamente o banco de horas para a data da solicitação
+    await calculateHourBankForPeriod(
+      requestToApprove.user_id,
+      requestToApprove.date,
+      requestToApprove.date,
+      req.user.company_id,
+      req.user.id
+    );
 
     res.json(data);
   } catch (err: any) {
