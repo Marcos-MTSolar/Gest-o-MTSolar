@@ -4841,9 +4841,39 @@ app.get('/api/ponto/relatorio/:userId', authenticateToken, async (req: any, res)
       .gte('reference_date', (start as string).split('T')[0])
       .lte('reference_date', (end as string).split('T')[0]);
 
+    // Enriquecer lançamentos de atestado_abonado com o CID da tabela medical_certificates.
+    // Isso permite exibir o CID correto no relatório em tela e no PDF gerado.
+    const enrichedHbEntries = (hbEntries || []).map(entry => ({ ...entry }));
+    const hasAtestado = enrichedHbEntries.some(e => e.type === 'atestado_abonado');
+
+    if (hasAtestado) {
+      const startDateStr = (start as string).split('T')[0];
+      const endDateStr = (end as string).split('T')[0];
+
+      const { data: certs } = await supabaseAdmin
+        .from('medical_certificates')
+        .select('start_date, end_date, cid')
+        .eq('company_id', req.user.company_id)
+        .eq('user_id', uId)
+        .lte('start_date', endDateStr)
+        .gte('end_date', startDateStr);
+
+      if (certs && certs.length > 0) {
+        // Para cada lançamento de atestado, encontrar o atestado cujo intervalo contém reference_date
+        for (const entry of enrichedHbEntries) {
+          if (entry.type !== 'atestado_abonado') continue;
+          const refDate = entry.reference_date;
+          const matching = certs.find(c => c.start_date <= refDate && c.end_date >= refDate);
+          if (matching) {
+            entry.cid = matching.cid ?? null;
+          }
+        }
+      }
+    }
+
     res.json({
       records: records || [],
-      hourBank: hbEntries || []
+      hourBank: enrichedHbEntries
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -5280,6 +5310,22 @@ app.post('/api/medical-certificates', authenticateToken, upload.single('document
       .single();
 
     if (error) throw error;
+
+    // Recalcula o banco de horas retroativamente para os dias cobertos pelo atestado.
+    // Isso garante que faltas/jornadas incompletas previamente lançadas para esses dias
+    // sejam substituídas pelo lançamento correto de 'atestado_abonado'.
+    try {
+      await calculateHourBankForPeriod(
+        parseInt(user_id, 10),
+        start_date,
+        end_date,
+        req.user.company_id,
+        req.user.id
+      );
+    } catch (recalcErr: any) {
+      console.warn('[POST medical-certificates] Recálculo automático falhou (não-bloqueante):', recalcErr?.message);
+    }
+
     res.json(data);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -5299,10 +5345,11 @@ app.delete('/api/medical-certificates/:id', authenticateToken, async (req: any, 
       return res.status(400).json({ error: 'ID inválido.' });
     }
 
-    // Busca o registro para verificar company_id e obter o caminho do arquivo no R2
+    // Busca o registro para verificar company_id, obter o caminho do arquivo
+    // e os dados necessários para o recálculo posterior (user_id, start_date, end_date)
     const { data: cert, error: fetchError } = await supabaseAdmin
       .from('medical_certificates')
-      .select('document_path, company_id')
+      .select('document_path, company_id, user_id, start_date, end_date')
       .eq('id', certId)
       .eq('company_id', req.user.company_id)
       .maybeSingle();
@@ -5327,6 +5374,22 @@ app.delete('/api/medical-certificates/:id', authenticateToken, async (req: any, 
       .eq('company_id', req.user.company_id);
 
     if (deleteError) throw deleteError;
+
+    // Recalcula o banco de horas para os dias que estavam cobertos pelo atestado excluído.
+    // Os dias voltarão à classificação correta: falta (sem ponto) ou normal (com ponto).
+    if (cert.user_id && cert.start_date && cert.end_date) {
+      try {
+        await calculateHourBankForPeriod(
+          cert.user_id,
+          cert.start_date,
+          cert.end_date,
+          req.user.company_id,
+          req.user.id
+        );
+      } catch (recalcErr: any) {
+        console.warn('[DELETE medical-certificates] Recálculo automático falhou (não-bloqueante):', recalcErr?.message);
+      }
+    }
 
     res.json({ success: true, message: 'Atestado excluído com sucesso.' });
   } catch (err: any) {

@@ -942,9 +942,22 @@ export default function Ponto() {
 
       const hasMissingLocation = (recs ?? []).some((r) => r.latitude === null || r.longitude === null);
       const hasExtraPunches = (recs ?? []).length > 4;
-      let obs = hasMissingLocation ? 'Sem GPS' : 'Com GPS';
-      if (hasExtraPunches) {
-        obs += ' (Inconsistente)';
+
+      let obs: string;
+      if (hbEntry?.type === 'atestado_abonado') {
+        // Exibe o CID do atestado na coluna Observações para identificação precisa
+        obs = hbEntry.cid ? `Atestado — CID: ${hbEntry.cid}` : 'Atestado Médico';
+      } else if (hbEntry?.type === 'feriado_abonado') {
+        obs = 'Feriado Nacional';
+      } else if (hbEntry?.type === 'folga_abatida') {
+        obs = 'Folga Aprovada';
+      } else if (hbEntry?.type === 'compensacao') {
+        obs = 'Compensação Aprovada';
+      } else if ((recs ?? []).length === 0) {
+        obs = 'Sem batidas';
+      } else {
+        obs = hasMissingLocation ? 'Sem GPS' : 'Com GPS';
+        if (hasExtraPunches) obs += ' (Inconsistente)';
       }
 
       // Colorir linha por tipo de dia
@@ -1636,8 +1649,12 @@ export default function Ponto() {
                             hbEntry.type === 'falta' ? 'bg-red-100 text-red-800' :
                             hbEntry.type === 'atestado_abonado' ? 'bg-teal-100 text-teal-800' :
                             hbEntry.type === 'feriado_abonado' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700'
-                          }`}>
-                            {HB_TYPE_LABEL[hbEntry.type] ?? hbEntry.type}
+                          }`}
+                          title={hbEntry.type === 'atestado_abonado' && hbEntry.cid ? `CID: ${hbEntry.cid}` : undefined}
+                          >
+                            {hbEntry.type === 'atestado_abonado'
+                              ? `Atestado${hbEntry.cid ? ` — CID: ${hbEntry.cid}` : ''}`
+                              : (HB_TYPE_LABEL[hbEntry.type] ?? hbEntry.type)}
                           </span>
                         )}
                       </div>

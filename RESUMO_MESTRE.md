@@ -2,6 +2,36 @@
 
 ---
 
+## Alterações — Sessão 01/09/2026 — 09:45 (Atestados Retroativos com Recálculo Automático e Exibição do CID no Relatório)
+
+### Data/Hora
+2026-09-01 — Sessão 16
+
+### Arquivos modificados
+- `api/index.ts` — Inclusão do gatilho automático de recálculo (`calculateHourBankForPeriod`) nas rotas `POST /api/medical-certificates` (ao cadastrar atestado) e `DELETE /api/medical-certificates/:id` (ao excluir atestado), cobrindo o intervalo retroativo `[start_date, end_date]`. Enriquecimento do endpoint `GET /api/ponto/relatorio/:userId` para cruzar lançamentos de `atestado_abonado` com `medical_certificates` e incluir a propriedade `cid`.
+- `src/pages/Ponto.tsx` — Atualização da coluna de "OBSERVAÇÕES" no PDF gerado para exibir `Atestado — CID: {cid}` (ou `Atestado Médico`) nos dias abonados por atestado. Atualização do badge do dia no relatório em tela para exibir `Atestado — CID: {cid}`.
+
+### O que foi feito
+
+#### 1. Diagnóstico do Problema com Datas Retroativas
+- **Falta de Gatilho no cadastro/exclusão de Atestados:** Ao criar um atestado médico com data no passado via `POST /api/medical-certificates`, o registro era inserido na tabela `medical_certificates`, mas a rotina de recálculo `calculateHourBankForPeriod` não era disparada, mantendo os lançamentos de `falta` ou `jornada_incompleta` anteriores intocados no `hour_bank`.
+- **Ausência do CID no Relatório:** Os lançamentos do banco de horas do tipo `atestado_abonado` não possuíam vínculo com o código CID do atestado correspondente para exibição nas observações do PDF e no relatório web.
+
+#### 2. Solução Implementada
+1. **Recálculo Retroativo Automático (Backend `api/index.ts`):**
+   - **Gatilho de Criação (`POST`):** Imediatamente após a inserção do atestado, o sistema executa `calculateHourBankForPeriod` para o intervalo `[start_date, end_date]`, removendo substitutivamente lançamentos de faltas anteriores e gravando os lançamentos de `atestado_abonado` (`hours = 0`).
+   - **Gatilho de Exclusão (`DELETE`):** Ao excluir um atestado, o sistema captura previamente as datas e o usuário e executa o recálculo do período, restaurando os dias à sua condição original (falta se sem batidas de ponto, ou normal se com batidas).
+2. **Exibição do CID no Relatório Web e PDF (`Ponto.tsx`):**
+   - O endpoint `/api/ponto/relatorio/:userId` cruza os atestados do usuário no período e inclui a propriedade `cid` nos lançamentos `atestado_abonado`.
+   - No PDF, a coluna "OBSERVAÇÕES" passa a exibir `Atestado — CID: {cid}` (ex: `Atestado — CID: A12.0`).
+   - Na tela, o badge do dia exibe `Atestado — CID: {cid}`.
+3. **Auditoria e Recálculo de Atestados Existentes em Produção:**
+   - Foi executado o recálculo retroativo para os 2 atestados já existentes no banco de dados real:
+     - **Atestado #4 (Mariana Feliciano - 19/08/2026 - CID: A12.0):** Lançamento de `atestado_abonado` gerado com sucesso em `hour_bank` para 19/08/2026.
+     - **Atestado #3 (Marcos Aurélio - 01/09/2026 a 02/09/2026 - CID: M52.2):** Lançamentos de `atestado_abonado` gerados com sucesso em `hour_bank` para 01/09/2026 e 02/09/2026.
+
+---
+
 ## Alterações — Sessão 01/09/2026 — 09:16 (Formatação e Layout Vertical do Resumo do Banco de Horas no PDF)
 
 ### Data/Hora
