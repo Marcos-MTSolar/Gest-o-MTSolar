@@ -2,6 +2,32 @@
 
 ---
 
+## Alterações — Sessão 01/09/2026 — 08:35 (Acesso e Visibilidade de Atestados Médicos com Upload e CID)
+
+### Data/Hora
+2026-09-01 — Sessão 14
+
+### Arquivos modificados
+- `src/pages/Funcionarios.tsx` — Atualizado o botão da coluna de Ações da tabela de colaboradores para exibir um botão visível e destacado (`📎 Atestado`), com ícone e rótulo de texto em cor teal, facilitando a identificação imediata do cadastro de atestados médicos.
+- `src/pages/Ponto.tsx` — Adicionado o botão `📋 Lançar Atestado Médico` no painel do Gestor (aba Relatórios) e integrado o modal completo de Atestados Médicos (com data de início, dias afastado, cálculo automático do período, campo CID, upload de documento PDF/imagem, observações e histórico com link de download/visualização e exclusão).
+
+### O que foi feito
+
+#### 1. Causa Raiz da Impressão de Ausência dos Campos
+- **Não houve regressão de código:** O código do modal completo com formulário, campo CID, upload de arquivos e cálculo de período **nunca foi apagado ou alterado**.
+- **Problema de Navegação e Visibilidade:**
+  1. Em `Funcionarios.tsx`, o botão de abertura do modal era apenas um pequeno ícone de documento de 18px (`<FileText size={18} />`) sem rótulo de texto na coluna de Ações, passando facilmente despercebido pelo usuário.
+  2. Em `Ponto.tsx` (onde o gestor analisa frequentemente os cartões de ponto, folgas e banco de horas), **não havia um ponto de acesso** para lançar atestados médicos, obrigando o gestor a navegar até a tela de Funcionários sem um direcionamento claro.
+
+#### 2. Solução Implementada
+1. **Destaque na Tela de Funcionários (`Funcionarios.tsx`):**
+   - O botão na tabela foi transformado em um badge estilizado com texto explícito: `📎 Atestado`.
+2. **Duplo Ponto de Acesso e Modal em Ponto Eletrônico (`Ponto.tsx`):**
+   - Incluído o botão `📋 Lançar Atestado Médico` na barra de ações do gestor quando um colaborador está selecionado na aba de Relatórios do Ponto.
+   - Replicado o modal completo em `Ponto.tsx`, permitindo que o gestor insira atestados médicos (upload de PDF/imagem + CID + dias de afastamento) diretamente da tela de gestão de ponto.
+
+---
+
 ## Alterações — Sessão 01/09/2026 — 08:23 (Integração de Folgas e Compensações time_off_requests com Banco de Horas e Relatório)
 
 ### Data/Hora

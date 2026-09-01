@@ -7,7 +7,8 @@ import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import jsPDF from 'jspdf';
 import { supabase } from '../lib/supabase';
-import { Trash2, MapPin } from 'lucide-react';
+import { Trash2, MapPin, FileText, X, ExternalLink } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 /**
  * BLOQUEAR_PONTO_SEM_LOCALIZACAO:
@@ -321,6 +322,20 @@ export default function Ponto() {
     nome: string;
   } | null>(null);
   const [showRecalcConfirmAll, setShowRecalcConfirmAll] = useState(false);
+
+  // Estados do Modal de Atestados Médicos (Gestor)
+  const [isAtestadoModalOpen, setIsAtestadoModalOpen] = useState(false);
+  const [selectedUserForCert, setSelectedUserForCert] = useState<any | null>(null);
+  const [certFormData, setCertFormData] = useState({
+    start_date: new Date().toISOString().split('T')[0],
+    days_off: '1',
+    cid: '',
+    notes: '',
+  });
+  const [certFile, setCertFile] = useState<File | null>(null);
+  const [savingCert, setSavingCert] = useState(false);
+  const [certsList, setCertsList] = useState<any[]>([]);
+  const [loadingCerts, setLoadingCerts] = useState(false);
 
   useEffect(() => {
     async function fetchCompanyInfo() {
@@ -1364,6 +1379,35 @@ export default function Ponto() {
                 ) : '⟳ Recalcular Período'}
               </button>
 
+              {/* Botão Lançar Atestado Médico */}
+              {selectedUser && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const u = (allUsers ?? []).find((user: any) => user.id === selectedUser);
+                    if (!u) return;
+                    setSelectedUserForCert(u);
+                    setCertFormData({
+                      start_date: new Date().toISOString().split('T')[0],
+                      days_off: '1',
+                      cid: '',
+                      notes: '',
+                    });
+                    setCertFile(null);
+                    setIsAtestadoModalOpen(true);
+                    setLoadingCerts(true);
+                    api.get(`/api/medical-certificates?userId=${u.id}`)
+                      .then((res) => setCertsList(res.data ?? []))
+                      .catch(() => toast.error('Erro ao carregar atestados'))
+                      .finally(() => setLoadingCerts(false));
+                  }}
+                  className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+                  title="Lançar atestado médico (com upload de arquivo e CID) para o funcionário selecionado"
+                >
+                  <FileText size={16} /> Lançar Atestado Médico
+                </button>
+              )}
+
               {user?.role === 'CEO' && selectedUser && (
                 <button
                   type="button"
@@ -2398,6 +2442,217 @@ export default function Ponto() {
                 className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
               >
                 {deletingRecords ? 'Excluindo...' : 'Confirmar Exclusão'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Atestados Médicos (CEO/ADMIN) */}
+      {isAtestadoModalOpen && selectedUserForCert && (
+        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl border border-gray-100 overflow-hidden transform transition-all flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center px-6 py-4 bg-gray-50 border-b border-gray-150">
+              <div>
+                <h2 className="text-lg font-bold text-gray-800">Atestados Médicos — Lançamento Gestor</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Colaborador(a): <strong className="text-gray-700">{selectedUserForCert.name}</strong></p>
+              </div>
+              <button
+                onClick={() => setIsAtestadoModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-6 flex-1">
+              {/* Formulário Novo Atestado */}
+              <div className="bg-gray-50 border rounded-xl p-4 space-y-4">
+                <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">Lançar Novo Atestado / Afastamento</p>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Início Afastamento *</label>
+                    <input
+                      type="date"
+                      required
+                      value={certFormData.start_date}
+                      onChange={e => setCertFormData(p => ({ ...p, start_date: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Dias Afastado *</label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      value={certFormData.days_off}
+                      onChange={e => setCertFormData(p => ({ ...p, days_off: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">CID (Opcional)</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: M54.5"
+                      maxLength={10}
+                      value={certFormData.cid}
+                      onChange={e => setCertFormData(p => ({ ...p, cid: e.target.value.toUpperCase() }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Exibição automática do cálculo do término */}
+                {certFormData.start_date && parseInt(certFormData.days_off, 10) > 0 && (
+                  <div className="text-xs bg-teal-50 border border-teal-100 rounded-lg p-2 text-teal-800 font-medium">
+                    🗓️ Período de Afastamento: {(() => {
+                      const parts = certFormData.start_date.split('-');
+                      const start = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                      const end = new Date(start);
+                      end.setDate(end.getDate() + parseInt(certFormData.days_off, 10) - 1);
+                      
+                      const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                      return `${fmt(start)} até ${fmt(end)}`;
+                    })()}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 font-mono">Upload do Documento (Imagem ou PDF) *</label>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={e => {
+                      const files = e.target.files;
+                      if (files && files.length > 0) setCertFile(files[0]);
+                    }}
+                    className="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-900 hover:file:bg-blue-100 cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Observações</label>
+                  <textarea
+                    placeholder="Descrição opcional do afastamento..."
+                    value={certFormData.notes}
+                    onChange={e => setCertFormData(p => ({ ...p, notes: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-h-[60px]"
+                  />
+                </div>
+
+                <button
+                  onClick={async () => {
+                    if (!certFormData.start_date || !certFormData.days_off || !certFile) {
+                      toast.error('Data de início, dias afastado e o arquivo são obrigatórios.');
+                      return;
+                    }
+
+                    if (certFormData.cid && !/^[A-Z]\d{2}(\.\d)?$/.test(certFormData.cid)) {
+                      if (!confirm('O formato do CID parece fora do padrão (ex: A00.0). Deseja prosseguir assim mesmo?')) {
+                        return;
+                      }
+                    }
+
+                    try {
+                      setSavingCert(true);
+                      
+                      const fd = new FormData();
+                      fd.append('user_id', String(selectedUserForCert.id));
+                      fd.append('start_date', certFormData.start_date);
+                      fd.append('days_off', certFormData.days_off);
+                      fd.append('cid', certFormData.cid);
+                      fd.append('notes', certFormData.notes);
+                      fd.append('document', certFile);
+
+                      await api.post('/api/medical-certificates', fd, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                      });
+
+                      toast.success('Atestado cadastrado com sucesso!');
+                      
+                      setCertFormData({ start_date: new Date().toISOString().split('T')[0], days_off: '1', cid: '', notes: '' });
+                      setCertFile(null);
+                      
+                      const res = await api.get(`/api/medical-certificates?userId=${selectedUserForCert.id}`);
+                      setCertsList(res.data ?? []);
+                      if (selectedUser) fetchReport(selectedUser);
+                    } catch (err: any) {
+                      toast.error(err.response?.data?.error || 'Erro ao salvar atestado.');
+                    } finally {
+                      setSavingCert(false);
+                    }
+                  }}
+                  disabled={savingCert || !certFormData.start_date || !certFile}
+                  className="bg-blue-900 hover:bg-blue-800 text-white font-semibold py-2 px-4 rounded-lg text-xs disabled:opacity-50 flex items-center gap-2"
+                >
+                  {savingCert ? 'Salvando Atestado...' : 'Gravar Atestado'}
+                </button>
+              </div>
+
+              {/* Histórico de Atestados */}
+              <div className="space-y-3">
+                <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">Histórico de Atestados</p>
+                {loadingCerts ? (
+                  <p className="text-center text-xs text-gray-400 py-4">Carregando históricos...</p>
+                ) : certsList.length === 0 ? (
+                  <p className="text-center text-xs text-gray-400 py-6 italic border rounded-xl">Nenhum atestado registrado para este colaborador.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {certsList.map((c: any) => (
+                      <div key={c.id} className="bg-white border rounded-xl p-3 flex justify-between items-center text-xs shadow-sm">
+                        <div>
+                          <p className="font-semibold text-gray-800">
+                            📅 {c.start_date} até {c.end_date} ({c.days_off} dia{c.days_off > 1 ? 's' : ''})
+                          </p>
+                          {c.cid && <p className="text-gray-500 font-mono text-[11px] mt-0.5">CID: {c.cid}</p>}
+                          {c.notes && <p className="text-gray-500 italic mt-0.5">{c.notes}</p>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {c.document_url && (
+                            <a
+                              href={c.document_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 font-medium border border-blue-200 bg-blue-50 px-2.5 py-1 rounded-lg flex items-center gap-1"
+                              title="Visualizar Atestado"
+                            >
+                              <ExternalLink size={12} /> Ver Anexo
+                            </a>
+                          )}
+                          <button
+                            onClick={async () => {
+                              if (!confirm('Excluir este atestado médico?')) return;
+                              try {
+                                await api.delete(`/api/medical-certificates/${c.id}`);
+                                toast.success('Atestado excluído.');
+                                setCertsList(p => p.filter(item => item.id !== c.id));
+                                if (selectedUser) fetchReport(selectedUser);
+                              } catch {
+                                toast.error('Erro ao excluir atestado.');
+                              }
+                            }}
+                            className="text-red-600 hover:text-red-800 p-1.5 rounded-lg border border-red-100 bg-red-50"
+                            title="Excluir Atestado"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="px-6 py-3 bg-gray-50 border-t border-gray-150 text-right">
+              <button
+                onClick={() => setIsAtestadoModalOpen(false)}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-xs font-semibold"
+              >
+                Fechar
               </button>
             </div>
           </div>

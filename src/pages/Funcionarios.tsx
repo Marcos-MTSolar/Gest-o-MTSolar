@@ -382,10 +382,11 @@ export default function Funcionarios() {
                                 .catch(() => toast.error('Erro ao carregar atestados'))
                                 .finally(() => setLoadingCerts(false));
                             }}
-                            className="p-2 text-gray-600 hover:text-teal-900 rounded-lg hover:bg-teal-50 transition-all border border-transparent hover:border-teal-100"
-                            title="Atestados Médicos"
+                            className="px-2.5 py-1.5 text-xs font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg flex items-center gap-1.5 transition-all shadow-sm"
+                            title="Anexar e Gerenciar Atestados Médicos"
                           >
-                            <FileText size={18} />
+                            <FileText size={15} />
+                            <span>Atestado</span>
                           </button>
                           <button
                             onClick={() => handleToggleStatus(u)}
