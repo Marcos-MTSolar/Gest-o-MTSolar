@@ -999,68 +999,86 @@ export default function Ponto() {
 
     // Resumo do banco de horas (se disponível)
     if (hourBankSummary) {
-      doc.setFillColor(240, 248, 255);
-      doc.rect(14, y - 4, 182, 30, 'F');
-      doc.setDrawColor(190, 210, 240);
-      doc.rect(14, y - 4, 182, 30, 'S');
+      if (y > 220) {
+        doc.addPage();
+        y = 25;
+      }
 
+      const boxStartY = y - 2;
+      const boxHeight = 44; // Altura para 5 linhas + cabeçalho com excelente espaçamento
+
+      doc.setFillColor(245, 248, 252);
+      doc.rect(14, boxStartY, 182, boxHeight, 'F');
+      doc.setDrawColor(200, 215, 235);
+      doc.setLineWidth(0.3);
+      doc.rect(14, boxStartY, 182, boxHeight, 'S');
+
+      // Título da caixa
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8);
+      doc.setFontSize(8.5);
       doc.setTextColor(30, 70, 140);
-      doc.text('RESUMO DO BANCO DE HORAS', 105, y + 1, { align: 'center' });
+      doc.text('RESUMO DO BANCO DE HORAS', 105, y + 3, { align: 'center' });
 
-      y += 8;
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(40, 40, 40);
+      y += 9;
+      doc.setFontSize(8);
 
-      const col1x = 18, col2x = 70, col3x = 122;
+      const labelX = 20;
+      const valueX = 186;
 
+      // 1. Hora Extra 50%
       doc.setFont('helvetica', 'bold');
-      doc.text('H. Extras (50% — dia útil):', col1x, y);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(30, 140, 80);
-      doc.text(`+${hourBankSummary.extraNormal.toFixed(2)}h`, col1x + 45, y);
-      doc.setTextColor(40, 40, 40);
-
-      doc.setFont('helvetica', 'bold');
-      doc.text('H. Extras (100% — Dom/Fer.):', col2x, y);
+      doc.setTextColor(50, 50, 50);
+      doc.text('• Horas Extras (50% — Dias Úteis):', labelX, y);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(30, 140, 80);
-      doc.text(`+${hourBankSummary.extraFds.toFixed(2)}h`, col2x + 50, y);
-      doc.setTextColor(40, 40, 40);
+      doc.text(`+${hourBankSummary.extraNormal.toFixed(2)}h`, valueX, y, { align: 'right' });
 
+      // 2. Hora Extra 100%
+      y += 5.5;
       doc.setFont('helvetica', 'bold');
-      doc.text('Faltas/Horas devendo:', col3x, y);
+      doc.setTextColor(50, 50, 50);
+      doc.text('• Horas Extras (100% — Domingos e Feriados):', labelX, y);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(30, 140, 80);
+      doc.text(`+${hourBankSummary.extraFds.toFixed(2)}h`, valueX, y, { align: 'right' });
+
+      // 3. Faltas / Horas devendo
+      y += 5.5;
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(50, 50, 50);
+      doc.text('• Faltas / Horas Devendo:', labelX, y);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(200, 50, 50);
-      doc.text(`-${hourBankSummary.devendo.toFixed(2)}h`, col3x + 38, y);
-      doc.setTextColor(40, 40, 40);
+      doc.text(`-${hourBankSummary.devendo.toFixed(2)}h`, valueX, y, { align: 'right' });
 
-      y += 7;
+      // 4. Dias Abonados
+      y += 5.5;
       doc.setFont('helvetica', 'bold');
-      doc.text('Dias Abonados (Fer./Ates.):', col1x, y);
+      doc.setTextColor(50, 50, 50);
+      doc.text('• Dias Abonados (Feriados e Atestados):', labelX, y);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(50, 130, 200);
-      doc.text(`${hourBankSummary.abonados} dia(s)`, col1x + 45, y);
-      doc.setTextColor(40, 40, 40);
+      doc.text(`${hourBankSummary.abonados} dia(s)`, valueX, y, { align: 'right' });
 
+      // 5. Saldo do Banco de Horas
+      y += 6.5;
       doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 30, 30);
+      doc.text('• Saldo Total do Banco de Horas:', labelX, y);
       const balanceColor = hourBankSummary.balance >= 0 ? [30, 140, 80] : [200, 50, 50];
-      doc.text('Saldo do Banco de Horas:', col2x, y);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(balanceColor[0], balanceColor[1], balanceColor[2]);
-      doc.text(`${hourBankSummary.balance >= 0 ? '+' : ''}${hourBankSummary.balance.toFixed(2)}h`, col2x + 46, y);
-      doc.setTextColor(40, 40, 40);
+      doc.text(`${hourBankSummary.balance >= 0 ? '+' : ''}${hourBankSummary.balance.toFixed(2)}h`, valueX, y, { align: 'right' });
 
-      y += 3;
+      y += 9; // Avança para fora do box do resumo
 
-      // Nota sobre multiplicadores
+      // Legenda final sobre multiplicadores CLT
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(6.5);
       doc.setTextColor(100, 100, 100);
-      doc.text('* Mult. 1.5 = adicional mínimo de 50% em dia útil (Art. 7º, XVI CF/88). Mult. 2.0 = adicional 100% em dom./feriado (Lei 605/49 c/c Súmula 146 TST).', 14, y + 10);
-      doc.text('  Percentuais podem ser ajustados por acordo/convenção coletiva.', 14, y + 15);
-      y += 20;
+      doc.text('* Mult. 1.5 = adicional mínimo de 50% em dia útil (Art. 7º, XVI CF/88). Mult. 2.0 = adicional 100% em dom./feriado (Lei 605/49 c/c Súmula 146 TST).', 14, y);
+      doc.text('  Percentuais podem ser ajustados por acordo ou convenção coletiva de trabalho.', 14, y + 3.5);
+      y += 10;
     }
 
     y += 15;

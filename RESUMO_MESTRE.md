@@ -2,6 +2,30 @@
 
 ---
 
+## Alterações — Sessão 01/09/2026 — 09:16 (Formatação e Layout Vertical do Resumo do Banco de Horas no PDF)
+
+### Data/Hora
+2026-09-01 — Sessão 15
+
+### Arquivos modificados
+- `src/pages/Ponto.tsx` — Reformulação completa da seção `RESUMO DO BANCO DE HORAS` na função `generatePDF`. Cada um dos 5 itens do resumo (Horas Extras 50%, Horas Extras 100%, Faltas/Horas Devendo, Dias Abonados e Saldo Total do Banco de Horas) foi disposto em sua própria linha vertical com coordenadas Y dedicadas e alinhamento à direita dos valores; ajuste do espaçamento vertical da caixa descritiva e da legenda dos multiplicadores legais da CLT.
+
+### O que foi feito
+
+#### 1. Diagnóstico do Problema Visual no PDF
+- **Colisão e Sobreposição Horizontal:** No código anterior, a seção do resumo do banco de horas no PDF tentava renderizar 3 colunas horizontais na mesma linha `y` (`col1x = 18`, `col2x = 70`, `col3x = 122`).
+- Como a string do rótulo e do valor da primeira coluna (ex: `H. Extras (50% — dia útil): +9.71h`) ultrapassava a posição inicial da segunda coluna (`col2x = 70`), o texto do primeiro item colava no segundo item, gerando a sobreposição relatada (ex: `+9.71hH. Extras (100%...`).
+
+#### 2. Correções Implementadas
+1. **Disposição em Linhas Individuais:**
+   - Cada um dos 5 itens do resumo foi configurado para ser desenhado em sua **própria linha Y** com incrementos verticais dedicados (`y += 5.5`).
+2. **Alinhamento à Direita:**
+   - O rótulo é posicionado à esquerda (`labelX = 20`) e o valor numérico correspondente é impresso à direita (`valueX = 186` com `align: 'right'`), eliminando qualquer possibilidade de colisão visual ou texto grudado.
+3. **Legenda CLT e Assinatura:**
+   - A altura da caixa azul de fundo foi expandida proporcionalmente (`boxHeight = 44`) e a legenda sobre os multiplicadores da CLT foi reposicionada abaixo da caixa com espaçamento vertical seguro, mantendo o bloco de assinatura do colaborador sem sobreposições.
+
+---
+
 ## Alterações — Sessão 01/09/2026 — 08:35 (Acesso e Visibilidade de Atestados Médicos com Upload e CID)
 
 ### Data/Hora
