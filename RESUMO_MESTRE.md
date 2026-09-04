@@ -2,6 +2,40 @@
 
 ---
 
+## Alterações — Sessão 04/09/2026 — 10:15 (Compactação do Relatório de Ponto em PDF para Página Única com Logomarca e Assinatura Dupla)
+
+### Data/Hora
+2026-09-04 — Sessão 18
+
+### Arquivos modificados
+- `src/pages/Ponto.tsx` — Reformulação visual da função `generatePDF` para garantir que relatórios de ponto de até 31 dias caibam rigorosamente em 1 única página:
+  1. **Logomarca no Cabeçalho:** Adicionada a logomarca da MT Solar (`/Logomarca.png`, cores sólidas em azul vivo e amarelo) no canto superior esquerdo com largura de **32mm** (altura ~15.3mm, proporção 2.087:1) e fundo branco sólido, posicionada de `y=5` a `y=20.3` (acima da linha divisória em `y=22`).
+  2. **Resumo do Banco de Horas Compactado:** Reduzida a caixa do resumo de **44mm para 27mm** de altura, reorganizando os 5 indicadores (Horas Extras 50%, 100%, Faltas/Devendo, Dias Abonados e Saldo Total) em 2 colunas com espaçamento vertical de 4.8mm por linha.
+  3. **Tabela Diária Compactada:** Ajustado o espaçamento entre linhas da tabela de **7.0mm para 4.5mm**, mantendo o tamanho de fonte da tabela em **7.5pt** sem redução.
+  4. **Assinaturas Lado a Lado:** Linhas de assinatura do Colaborador (esquerda) e da Empresa / MT Solar (direita) posicionadas em duas colunas paralelas.
+- `scratch/generate_test_pdfs.ts` — Atualizado o script de teste de geração de PDF para espelhar rigorosamente o layout e parâmetros de `Ponto.tsx`.
+
+### O que foi feito
+
+#### 1. Diagnóstico do Problema Visual
+- O relatório de ponto em PDF de 31 dias estava estourando para a 2ª página devido ao tamanho desproporcional da caixa de resumo do banco de horas (44mm de altura), altura de linha da tabela diária (7.0mm) e ausência de layout otimizado no cabeçalho e rodapé.
+- Adicionalmente, o relatório não possuía a logomarca oficial da empresa nem a linha de assinatura do empregador.
+
+#### 2. Solução Implementada e Validação
+1. **Otimização de Espaço Vertical:**
+   - Redução da tabela diária: de `7.0mm` para `4.5mm` por linha (economia de ~77.5mm em 31 dias).
+   - Redução da caixa de resumo: de `44mm` para `27mm` de altura (economia de ~17mm).
+   - Resultado: Relatórios com 31 dias terminam em `y ≈ 275mm`, cabendo confortavelmente dentro do limite da folha A4 (297mm).
+2. **Qualidade e Visibilidade da Logomarca:**
+   - Testadas duas variações de imagens (`PNG_-_MT_SOLAR__1_.png` e `Logomarca.png`). A imagem `Logomarca.png` com cores sólidas apresentou contraste perfeito em azul vivo e amarelo.
+   - Ajustada para largura de `32mm` com margem de segurança de `1.7mm` antes da linha separadora `y=22`.
+3. **Assinatura Dupla:**
+   - Adicionadas linhas paralelas para **Assinatura do Colaborador** e **Assinatura da Empresa (MT Solar)**.
+4. **Preservação Absoluta da Lógica:**
+   - Modificações estritamente restritas às funções visuais de `generatePDF` em `Ponto.tsx`. Nenhuma lógica de cálculo, datas ou rotas de backend foi alterada.
+
+---
+
 ## Alterações — Sessão 04/09/2026 — 08:50 (Correção Crítica de Fuso Horário no Registro de Ponto e Desacoplamento de Erros de GPS)
 
 ### Data/Hora

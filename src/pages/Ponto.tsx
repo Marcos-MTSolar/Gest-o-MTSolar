@@ -782,6 +782,9 @@ export default function Ponto() {
     return `${day}/${month}/${year}`;
   }
 
+  // Logomarca com cores sólidas — Logomarca.png (azul e amarelo vivos, melhor visibilidade no PDF)
+  const LOGO_URL = '/Logomarca.png';
+
   function generatePDF() {
     if (!(reportRecords ?? []).length) return;
     const doc = new jsPDF();
@@ -809,48 +812,66 @@ export default function Ponto() {
     const companyName = companyInfo?.name ?? 'MT Solar';
     const companyCnpj = companyInfo?.cnpj ? `CNPJ: ${companyInfo.cnpj}` : '';
 
+    // Logomarca da empresa — Logomarca.png com cores sólidas
+    // Dimensões reais: 2832x1357px → proporção 2.087:1
+    const logoW = 32; // largura em mm — altura resultante ≈15.3mm, cabe no cabeçalho
+    const logoH = (logoW * 1357) / 2832;
+    doc.setFillColor(255, 255, 255);
+    doc.rect(14, 4, logoW, logoH + 3, 'F');
+    doc.addImage(LOGO_URL, 'PNG', 14, 5, logoW, logoH);
+    const logoOffset = logoW + 3;
+
     // Cabeçalho do PDF
+    const headerTextX = 14 + logoOffset;
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text(companyName, 14, 20);
+    doc.setFontSize(12);
+    doc.text(companyName, headerTextX, 13);
     
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
+    doc.setFontSize(8.5);
     if (companyCnpj) {
-      doc.text(companyCnpj, 14, 26);
+      doc.text(companyCnpj, headerTextX, 18);
     }
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text('ESPELHO DE PONTO', 196, 20, { align: 'right' });
+    doc.setFontSize(13);
+    doc.text('ESPELHO DE PONTO', 196, 13, { align: 'right' });
     
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.text(`Período: ${periodStr}`, 196, 26, { align: 'right' });
+    doc.setFontSize(8.5);
+    doc.text(`Período: ${periodStr}`, 196, 18, { align: 'right' });
+
+    // Linha separadora do cabeçalho
+    doc.setDrawColor(210, 215, 225);
+    doc.setLineWidth(0.2);
+    doc.line(14, 22, 196, 22);
 
     // Informações do Colaborador
     doc.setFont('helvetica', 'bold');
-    doc.text('Colaborador:', 14, 35);
+    doc.setFontSize(8.5);
+    doc.text('Colaborador:', 14, 27);
     doc.setFont('helvetica', 'normal');
-    doc.text(userName, 42, 35);
+    doc.text(userName, 38, 27);
 
     doc.setFont('helvetica', 'bold');
-    doc.text('CPF:', 120, 35);
+    doc.text('CPF:', 115, 27);
     doc.setFont('helvetica', 'normal');
-    doc.text(userCpf, 131, 35);
+    doc.text(userCpf, 124, 27);
 
     doc.setFont('helvetica', 'bold');
-    doc.text('Cargo:', 14, 41);
+    doc.text('Cargo:', 14, 32);
     doc.setFont('helvetica', 'normal');
     const roleTranslated = ROLE_LABELS[userCargo] || userCargo;
-    doc.text(roleTranslated, 28, 41);
+    doc.text(roleTranslated, 27, 32);
 
     doc.setFont('helvetica', 'bold');
-    doc.text('Admissão:', 120, 41);
+    doc.text('Admissão:', 115, 32);
     doc.setFont('helvetica', 'normal');
-    doc.text(userAdmissao, 142, 41);
+    doc.text(userAdmissao, 133, 32);
 
-    doc.text(`Emitido em: ${new Date().toLocaleDateString('pt-BR')}`, 196, 47, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text(`Emitido em: ${new Date().toLocaleDateString('pt-BR')}`, 196, 32, { align: 'right' });
 
     // Quadro de horários de expediente esperado
     const colabSchedule = (schedules ?? []).find((s) => s.role === userRole);
@@ -859,31 +880,32 @@ export default function Ponto() {
       : 'Horário esperado: Não configurado';
 
     doc.setFillColor(245, 247, 250);
-    doc.rect(14, 50, 182, 12, 'F');
+    doc.rect(14, 35, 182, 7.5, 'F');
     doc.setFont('helvetica', 'bold');
-    doc.text('Expediente Esperado:', 18, 57);
+    doc.setFontSize(8);
+    doc.text('Expediente Esperado:', 17, 40);
     doc.setFont('helvetica', 'normal');
-    doc.text(scheduleStr, 60, 57);
+    doc.text(scheduleStr, 54, 40);
 
     // Tabela de registros diários — com coluna Tipo do Dia
-    let y = 74;
+    let y = 48.5;
     doc.setFillColor(235, 238, 243);
-    doc.rect(14, y - 6, 182, 8, 'F');
+    doc.rect(14, 44, 182, 6.5, 'F');
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.5);
-    doc.text('DIA/MÊS', 14, y - 1);
-    doc.text('SEMANA', 28, y - 1);
-    doc.text('ENTRADA', 50, y - 1);
-    doc.text('S.ALM.', 66, y - 1);
-    doc.text('R.ALM.', 80, y - 1);
-    doc.text('SAÍDA', 94, y - 1);
-    doc.text('TOTAL', 108, y - 1);
-    doc.text('TIPO DO DIA', 120, y - 1);
-    doc.text('OBSERVAÇÕES', 158, y - 1);
+    doc.text('DIA/MÊS', 14, y);
+    doc.text('SEMANA', 28, y);
+    doc.text('ENTRADA', 50, y);
+    doc.text('S.ALM.', 66, y);
+    doc.text('R.ALM.', 80, y);
+    doc.text('SAÍDA', 94, y);
+    doc.text('TOTAL', 108, y);
+    doc.text('TIPO DO DIA', 120, y);
+    doc.text('OBSERVAÇÕES', 158, y);
 
     doc.setFont('helvetica', 'normal');
-    y += 7;
+    y += 5.5;
 
     // Mapa de lançamentos do banco de horas por data para cruzar com batidas
     const hbByDate: Record<string, any> = {};
@@ -964,7 +986,6 @@ export default function Ponto() {
 
       let obs: string;
       if (hbEntry?.type === 'atestado_abonado') {
-        // Exibe o CID do atestado na coluna Observações para identificação precisa
         obs = hbEntry.cid ? `Atestado — CID: ${hbEntry.cid}` : 'Atestado Médico';
       } else if (hbEntry?.type === 'feriado_abonado') {
         obs = 'Feriado Nacional';
@@ -1006,38 +1027,24 @@ export default function Ponto() {
       // Linha separadora
       doc.setDrawColor(220, 224, 230);
       doc.setLineWidth(0.1);
-      doc.line(14, y + 2, 196, y + 2);
+      doc.line(14, y + 1.2, 196, y + 1.2);
 
-      y += 7;
-
-      if (y > 270) {
-        doc.addPage();
-        y = 20;
-      }
+      y += 4.5;
     });
 
-    y += 5;
-    if (y > 230) {
-      doc.addPage();
-      y = 20;
-    }
+    y += 2;
 
     // Resumo de horas trabalhadas
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setTextColor(30, 30, 30);
     doc.text(`Total de horas trabalhadas: ${totalHours.toFixed(1)}h`, 14, y);
-    y += 8;
+    y += 5.5;
 
-    // Resumo do banco de horas (se disponível)
+    // Resumo do banco de horas (TAREFA B - Compactado de 44mm para 27mm)
     if (hourBankSummary) {
-      if (y > 220) {
-        doc.addPage();
-        y = 25;
-      }
-
       const boxStartY = y - 2;
-      const boxHeight = 44; // Altura para 5 linhas + cabeçalho com excelente espaçamento
+      const boxHeight = 27;
 
       doc.setFillColor(245, 248, 252);
       doc.rect(14, boxStartY, 182, boxHeight, 'F');
@@ -1049,9 +1056,9 @@ export default function Ponto() {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8.5);
       doc.setTextColor(30, 70, 140);
-      doc.text('RESUMO DO BANCO DE HORAS', 105, y + 3, { align: 'center' });
+      doc.text('RESUMO DO BANCO DE HORAS', 105, y + 2, { align: 'center' });
 
-      y += 9;
+      y += 6.2;
       doc.setFontSize(8);
 
       const labelX = 20;
@@ -1066,7 +1073,7 @@ export default function Ponto() {
       doc.text(`+${hourBankSummary.extraNormal.toFixed(2)}h`, valueX, y, { align: 'right' });
 
       // 2. Hora Extra 100%
-      y += 5.5;
+      y += 3.8;
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(50, 50, 50);
       doc.text('• Horas Extras (100% — Domingos e Feriados):', labelX, y);
@@ -1075,7 +1082,7 @@ export default function Ponto() {
       doc.text(`+${hourBankSummary.extraFds.toFixed(2)}h`, valueX, y, { align: 'right' });
 
       // 3. Faltas / Horas devendo
-      y += 5.5;
+      y += 3.8;
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(50, 50, 50);
       doc.text('• Faltas / Horas Devendo:', labelX, y);
@@ -1084,7 +1091,7 @@ export default function Ponto() {
       doc.text(`-${hourBankSummary.devendo.toFixed(2)}h`, valueX, y, { align: 'right' });
 
       // 4. Dias Abonados
-      y += 5.5;
+      y += 3.8;
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(50, 50, 50);
       doc.text('• Dias Abonados (Feriados e Atestados):', labelX, y);
@@ -1093,7 +1100,7 @@ export default function Ponto() {
       doc.text(`${hourBankSummary.abonados} dia(s)`, valueX, y, { align: 'right' });
 
       // 5. Saldo do Banco de Horas
-      y += 6.5;
+      y += 4.4;
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(30, 30, 30);
       doc.text('• Saldo Total do Banco de Horas:', labelX, y);
@@ -1102,31 +1109,35 @@ export default function Ponto() {
       doc.setTextColor(balanceColor[0], balanceColor[1], balanceColor[2]);
       doc.text(`${hourBankSummary.balance >= 0 ? '+' : ''}${hourBankSummary.balance.toFixed(2)}h`, valueX, y, { align: 'right' });
 
-      y += 9; // Avança para fora do box do resumo
+      y += 6.5;
 
       // Legenda final sobre multiplicadores CLT
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(6.5);
       doc.setTextColor(100, 100, 100);
       doc.text('* Mult. 1.5 = adicional mínimo de 50% em dia útil (Art. 7º, XVI CF/88). Mult. 2.0 = adicional 100% em dom./feriado (Lei 605/49 c/c Súmula 146 TST).', 14, y);
-      doc.text('  Percentuais podem ser ajustados por acordo ou convenção coletiva de trabalho.', 14, y + 3.5);
-      y += 10;
+      doc.text('  Percentuais podem ser ajustados por acordo ou convenção coletiva de trabalho.', 14, y + 3.2);
+      y += 7.5;
     }
 
-    y += 15;
-    if (y > 265) {
-      doc.addPage();
-      y = 35;
-    }
-
+    // Assinaturas Lado a Lado (TAREFA C: Colaborador à esquerda, Empresa à direita)
+    y += 18;
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
+    doc.setFontSize(8.5);
     doc.setTextColor(30, 30, 30);
-    doc.line(55, y, 155, y);
-    y += 5;
-    doc.text('Assinatura do Colaborador', 105, y, { align: 'center' });
-    y += 5;
-    doc.text(userName, 105, y, { align: 'center' });
+
+    // Assinatura 1: Colaborador
+    doc.line(20, y, 95, y);
+    doc.text('Assinatura do Colaborador', 57.5, y + 4.5, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.text(userName, 57.5, y + 8.5, { align: 'center' });
+
+    // Assinatura 2: Empresa
+    doc.setFont('helvetica', 'normal');
+    doc.line(115, y, 190, y);
+    doc.text('Assinatura do Responsável', 152.5, y + 4.5, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.text(companyName, 152.5, y + 8.5, { align: 'center' });
 
     doc.save(`ponto-${userName.replace(/\s/g, '-')}-${startDate}-a-${endDate}.pdf`);
   }
