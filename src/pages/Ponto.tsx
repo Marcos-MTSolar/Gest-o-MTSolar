@@ -9,6 +9,8 @@ import jsPDF from 'jspdf';
 import { supabase } from '../lib/supabase';
 import { Trash2, MapPin, FileText, X, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getRecifeDateStr } from '../utils/dateUtils';
+
 
 /**
  * BLOQUEAR_PONTO_SEM_LOCALIZACAO:
@@ -656,8 +658,8 @@ export default function Ponto() {
         width: 640,
       });
 
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const todayRecords = records.filter((r) => r.timestamp.slice(0, 10) === todayStr);
+      const todayRecifeStr = getRecifeDateStr();
+      const todayRecords = records.filter((r) => getRecifeDateStr(r.timestamp) === todayRecifeStr);
       const type = getNextPunchType(todayRecords);
 
       if (!type) {
@@ -665,12 +667,12 @@ export default function Ponto() {
         return;
       }
 
+      // 1. Tentar capturar geolocalização
+      let localizacao: { latitude: number; longitude: number };
       try {
-        const localizacao = await capturarLocalizacao();
-        // Localização capturada com sucesso → registra normalmente
-        await registrarPontoComLocalizacao(photo, localizacao.latitude, localizacao.longitude, type);
+        localizacao = await capturarLocalizacao();
       } catch (geoErr: any) {
-        // Falha ao capturar localização: exibe modal com opção de tentar novamente
+        // Falha ao capturar localização: exibe modal de geolocalização
         setGeoErrorModal({
           visible: true,
           mensagem: geoErr?.message ?? 'Não foi possível obter a localização GPS.',
@@ -678,6 +680,16 @@ export default function Ponto() {
           pendingPhoto: photo.base64String ?? null,
           tentativas: 1,
         });
+        return;
+      }
+
+      // 2. Se GPS funcionou, envia a requisição para a API do backend
+      try {
+        await registrarPontoComLocalizacao(photo, localizacao.latitude, localizacao.longitude, type);
+      } catch (apiErr: any) {
+        // Erro da API HTTP (ex: 400 duplicação de tipo) -> exibe na tela, NÃO no modal de GPS!
+        const msg = apiErr?.response?.data?.error ?? apiErr?.message ?? 'Erro ao registrar ponto.';
+        setMessage({ text: msg, type: 'error' });
       }
     } catch (err: any) {
       // Erros de câmera ou de rede ao registrar ponto
@@ -700,22 +712,29 @@ export default function Ponto() {
     if (!geoErrorModal.pendingType || !geoErrorModal.pendingPhoto) return;
     const novasTentativas = geoErrorModal.tentativas + 1;
 
+    let localizacao: { latitude: number; longitude: number };
     try {
-      const localizacao = await capturarLocalizacao();
-      // Conseguiu na retentativa
+      localizacao = await capturarLocalizacao();
+    } catch (geoErr: any) {
+      setGeoErrorModal(prev => ({
+        ...prev,
+        mensagem: geoErr?.message ?? 'Localização GPS indisponível. Por favor, ative a localização no seu dispositivo/navegador.',
+        tentativas: novasTentativas,
+      }));
+      return;
+    }
+
+    try {
       await registrarPontoComLocalizacao(
         { base64String: geoErrorModal.pendingPhoto },
         localizacao.latitude,
         localizacao.longitude,
         geoErrorModal.pendingType
       );
-    } catch (geoErr: any) {
-      // Geolocalização é estritamente obrigatória — mantém o aviso com mensagem atualizada
-      setGeoErrorModal(prev => ({
-        ...prev,
-        mensagem: geoErr?.message ?? 'Localização GPS indisponível. Por favor, ative a localização no seu dispositivo/navegador.',
-        tentativas: novasTentativas,
-      }));
+    } catch (apiErr: any) {
+      const msg = apiErr?.response?.data?.error ?? apiErr?.message ?? 'Erro ao registrar ponto.';
+      setMessage({ text: msg, type: 'error' });
+      setGeoErrorModal({ visible: false, mensagem: '', pendingType: null, pendingPhoto: null, tentativas: 0 });
     }
   }
 

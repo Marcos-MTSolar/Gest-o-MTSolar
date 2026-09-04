@@ -16,8 +16,16 @@ export const r2Client = new S3Client({
   },
 });
 
-export const R2_BUCKET = process.env.CLOUDFLARE_R2_BUCKET!;
-export const R2_PUBLIC_URL = process.env.CLOUDFLARE_R2_PUBLIC_URL!;
+export const R2_BUCKET = process.env.CLOUDFLARE_R2_BUCKET || 'mtsolar-media';
+export const R2_PUBLIC_URL = process.env.CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-dcf353c8e6cc49e48992fe2cda8aee5a.r2.dev';
+
+export function getR2Bucket(): string {
+  return process.env.CLOUDFLARE_R2_BUCKET || R2_BUCKET;
+}
+
+export function getR2PublicUrl(): string {
+  return process.env.CLOUDFLARE_R2_PUBLIC_URL || R2_PUBLIC_URL;
+}
 
 export async function uploadToR2(
   buffer: Buffer,
@@ -25,22 +33,24 @@ export async function uploadToR2(
   contentType: string,
   customMetadata?: Record<string, string>
 ): Promise<string> {
+  const bucket = getR2Bucket();
   await r2Client.send(
     new PutObjectCommand({
-      Bucket: R2_BUCKET,
+      Bucket: bucket,
       Key: filePath,
       Body: buffer,
       ContentType: contentType,
       Metadata: { uploadedAt: new Date().toISOString(), ...customMetadata },
     })
   );
-  const baseUrl = R2_PUBLIC_URL.endsWith('/') ? R2_PUBLIC_URL.slice(0, -1) : R2_PUBLIC_URL;
+  const publicUrl = getR2PublicUrl();
+  const baseUrl = publicUrl.endsWith('/') ? publicUrl.slice(0, -1) : publicUrl;
   return `${baseUrl}/${filePath}`;
 }
 
 export async function getFileFromR2(filePath: string) {
   const command = new GetObjectCommand({
-    Bucket: R2_BUCKET,
+    Bucket: getR2Bucket(),
     Key: filePath,
   });
   return await r2Client.send(command);
@@ -49,7 +59,7 @@ export async function getFileFromR2(filePath: string) {
 export async function deleteFromR2(filePath: string): Promise<void> {
   await r2Client.send(
     new DeleteObjectCommand({
-      Bucket: R2_BUCKET,
+      Bucket: getR2Bucket(),
       Key: filePath,
     })
   );
@@ -58,7 +68,7 @@ export async function deleteFromR2(filePath: string): Promise<void> {
 export async function listFromR2(prefix: string) {
   const response = await r2Client.send(
     new ListObjectsV2Command({
-      Bucket: R2_BUCKET,
+      Bucket: getR2Bucket(),
       Prefix: prefix,
     })
   );
@@ -71,7 +81,7 @@ export async function generatePresignedUrl(
   expiresInSeconds = 300
 ): Promise<string> {
   const command = new PutObjectCommand({
-    Bucket: R2_BUCKET,
+    Bucket: getR2Bucket(),
     Key: filePath,
     ContentType: contentType,
   });

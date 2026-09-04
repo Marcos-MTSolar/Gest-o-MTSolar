@@ -10,6 +10,8 @@ import cors from 'cors';
 import * as dotenv from 'dotenv';
 import admin from 'firebase-admin';
 import { uploadToR2, deleteFromR2, R2_PUBLIC_URL, generatePresignedUrl, listFromR2, getFileFromR2 } from './r2.js';
+import { getRecifeDateStr, getRecifeDayBounds, getRecifeTimeVal } from './dateUtils.js';
+
 
 dotenv.config();
 
@@ -4029,13 +4031,9 @@ app.post('/api/cron/mensagem-fim-expediente', async (req, res) => {
 // Retorna: boolean (true = é feriado)
 // =============================================================================
 async function isHoliday(date: Date, companyId: string): Promise<boolean> {
-  // Formata a data como YYYY-MM-DD (horário local, sem risco de UTC shift)
-  const year  = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day   = String(date.getDate()).padStart(2, '0');
-  const dateStr = `${year}-${month}-${day}`;
+  const dateStr = getRecifeDateStr(date);
+  const [, month, day] = dateStr.split('-');
 
-  // Busca todos os feriados da empresa
   const { data: holidays, error } = await supabaseAdmin
     .from('holidays')
     .select('date, recurring')
@@ -4046,11 +4044,9 @@ async function isHoliday(date: Date, companyId: string): Promise<boolean> {
   for (const h of holidays) {
     const hDate = h.date as string; // YYYY-MM-DD
     if (h.recurring) {
-      // Feriado fixo: compara apenas mês e dia (ignora o ano cadastrado)
       const [, hMonth, hDay] = hDate.split('-');
       if (hMonth === month && hDay === day) return true;
     } else {
-      // Feriado móvel: compara a data completa (deve estar cadastrado para o ano correto)
       if (hDate === dateStr) return true;
     }
   }
@@ -4058,16 +4054,9 @@ async function isHoliday(date: Date, companyId: string): Promise<boolean> {
   return false;
 }
 
-// =============================================================================
-// UTILITÁRIO: getHolidayName(date, companyId)
-// Retorna o nome do feriado se a data for feriado, ou null caso contrário.
-// Útil para exibir o nome do feriado nos relatórios e no PDF de ponto.
-// =============================================================================
 async function getHolidayName(date: Date, companyId: string): Promise<string | null> {
-  const year  = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day   = String(date.getDate()).padStart(2, '0');
-  const dateStr = `${year}-${month}-${day}`;
+  const dateStr = getRecifeDateStr(date);
+  const [, month, day] = dateStr.split('-');
 
   const { data: holidays, error } = await supabaseAdmin
     .from('holidays')
@@ -4152,7 +4141,7 @@ app.put('/api/ponto/schedules', authenticateToken, async (req: any, res) => {
 // GET /api/medical-certificates/active — Verifica se o usuário logado está sob atestado ativo hoje
 app.get('/api/medical-certificates/active', authenticateToken, async (req: any, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getRecifeDateStr();
 
     const { data: cert, error } = await supabaseAdmin
       .from('medical_certificates')
@@ -4174,7 +4163,7 @@ app.get('/api/medical-certificates/active', authenticateToken, async (req: any, 
 app.post('/api/ponto/registrar', authenticateToken, async (req: any, res) => {
   try {
     // ⚠️ Bloqueio de batida de ponto caso o funcionário esteja de atestado médico
-    const today = new Date().toISOString().split('T')[0];
+    const today = getRecifeDateStr();
     const { data: activeCert } = await supabaseAdmin
       .from('medical_certificates')
       .select('end_date')
@@ -4228,9 +4217,8 @@ app.post('/api/ponto/registrar', authenticateToken, async (req: any, res) => {
       });
     }
 
-    // 🔒 Proteção contra registrar o mesmo tipo de batida duas vezes no mesmo dia
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
+    // 🔒 Proteção contra registrar o mesmo tipo de batida duas vezes no mesmo dia (America/Recife)
+    const { todayStart, todayEnd } = getRecifeDayBounds(now);
     const { data: existingTypeToday } = await supabaseAdmin
       .from('time_records')
       .select('id')
@@ -4255,7 +4243,6 @@ app.post('/api/ponto/registrar', authenticateToken, async (req: any, res) => {
     const filePath = `ponto/${req.user.company_id}/${req.user.id}/${yyyy}-${mm}/${timestamp}.jpg`;
     const base64Data = selfie_base64.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
-
     const selfie_url = await uploadToR2(buffer, filePath, 'image/jpeg');
 
     const { data, error } = await supabaseAdmin
@@ -4490,12 +4477,11 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
     .gte('date', startDateStr.split('T')[0])
     .lte('date', endDateStr.split('T')[0]);
 
-  // Agrupar registros de ponto por dia (YYYY-MM-DD local)
+  // Agrupar registros de ponto por dia (YYYY-MM-DD local em America/Recife)
   const recordsByDay: Record<string, any[]> = {};
   if (timeRecords) {
     timeRecords.forEach(r => {
-      const d = new Date(r.timestamp);
-      const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const dayKey = getRecifeDateStr(r.timestamp);
       if (!recordsByDay[dayKey]) recordsByDay[dayKey] = [];
       recordsByDay[dayKey].push(r);
     });
@@ -4503,10 +4489,8 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
 
   const currentDate = new Date(start);
   while (currentDate <= end) {
-    const year = currentDate.getFullYear();
-    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-    const day = String(currentDate.getDate()).padStart(2, '0');
-    const dayKey = `${year}-${month}-${day}`;
+    const dayKey = getRecifeDateStr(currentDate);
+    const [, month, day] = dayKey.split('-');
 
     const dayOfWeek = currentDate.getDay(); // 0 = Domingo, 6 = Sábado
     const isSunday = dayOfWeek === 0;
@@ -4651,18 +4635,15 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
       }
     }
 
-    // Trava para o dia atual em andamento (Evita classificar como Falta ou Jornada Incompleta prematuramente)
-    const nowBrazil = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-    const todayKey = `${nowBrazil.getFullYear()}-${String(nowBrazil.getMonth() + 1).padStart(2, '0')}-${String(nowBrazil.getDate()).padStart(2, '0')}`;
+    // Trava para o dia atual em andamento no fuso America/Recife (Evita classificar como Falta ou Jornada Incompleta prematuramente)
+    const todayKey = getRecifeDateStr();
     if (dayKey === todayKey) {
       let exitTimeVal = 18.0; // Padrão 18:00
       if (schedule && schedule.exit_time) {
         const [h, m] = schedule.exit_time.split(':').map(Number);
         exitTimeVal = h + m / 60;
       }
-      const currentHour = nowBrazil.getHours();
-      const currentMinute = nowBrazil.getMinutes();
-      const currentTimeVal = currentHour + currentMinute / 60;
+      const { currentTimeVal } = getRecifeTimeVal();
 
       // Se o expediente de hoje ainda não acabou, impede lançamentos de débito (falta ou jornada incompleta)
       if (currentTimeVal < exitTimeVal && (insertHours < 0 || insertType === 'falta' || insertType === 'jornada_incompleta')) {
@@ -7294,7 +7275,7 @@ app.all('/api/*', (req, res) => {
 });
 
 // Vite Integration
-if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL && process.env.ENABLE_LISTEN === 'true') {
   app.listen(PORT, () => {
     console.log(`[BACKEND] Servidor rodando em http://localhost:${PORT}`);
   });

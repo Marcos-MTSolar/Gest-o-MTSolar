@@ -2,6 +2,34 @@
 
 ---
 
+## Alterações — Sessão 04/09/2026 — 08:50 (Correção Crítica de Fuso Horário no Registro de Ponto e Desacoplamento de Erros de GPS)
+
+### Data/Hora
+2026-09-04 — Sessão 17
+
+### Arquivos modificados
+- `api/dateUtils.ts` — [NOVO] Módulo utilitário centralizado para manipulação de datas e fusos horários no fuso `America/Recife` (`getRecifeDateStr`, `getRecifeDayBounds`, `getRecifeTimeVal`).
+- `src/utils/dateUtils.ts` — [NOVO] Módulo utilitário de datas para o frontend no fuso `America/Recife`.
+- `api/index.ts` — Importação e aplicação dos utilitários `getRecifeDateStr`, `getRecifeDayBounds` e `getRecifeTimeVal` em todas as rotas e funções que calculam o dia e fuso (`isHoliday`, `getHolidayName`, `GET /api/medical-certificates/active`, `POST /api/ponto/registrar` na trava de tipo `existingTypeToday`, `calculateHourBankForPeriod` no agrupamento por dia e na trava de expediente em andamento).
+- `src/pages/Ponto.tsx` — Atualização do filtro de batidas do dia atual (`todayRecords`) para utilizar `getRecifeDateStr()`. Separação completa da captura de geolocalização (`capturarLocalizacao()`) em um bloco `try...catch` próprio, isolado da requisição HTTP (`registrarPontoComLocalizacao(...)`), garantindo que erros de API (como HTTP 400 por duplicação) sejam exibidos em mensagem vermelha na tela em vez de abrir o modal de "Localização não obtida".
+- `src/main.tsx` — Implementação de tratativa para o evento `vite:preloadError` e erros de importação de script dinâmico no Safari iOS, com trava de segurança em `sessionStorage` limitando o auto-reload a no máximo 1 tentativa por sessão do navegador.
+
+### O que foi feito
+
+#### 1. Diagnóstico do Incidente de Produção
+- **Causa Raiz do Bug das 21h (Mariana Feliciano - ID 286):** A funcionária Mariana bateu ponto em 03/09/2026 às 21:21:47 (horário de Recife, UTC-3). O servidor Node na Vercel roda em **UTC**, gravando o timestamp como `2026-09-04 00:21:47.375+00`. A trava de duplicação do dia (`existingTypeToday`) calculava `todayStart` e `todayEnd` em UTC puro (`00:00:00Z` a `23:59:59Z`), classificando essa batida noturna como sendo do dia 04/09 e bloqueando a Mariana de bater Entrada no dia 04/09 com erro HTTP 400.
+- **Causa Raiz do Modal de GPS Incorreto (Marcos Douglas):** Em `Ponto.tsx`, a função `handlePunch()` englobava GPS e requisição HTTP no mesmo `catch`. Qualquer erro HTTP 400 retornado pela API era capturado e repassado ao modal de GPS, exibindo falsamente `"Localização não obtida — Request failed with status code 400"`.
+
+#### 2. Solução Aplicada e Validação
+1. **Centralização de Fuso Horário (`America/Recife`):** Criados utilitários centralizados no backend e no frontend. Todos os cálculos de limites de dia utilizam a janela `00:00:00-03:00` a `23:59:59.999-03:00` (`03:00:00Z` a `02:59:59.999Z` do dia seguinte em UTC).
+2. **Reclassificação Automática:** Com a nova janela do fuso de Recife, a batida `00:21:47Z` de 04/09 foi automaticamente reclassificada no dia **03/09/2026** (pois `00:21Z` ocorre antes do início do dia 04/09 às `03:00Z`).
+3. **Desacoplamento de Erros no Frontend:** Erros HTTP da API agora são exibidos em banner de aviso na tela e não disparam mais o modal de erro de GPS.
+4. **Varredura Noturna nos Últimos 7 Dias (Tarefa C):** Executada consulta SQL na tabela `time_records` para identificar batidas entre 21h e 23h59 (00:00Z a 02:59Z). **Apenas a batida ID 286 da Mariana existia nesse intervalo**, confirmando que nenhum outro funcionário foi afetado.
+5. **Testes de Unidade:** Testados e validados todos os limites de data, simulação de batida noturna às 21h30 e confirmação de liberação dos usuários afetados.
+6. **Compilação:** Executado `tsc --noEmit` (sucesso 0 erros) e `npm run build` (sucesso em 19.71s).
+
+---
+
 ## Alterações — Sessão 01/09/2026 — 09:45 (Atestados Retroativos com Recálculo Automático e Exibição do CID no Relatório)
 
 ### Data/Hora
