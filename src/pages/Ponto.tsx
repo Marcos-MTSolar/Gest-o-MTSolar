@@ -68,12 +68,39 @@ const ROLE_LABELS: Record<string, string> = {
 
 const TYPE_ORDER = ['entry', 'lunch_start', 'lunch_end', 'exit'];
 
+/**
+ * Determina as opções de batida válidas com base no que já foi registrado hoje.
+ * Retorna:
+ *   - [] se o dia já está encerrado (tem 'exit')
+ *   - ['entry'] se não há nenhuma batida (sem ambiguidade)
+ *   - ['lunch_start', 'exit'] se só há 'entry' (ambiguidade: saída almoço ou saída final)
+ *   - ['lunch_end'] se há 'entry' + 'lunch_start' (sem ambiguidade: só pode ser retorno)
+ *   - ['exit'] se há 'entry' + 'lunch_start' + 'lunch_end' (sem ambiguidade: só saída final)
+ */
+function getContextualPunchOptions(todayRecords: TimeRecord[]): string[] {
+  const done = new Set(todayRecords.map((r) => r.type));
+
+  // Dia já encerrado
+  if (done.has('exit')) return [];
+
+  // Nenhuma batida hoje: única opção é entrada
+  if (!done.has('entry')) return ['entry'];
+
+  // Tem entrada mas não saiu para almoço: ambiguidade (saída almoço OU saída final)
+  if (!done.has('lunch_start')) return ['lunch_start', 'exit'];
+
+  // Saiu para almoço mas não retornou: única opção é retorno
+  if (!done.has('lunch_end')) return ['lunch_end'];
+
+  // Retornou do almoço mas não fez saída final: única opção é saída final
+  return ['exit'];
+}
+
+/** Compatibilidade: retorna o único tipo válido, ou null se ambiguidade/encerrado */
 function getNextPunchType(todayRecords: TimeRecord[]): string | null {
-  const done = todayRecords.map((r) => r.type);
-  for (const t of TYPE_ORDER) {
-    if (!done.includes(t as any)) return t;
-  }
-  return null;
+  const options = getContextualPunchOptions(todayRecords);
+  if (options.length === 1) return options[0];
+  return null; // ambiguidade (>1) ou encerrado (0)
 }
 
 function groupByDay(records: TimeRecord[]): Record<string, TimeRecord[]> {
@@ -254,6 +281,13 @@ export default function Ponto() {
   const isPunchingRef = useRef(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [activeTab, setActiveTab] = useState<'ponto' | 'historico' | 'gestor' | 'ajustes' | 'fotos' | 'feriados' | 'folgas' | 'bancohoras'>('ponto');
+
+  // Modal de seleção contextual de tipo de batida (aparece quando há ambiguidade)
+  const [punchTypeModal, setPunchTypeModal] = useState<{
+    visible: boolean;
+    photo: string | null; // base64 da selfie já capturada
+    options: string[];    // ex: ['lunch_start', 'exit']
+  }>({ visible: false, photo: null, options: [] });
 
   // Modal de erro de localização: mensagem de erro, tipo pendente (para continuar após tentativas) e contador
   const [geoErrorModal, setGeoErrorModal] = useState<{
@@ -642,6 +676,49 @@ export default function Ponto() {
     fetchHistory();
   }
 
+  /**
+   * prosseguirComTipo: após o tipo estar determinado (diretamente ou via modal de seleção),
+   * captura GPS e envia o registro. Chamado tanto pelo fluxo direto quanto pelo modal de escolha.
+   */
+  async function prosseguirComTipo(photo: { base64String?: string }, type: string) {
+    // Fechar modal de seleção de tipo (se estava aberto)
+    setPunchTypeModal({ visible: false, photo: null, options: [] });
+
+    // Capturar localização GPS
+    let localizacao: { latitude: number; longitude: number };
+    try {
+      localizacao = await capturarLocalizacao();
+    } catch (geoErr: any) {
+      // Falha ao capturar localização: exibe modal de geolocalização
+      setGeoErrorModal({
+        visible: true,
+        mensagem: geoErr?.message ?? 'Não foi possível obter a localização GPS.',
+        pendingType: type,
+        pendingPhoto: photo.base64String ?? null,
+        tentativas: 1,
+      });
+      // Libera o debounce pois o fluxo ficará pausado no modal de GPS
+      isPunchingRef.current = false;
+      setPunching(false);
+      return;
+    }
+
+    // GPS ok: enviar registro
+    try {
+      await registrarPontoComLocalizacao(photo, localizacao.latitude, localizacao.longitude, type);
+    } catch (apiErr: any) {
+      // Erro da API HTTP (ex: 400 duplicação de tipo) -> exibe na tela, NÃO no modal de GPS!
+      const msg = apiErr?.response?.data?.error ?? apiErr?.message ?? 'Erro ao registrar ponto.';
+      setMessage({ text: msg, type: 'error' });
+    } finally {
+      // 🔒 Debounce de 2.5s antes de liberar o botão
+      setTimeout(() => {
+        isPunchingRef.current = false;
+        setPunching(false);
+      }, 2500);
+    }
+  }
+
   async function handlePunch() {
     // 🔒 Trava síncrona imediata para ignorar cliques adicionais (duplo-submit/duplo-clique)
     if (isPunchingRef.current || punching) return;
@@ -650,6 +727,7 @@ export default function Ponto() {
     setMessage(null);
 
     try {
+      // 1. Capturar selfie primeiro (antes de qualquer outra coisa)
       const photo = await Camera.getPhoto({
         quality: 60,
         allowEditing: false,
@@ -658,44 +736,35 @@ export default function Ponto() {
         width: 640,
       });
 
+      // 2. Determinar opções de tipo com base nas batidas de hoje (fuso America/Recife)
       const todayRecifeStr = getRecifeDateStr();
-      const todayRecords = records.filter((r) => getRecifeDateStr(r.timestamp) === todayRecifeStr);
-      const type = getNextPunchType(todayRecords);
+      const todayRecordsNow = records.filter((r) => getRecifeDateStr(r.timestamp) === todayRecifeStr);
+      const options = getContextualPunchOptions(todayRecordsNow);
 
-      if (!type) {
+      // 3. Verificar se o dia já foi encerrado
+      if (options.length === 0) {
         setMessage({ text: 'Todas as batidas do dia já foram registradas.', type: 'error' });
         return;
       }
 
-      // 1. Tentar capturar geolocalização
-      let localizacao: { latitude: number; longitude: number };
-      try {
-        localizacao = await capturarLocalizacao();
-      } catch (geoErr: any) {
-        // Falha ao capturar localização: exibe modal de geolocalização
-        setGeoErrorModal({
-          visible: true,
-          mensagem: geoErr?.message ?? 'Não foi possível obter a localização GPS.',
-          pendingType: type,
-          pendingPhoto: photo.base64String ?? null,
-          tentativas: 1,
-        });
+      // 4. Se há exatamente uma opção (sem ambiguidade): prosseguir direto
+      if (options.length === 1) {
+        await prosseguirComTipo(photo, options[0]);
         return;
       }
 
-      // 2. Se GPS funcionou, envia a requisição para a API do backend
-      try {
-        await registrarPontoComLocalizacao(photo, localizacao.latitude, localizacao.longitude, type);
-      } catch (apiErr: any) {
-        // Erro da API HTTP (ex: 400 duplicação de tipo) -> exibe na tela, NÃO no modal de GPS!
-        const msg = apiErr?.response?.data?.error ?? apiErr?.message ?? 'Erro ao registrar ponto.';
-        setMessage({ text: msg, type: 'error' });
-      }
+      // 5. Há mais de uma opção (ambiguidade): exibir modal de seleção
+      //    O debounce NÃO libera aqui; será liberado em prosseguirComTipo após a escolha.
+      setPunchTypeModal({
+        visible: true,
+        photo: photo.base64String ?? null,
+        options,
+      });
+      // Não libera isPunchingRef aqui — o modal fica aberto aguardando a escolha
     } catch (err: any) {
       // Erros de câmera ou de rede ao registrar ponto
       const msg = err?.response?.data?.error ?? err?.message ?? 'Erro ao registrar ponto.';
       setMessage({ text: msg, type: 'error' });
-    } finally {
       // 🔒 Debounce de 2.5s antes de liberar o botão para novos cliques
       setTimeout(() => {
         isPunchingRef.current = false;
@@ -1143,9 +1212,13 @@ export default function Ponto() {
   }
 
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const todayRecords = (records ?? []).filter((r) => r.timestamp.slice(0, 10) === todayStr);
-  const nextType = getNextPunchType(todayRecords);
+  // Usa getRecifeDateStr para garantir consistência de fuso com o backend (America/Recife)
+  const todayStr = getRecifeDateStr();
+  const todayRecords = (records ?? []).filter((r) => getRecifeDateStr(r.timestamp) === todayStr);
+  // Opções contextuais de batida para o dia de hoje
+  const punchOptions = getContextualPunchOptions(todayRecords);
+  // nextType: tipo único quando não há ambiguidade (1 opção); null quando há ambiguidade (>1) ou dia encerrado (0)
+  const nextType = punchOptions.length === 1 ? punchOptions[0] : (punchOptions.length === 0 ? null : 'ambiguous');
   const mySchedule = (schedules ?? []).find((s) => s.role === user?.role);
 
   return (
@@ -1210,20 +1283,24 @@ export default function Ponto() {
                 </p>
                 <p className="text-xs text-red-600 italic">Desejamos uma boa recuperação!</p>
               </div>
-            ) : nextType ? (
+            ) : punchOptions.length > 0 ? (
               <button
                 onClick={handlePunch}
                 disabled={punching}
                 className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-4 px-10 rounded-2xl text-lg transition-all shadow-md"
               >
-                {punching ? 'Aguarde...' : `Registrar ${TYPE_LABELS[nextType]}`}
+                {punching
+                  ? 'Aguarde...'
+                  : punchOptions.length === 1
+                    ? `Registrar ${TYPE_LABELS[punchOptions[0]]}`
+                    : 'Registrar Ponto'}
               </button>
             ) : (
               <div className="text-green-600 font-semibold text-lg">✅ Todas as batidas do dia registradas!</div>
             )}
 
             {/* Aviso: localização obrigatória para web */}
-            {!Capacitor.isNativePlatform() && nextType && !activeMedicalCertificate?.active && (
+            {!Capacitor.isNativePlatform() && punchOptions.length > 0 && !activeMedicalCertificate?.active && (
               <p className="text-xs text-gray-400 mt-2">
                 📍 Sua localização será solicitada ao bater ponto. Certifique-se de permitir o acesso no navegador.
               </p>
@@ -2395,6 +2472,76 @@ export default function Ponto() {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          Modal de seleção contextual de tipo de batida
+          Aparece APENAS quando há ambiguidade real (entrada registrada e
+          o funcionário pode sair para almoço OU encerrar o dia).
+      ═══════════════════════════════════════════════════════════════════ */}
+      {punchTypeModal.visible && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">🕐</span>
+              <div>
+                <h3 className="font-bold text-gray-800 text-base">Qual tipo de saída?</h3>
+                <p className="text-xs text-gray-500">Escolha o tipo correto para este registro</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-600 bg-blue-50 border border-blue-100 rounded-xl p-3">
+              Você já tem a <strong>Entrada</strong> registrada hoje. O que está acontecendo agora?
+            </p>
+
+            <div className="flex flex-col gap-3">
+              {punchTypeModal.options.includes('lunch_start') && (
+                <button
+                  onClick={() => {
+                    if (punchTypeModal.photo) {
+                      prosseguirComTipo({ base64String: punchTypeModal.photo }, 'lunch_start');
+                    }
+                  }}
+                  className="bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 px-4 rounded-xl text-sm transition-colors text-left flex items-center gap-3"
+                >
+                  <span className="text-xl">☀️</span>
+                  <div>
+                    <p className="font-bold">Saída para Almoço</p>
+                    <p className="text-xs text-amber-100">Vou retornar depois do almoço</p>
+                  </div>
+                </button>
+              )}
+
+              {punchTypeModal.options.includes('exit') && (
+                <button
+                  onClick={() => {
+                    if (punchTypeModal.photo) {
+                      prosseguirComTipo({ base64String: punchTypeModal.photo }, 'exit');
+                    }
+                  }}
+                  className="bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-4 rounded-xl text-sm transition-colors text-left flex items-center gap-3"
+                >
+                  <span className="text-xl">🏁</span>
+                  <div>
+                    <p className="font-bold">Saída Final (fim do expediente)</p>
+                    <p className="text-xs text-red-100">Encerrando o dia — saída antecipada ou sem almoço formal</p>
+                  </div>
+                </button>
+              )}
+
+              <button
+                onClick={() => {
+                  setPunchTypeModal({ visible: false, photo: null, options: [] });
+                  isPunchingRef.current = false;
+                  setPunching(false);
+                }}
+                className="text-gray-500 hover:text-gray-700 text-sm py-1 text-center"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

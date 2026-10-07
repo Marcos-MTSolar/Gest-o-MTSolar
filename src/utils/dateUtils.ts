@@ -8,6 +8,9 @@
  */
 export function getRecifeDateStr(dateInput: Date | string | number = new Date()): string {
   try {
+    if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+      return dateInput;
+    }
     const d = typeof dateInput === 'object' ? dateInput : new Date(dateInput);
     if (isNaN(d.getTime())) return new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Recife' });
     return d.toLocaleDateString('sv-SE', { timeZone: 'America/Recife' });

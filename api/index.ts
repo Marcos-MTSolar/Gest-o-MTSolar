@@ -4236,6 +4236,54 @@ app.post('/api/ponto/registrar', authenticateToken, async (req: any, res) => {
       });
     }
 
+    // 🔒 Validação contextual de sequência: o tipo enviado deve ser coerente com o histórico do dia
+    // Busca TODAS as batidas do dia para verificar a sequência
+    const { data: todayAllRecords } = await supabaseAdmin
+      .from('time_records')
+      .select('type')
+      .eq('company_id', req.user.company_id)
+      .eq('user_id', req.user.id)
+      .gte('timestamp', todayStart)
+      .lte('timestamp', todayEnd);
+
+    const tiposDoDia = new Set((todayAllRecords ?? []).map((r: any) => r.type as string));
+    const tipoLabelMap: Record<string, string> = { entry: 'Entrada', lunch_start: 'Saída Almoço', lunch_end: 'Retorno Almoço', exit: 'Saída' };
+
+    // Dia já encerrado: 'exit' já existe → nenhum tipo pode ser registrado
+    if (tiposDoDia.has('exit')) {
+      return res.status(400).json({
+        error: 'O expediente deste dia já foi encerrado com a Saída Final. Não é possível registrar novas batidas.'
+      });
+    }
+
+    // 'entry' só pode ser registrado se NÃO há nenhuma batida hoje
+    if (type === 'entry' && tiposDoDia.size > 0) {
+      return res.status(400).json({
+        error: 'Já existe uma Entrada registrada hoje. Não é possível registrar uma nova Entrada.'
+      });
+    }
+
+    // 'lunch_start', 'lunch_end' e 'exit' exigem que 'entry' já exista
+    if (type !== 'entry' && !tiposDoDia.has('entry')) {
+      return res.status(400).json({
+        error: `Não é possível registrar "${tipoLabelMap[type] ?? type}" sem ter registrado a Entrada primeiro.`
+      });
+    }
+
+    // 'lunch_end' exige que 'lunch_start' já exista
+    if (type === 'lunch_end' && !tiposDoDia.has('lunch_start')) {
+      return res.status(400).json({
+        error: 'Não é possível registrar o Retorno do Almoço sem ter registrado a Saída para Almoço primeiro.'
+      });
+    }
+
+    // 'lunch_start' não pode ser registrado se 'lunch_end' já existe (evita estado inconsistente)
+    if (type === 'lunch_start' && tiposDoDia.has('lunch_end')) {
+      return res.status(400).json({
+        error: 'O ciclo de almoço já foi concluído hoje. Não é possível registrar uma nova Saída para Almoço.'
+      });
+    }
+
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const timestamp = now.getTime();
@@ -4432,25 +4480,21 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
     expectedDailyHours = (lunchStart - entry) + (exit - lunchEnd);
   }
 
-  // Parse datas
-  const start = new Date(startDateStr.split('T')[0] + 'T00:00:00');
-  const end = new Date(endDateStr.split('T')[0] + 'T23:59:59');
+  // Parse datas no fuso America/Recife
+  const { todayStart: startISO } = getRecifeDayBounds(startDateStr.split('T')[0]);
+  const { todayEnd: endISO } = getRecifeDayBounds(endDateStr.split('T')[0]);
 
-  // Buscar todos os registros de ponto do usuário no período
-  // CORREÇÃO BUG (2026-08-19): O filtro anterior .eq('status', 'approved') excluía
-  // todas as batidas normais (que ficam em 'pending' por padrão), fazendo o sistema
-  // tratar todos os dias úteis como falta. Agora incluímos todos os statuses válidos:
-  // - 'pending': batida registrada normalmente (maioria dos casos)
-  // - 'approved': batida cujo ajuste de timestamp foi aprovado pelo gestor
-  // - 'adjustment_requested': batida com pedido de ajuste em andamento (ponto existe e é válido)
+  // Buscar todos os registros de ponto do usuário no período (com limites corretos em America/Recife)
+  // CORREÇÃO BUG (2026-08-19 / 2026-10-06): Garante uso de getRecifeDayBounds para que batidas noturnas
+  // (ex: 21:21 BRT = 00:21 UTC do dia seguinte) fiquem dentro do intervalo de busca do dia correto.
   const { data: timeRecords } = await supabaseAdmin
     .from('time_records')
     .select('*')
     .eq('company_id', companyId)
     .eq('user_id', userId)
     .in('status', ['pending', 'approved', 'adjustment_requested'])
-    .gte('timestamp', start.toISOString())
-    .lte('timestamp', end.toISOString());
+    .gte('timestamp', startISO)
+    .lte('timestamp', endISO);
 
   // Buscar feriados
   const { data: holidays } = await supabaseAdmin
@@ -4487,11 +4531,15 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
     });
   }
 
-  const currentDate = new Date(start);
-  while (currentDate <= end) {
-    const dayKey = getRecifeDateStr(currentDate);
+  let curDateStr = startDateStr.split('T')[0];
+  const endDateCleanStr = endDateStr.split('T')[0];
+
+  while (curDateStr <= endDateCleanStr) {
+    const dayKey = curDateStr;
     const [, month, day] = dayKey.split('-');
 
+    // Instancia objeto Date no fuso de Recife às 12:00 para determinar o dia da semana sem desvio de fuso
+    const currentDate = new Date(`${dayKey}T12:00:00.000-03:00`);
     const dayOfWeek = currentDate.getDay(); // 0 = Domingo, 6 = Sábado
     const isSunday = dayOfWeek === 0;
     const isSaturday = dayOfWeek === 6;
@@ -4643,12 +4691,14 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
         const [h, m] = schedule.exit_time.split(':').map(Number);
         exitTimeVal = h + m / 60;
       }
-      const { currentTimeVal } = getRecifeTimeVal();
-
-      // Se o expediente de hoje ainda não acabou, impede lançamentos de débito (falta ou jornada incompleta)
-      if (currentTimeVal < exitTimeVal && (insertHours < 0 || insertType === 'falta' || insertType === 'jornada_incompleta')) {
-        insertType = null;
-        insertHours = 0;
+      // Se o dia avaliado for HOJE e o expediente de hoje ainda não acabou, impede lançamentos de débito (falta ou jornada incompleta)
+      const todayStr = getRecifeDateStr();
+      if (dayKey === todayStr) {
+        const { currentTimeVal } = getRecifeTimeVal();
+        if (currentTimeVal < exitTimeVal && (insertHours < 0 || insertType === 'falta' || insertType === 'jornada_incompleta')) {
+          insertType = null;
+          insertHours = 0;
+        }
       }
     }
 
@@ -4708,8 +4758,10 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
     // Log temporário detalhado para fins de diagnóstico (tarefa 4 do diagnóstico)
     console.log(`[HB_CALC_DAY] user=${userId} | dia=${dayKey} | trabalhadas=${workedHours.toFixed(2)}h | esperado=${currentExpectedHours.toFixed(2)}h | excedente=${insertHours.toFixed(2)}h | lancado=${insertType || 'nenhum'} | mult=${multiplier}`);
 
-    // Avança 1 dia
-    currentDate.setDate(currentDate.getDate() + 1);
+    // Avança 1 dia com precisão no fuso America/Recife
+    const nextDayObj = new Date(`${curDateStr}T12:00:00.000-03:00`);
+    nextDayObj.setDate(nextDayObj.getDate() + 1);
+    curDateStr = getRecifeDateStr(nextDayObj);
   }
 }
 
@@ -4796,19 +4848,22 @@ app.get('/api/ponto/relatorio/:userId', authenticateToken, async (req: any, res)
       return res.status(400).json({ error: 'Parâmetros start e end são obrigatórios.' });
     }
 
-    const uId = parseInt(userId, 10);
+    const startDateClean = (start as string).split('T')[0];
+    const endDateClean = (end as string).split('T')[0];
+    const { todayStart: startISO } = getRecifeDayBounds(startDateClean);
+    const { todayEnd: endISO } = getRecifeDayBounds(endDateClean);
 
     // Roda o cálculo dinâmico do banco de horas para garantir consistência
-    await calculateHourBankForPeriod(uId, start as string, end as string, req.user.company_id);
+    await calculateHourBankForPeriod(userId, startDateClean, endDateClean, req.user.company_id);
 
-    // Busca as batidas de ponto
+    // Busca as batidas de ponto com limites de fuso America/Recife corretos
     const { data: records, error } = await supabaseAdmin
       .from('time_records')
       .select('*, users(name, role, cpf, cargo, data_admissao)')
       .eq('company_id', req.user.company_id)
-      .eq('user_id', uId)
-      .gte('timestamp', start)
-      .lte('timestamp', end)
+      .eq('user_id', userId)
+      .gte('timestamp', startISO)
+      .lte('timestamp', endISO)
       .order('timestamp', { ascending: true });
 
     if (error) throw error;
@@ -4818,7 +4873,7 @@ app.get('/api/ponto/relatorio/:userId', authenticateToken, async (req: any, res)
       .from('hour_bank')
       .select('*')
       .eq('company_id', req.user.company_id)
-      .eq('user_id', uId)
+      .eq('user_id', userId)
       .gte('reference_date', (start as string).split('T')[0])
       .lte('reference_date', (end as string).split('T')[0]);
 
@@ -4835,7 +4890,7 @@ app.get('/api/ponto/relatorio/:userId', authenticateToken, async (req: any, res)
         .from('medical_certificates')
         .select('start_date, end_date, cid')
         .eq('company_id', req.user.company_id)
-        .eq('user_id', uId)
+        .eq('user_id', userId)
         .lte('start_date', endDateStr)
         .gte('end_date', startDateStr);
 

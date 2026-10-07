@@ -2,6 +2,134 @@
 
 ---
 
+## Alterações — Sessão 06/10/2026 — 09:10 (Resolução de Ambiguidade e Seleção Contextual no Ponto Eletrônico)
+
+### Data/Hora
+2026-10-06 — Sessão 19
+
+### Arquivos modificados
+- `src/pages/Ponto.tsx` — Implementação da lógica de seleção contextual de batidas no frontend (`getContextualPunchOptions`), substituição da sequência rígida fixa pelo modelo de opções válidas por estado, e adição do modal de escolha quando há ambiguidade (ex: decidir entre Saída para Almoço vs. Saída Final após a Entrada).
+- `api/index.ts` — Adição de validação contextual de sequência no backend (`POST /api/ponto/registrar`). Valida que batidas sigam um fluxo logicamente coerente (rejeita batidas pós Saída Final, exige Entrada prévia para qualquer saída, exige Saída Almoço prévia para Retorno Almoço, e impede retrabalho de ciclo de almoço).
+
+### O que foi feito
+
+#### 1. Diagnóstico do Bug (Sequência Fixa / Batidas Fantasmas)
+- O sistema determinava automaticamente o tipo da próxima batida com base em uma lista fixa e engessada (`entry` → `lunch_start` → `lunch_end` → `exit`).
+- Quando um funcionário realizava uma saída fora da rotina padrão, o sistema forçava o registro no "próximo slot", criando registros inconsistentes — incidente de Marcos Douglas em 02/10/2026.
+
+#### 2. Solução Implementada
+- **Sem ambiguidade (1 opção):** Prossegue direto sem interromper o usuário.
+- **Com ambiguidade (2 opções):** Exibe modal de escolha explícita (ex: Saída Almoço OU Saída Final).
+- **Encerramento do dia (0 opções):** Exibe `"✅ Todas as batidas do dia registradas!"`.
+- **Backend defensivo:** Valida sequência coerente rejeitando tipos inconsistentes com o estado do dia.
+
+---
+
+## Alterações — Sessão 06/10/2026 — 09:30 (Investigação e Correção Definitiva do Bug de Fuso Horário + Ajuste Retroativo de Dados)
+
+### Data/Hora
+2026-10-06 — Sessão 20
+
+### Arquivos modificados
+- `api/dateUtils.ts` — Correção crítica em `getRecifeDateStr`: adicionado guard para strings no formato `YYYY-MM-DD`, evitando que o parser UTC do Node.js recue 1 dia (e.g., `new Date("2026-09-04")` → `2026-09-03 21:00 BRT`).
+- `src/utils/dateUtils.ts` — Mesma correção aplicada na versão frontend de `getRecifeDateStr`.
+- `api/index.ts` — Múltiplas correções em `calculateHourBankForPeriod`:
+  1. Substituição de `new Date(startStr + 'T00:00:00')` por `getRecifeDayBounds()` para busca de registros de ponto com limites corretos de fuso.
+  2. Substituição do loop `currentDate.setDate(+1)` por iteração por string `YYYY-MM-DD` com `curDateStr`, eliminando desvio acumulado de fuso.
+  3. `currentDate` agora é instanciado com `T12:00:00.000-03:00` para determinação correta do dia da semana.
+  4. Trava de "expediente em andamento" agora só se aplica quando `dayKey === getRecifeDateStr()` (dia de hoje), não bloqueando recálculos de dias passados.
+  5. Mesma correção `getRecifeDayBounds()` aplicada em `GET /api/ponto/relatorio/:userId` para busca das batidas de ponto.
+- `supabase/migrations/20261006_add_jornada_incompleta_and_fix_retroactive.sql` — Migration que adiciona `jornada_incompleta` ao CHECK constraint de `hour_bank` e insere os lançamentos retroativos corrigidos.
+
+### Causa Raiz do Bug (Recorrência)
+
+⚠️ **A correção anterior (Sessão 17) estava em produção**, mas havia uma **falha residual não coberta pelos testes**:
+
+```ts
+// ANTES (bugado — em calculateHourBankForPeriod):
+const start = new Date(startDateStr.split('T')[0] + 'T00:00:00');
+// → Node.js interpreta como UTC local → '2026-09-01T00:00:00Z'
+// → Limites corretos ficariam ANTES de 03:00Z (início do dia em Recife)
+// → Batida de 21:21 BRT = 00:21Z do dia seguinte ficava FORA do intervalo
+```
+
+A correção de `existingTypeToday` (via `getRecifeDayBounds`) estava certa para **impedir duplicatas do mesmo dia**. Mas o `calculateHourBankForPeriod` (que agrupa batidas por dia para calcular horas trabalhadas) continuava usando `new Date(str + 'T00:00:00')` sem fuso, causando intervalo de busca UTC puro.
+
+**Adicionalmente:** A própria função `getRecifeDayBounds(dateStr)` quando recebia uma string `YYYY-MM-DD` chamava `new Date("2026-09-04")`, que o JS interpreta como UTC midnight → no fuso Recife (UTC-3) vira `2026-09-03T21:00 BRT` → retornava limites do dia **03/09** ao invés de **04/09**. Esse era o bug raiz mais profundo, que a correção anterior não havia pego.
+
+### Teste de Evidência Real
+
+```
+=== EVIDÊNCIA HTTP (teste simulado às 21:30 BRT em 06/10/2026) ===
+
+Timestamp inserido: 2026-10-07T00:30:00.000Z (= 21:30 BRT de 06/10)
+getRecifeDateStr(timestamp) → "2026-10-06" ✅
+
+getRecifeDayBounds("2026-10-06"):
+  todayStart: 2026-10-06T03:00:00.000Z ✅
+  todayEnd:   2026-10-07T02:59:59.999Z ✅
+
+Registro encontrado na busca do dia 2026-10-06? SIM ✅
+Registro vazou para o dia 2026-10-07?           NÃO ✅
+```
+
+### Correção Retroativa de Dados
+
+#### Marcos Douglas (02/10/2026) — CONFIRMADO PELO GESTOR
+- **Situação real:** Saída antecipada às 12:12. Não retornou.
+- **Antes:** 4 registros (entry 08:03 + lunch_start 12:10 + lunch_end 12:11 + exit 12:12) com lançamento de **H.Extra 50%** de +4.15h.
+- **Após:** 2 registros (entry 08:03 + exit 12:12). Lançamento corrigido para **Jornada Incompleta: -3.85h**.
+- IDs 470 e 471 removidos do banco; ID 472 corrigido de `lunch_end` para `exit`.
+
+#### Mariana Feliciano (03/09/2026) — Recorrência do bug de fuso
+- **Situação real:** Dia 03/09 com entrada 07:01, almoço 12:18-13:03. Batida de 21:21 BRT (ID 286) era `entry` duplicado gerado pela ausência de correção da `calculateHourBankForPeriod`.
+- **Antes:** Dias 03/09 sem lançamento de banco + 04/09 bloqueado por conflito de `entry`.
+- **Após recálculo:** Dia 03/09 com **Jornada Incompleta: -2.72h**; dia 04/09 com horas extras normais calculadas corretamente.
+
+#### Auditoria de Todos os Funcionários
+- Varredura de 482 registros de ponto: apenas **1 batida noturna (>= 21h BRT)** encontrada — a ID 286 da Mariana (já corrigida). Nenhum outro funcionário afetado.
+
+### Verificação Final
+- `npx tsc --noEmit`: 0 erros.
+- `npm run build`: Sucesso.
+
+---
+
+
+
+### Data/Hora
+2026-10-06 — Sessão 19
+
+### Arquivos modificados
+- `src/pages/Ponto.tsx` — Implementação da lógica de seleção contextual de batidas no frontend (`getContextualPunchOptions`), substituição da sequência rígida fixa pelo modelo de opções válidas por estado, e adição do modal de escolha quando há ambiguidade (ex: decidir entre Saída para Almoço vs. Saída Final após a Entrada).
+- `api/index.ts` — Adição de validação contextual de sequência no backend (`POST /api/ponto/registrar`). Valida que batidas sigam um fluxo logicamente coerente (rejeita batidas pós Saída Final, exige Entrada prévia para qualquer saída, exige Saída Almoço prévia para Retorno Almoço, e impede retrabalho de ciclo de almoço).
+
+### O que foi feito
+
+#### 1. Diagnóstico do Bug (Sequência Fixa / Batidas Fantasmas)
+- O sistema de Ponto Eletrônico anteriormente determinava automaticamente o tipo da próxima batida com base em uma lista fixa e engessada (`entry` → `lunch_start` → `lunch_end` → `exit`).
+- Quando um funcionário realizava uma saída fora da rotina padrão (ex: saindo mais cedo sem cumprir intervalo de almoço na empresa), o sistema forçava o registro no "próximo slot", criando registros inconsistentes e obrigando batidas subsequentes rápidas para forçar o fechamento do dia (ex: incidente reportado por Marcos Douglas em 02/10/2026).
+
+#### 2. Solução Implementada e Validação
+
+1. **Frontend Contextual (`Ponto.tsx`):**
+   - **Sem ambiguidade (1 opção):** Se o funcionário ainda não possui registros no dia, a única opção é `Entrada`. Se já retornou do almoço (`lunch_end`), a única opção é `Saída Final`. Nesses casos, o registro prossegue direto sem interromper o usuário.
+   - **Com ambiguidade (2 opções):** Se o funcionário registrou a `Entrada`, a próxima ação pode ser `Saída Almoço` OU `Saída Final` (saída antecipada / sem almoço). Nesses casos, a interface exibe um modal amigável para escolha explícita do tipo de saída.
+   - **Encerramento do dia (0 opções):** Após registrar a `Saída Final`, o botão exibe `"✅ Todas as batidas do dia registradas!"` e desabilita novas tentativas.
+
+2. **Backend Contextual Defensivo (`api/index.ts`):**
+   - Valida no servidor se o tipo de batida enviado é coerente com o histórico do dia do funcionário:
+     - Impede qualquer batida se `exit` já constar no dia.
+     - Impede `lunch_start`, `lunch_end` ou `exit` sem `entry` registrada.
+     - Impede `lunch_end` sem `lunch_start` prévia.
+     - Impede novo `lunch_start` caso `lunch_end` já tenha sido concluído.
+
+3. **Verificação e Qualidade:**
+   - Executada verificação de tipos com `npx tsc --noEmit` (0 erros).
+   - Executado build de produção com `npm run build` (sucesso).
+
+---
+
 ## Alterações — Sessão 04/09/2026 — 10:15 (Compactação do Relatório de Ponto em PDF para Página Única com Logomarca e Assinatura Dupla)
 
 ### Data/Hora
