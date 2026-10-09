@@ -107,7 +107,7 @@ const TYPE_ORDER = ['entry', 'lunch_start', 'lunch_end', 'exit'];
  *   - [] se o dia já está encerrado (tem 'exit')
  *   - ['entry'] se não há nenhuma batida (sem ambiguidade)
  *   - ['lunch_start', 'exit'] se só há 'entry' (ambiguidade: saída almoço ou saída final)
- *   - ['lunch_end', 'exit'] se há 'entry' + 'lunch_start' (ambiguidade: retorno almoço OU saída final)
+ *   - ['lunch_end', 'exit'] se há 'entry' + 'lunch_start' sem 'lunch_end' (ambiguidade: retorno almoço OU saída antecipada)
  *   - ['exit'] se há 'entry' + 'lunch_start' + 'lunch_end' (sem ambiguidade: só saída final)
  */
 function getContextualPunchOptions(todayRecords: TimeRecord[]): string[] {
@@ -122,7 +122,7 @@ function getContextualPunchOptions(todayRecords: TimeRecord[]): string[] {
   // Tem entrada mas não saiu para almoço: ambiguidade (saída almoço OU saída final)
   if (!done.has('lunch_start')) return ['lunch_start', 'exit'];
 
-  // Saiu para almoço mas não retornou: ambiguidade (retorno almoço OU saída final)
+  // Saiu para almoço mas não retornou: ambiguidade (retorno almoço OU saída antecipada por motivo pessoal)
   if (!done.has('lunch_end')) return ['lunch_end', 'exit'];
 
   // Retornou do almoço mas não fez saída final: única opção é saída final
@@ -134,6 +134,87 @@ function getNextPunchType(todayRecords: TimeRecord[]): string | null {
   const options = getContextualPunchOptions(todayRecords);
   if (options.length === 1) return options[0];
   return null; // ambiguidade (>1) ou encerrado (0)
+}
+
+// Configuração visual de cada tipo de batida para o modal
+const PUNCH_BUTTON_CONFIG: Record<string, { emoji: string; label: string; sublabel: string; className: string }> = {
+  entry: {
+    emoji: '🟢',
+    label: 'Entrada',
+    sublabel: 'Início do expediente',
+    className: 'bg-green-500 hover:bg-green-600',
+  },
+  lunch_start: {
+    emoji: '☀️',
+    label: 'Saída para Almoço',
+    sublabel: 'Vou retornar depois do almoço',
+    className: 'bg-amber-500 hover:bg-amber-600',
+  },
+  lunch_end: {
+    emoji: '🔄',
+    label: 'Retorno do Almoço',
+    sublabel: 'Estou de volta e retomando o trabalho',
+    className: 'bg-blue-500 hover:bg-blue-600',
+  },
+  exit: {
+    emoji: '🏁',
+    label: 'Saída Final',
+    sublabel: 'Encerrando o expediente do dia',
+    className: 'bg-red-500 hover:bg-red-600',
+  },
+};
+
+// Rótulos amigáveis para compor a descrição contextual
+const PUNCH_DONE_LABELS: Record<string, string> = {
+  entry: 'Entrada',
+  lunch_start: 'Saída para Almoço',
+  lunch_end: 'Retorno do Almoço',
+  exit: 'Saída Final',
+};
+
+/**
+ * Função pura que, dadas as opções válidas e os registros do dia,
+ * devolve título, descrição contextual e lista de botões para o modal.
+ * Sem nenhum texto ou botão fixo — tudo derivado de dados.
+ */
+function getPunchModalConfig(
+  options: string[],
+  todayRecords: TimeRecord[]
+): {
+  title: string;
+  description: string;
+  buttons: Array<{ type: string; emoji: string; label: string; sublabel: string; className: string }>;
+} {
+  // Monta lista dos tipos já registrados hoje (na ordem canônica)
+  const done = TYPE_ORDER.filter((t) => todayRecords.some((r) => r.type === t));
+  const doneLabels = done.map((t) => PUNCH_DONE_LABELS[t] ?? t);
+
+  // Descrição: lista o que já foi batido, convida a escolher
+  const doneText =
+    doneLabels.length === 0
+      ? 'Nenhuma batida registrada ainda hoje.'
+      : doneLabels.length === 1
+        ? `Você já registrou ${doneLabels[0]} hoje.`
+        : `Você já registrou ${doneLabels.slice(0, -1).join(', ')} e ${doneLabels[doneLabels.length - 1]} hoje.`;
+
+  const description = `${doneText} O que está acontecendo agora?`;
+
+  // Botões: um por opção, na ordem em que chegam
+  const buttons = options.map((type) => ({
+    type,
+    ...(PUNCH_BUTTON_CONFIG[type] ?? {
+      emoji: '⏺️',
+      label: PUNCH_DONE_LABELS[type] ?? type,
+      sublabel: '',
+      className: 'bg-gray-500 hover:bg-gray-600',
+    }),
+  }));
+
+  return {
+    title: 'Qual batida você está fazendo?',
+    description,
+    buttons,
+  };
 }
 
 function groupByDay(records: TimeRecord[]): Record<string, TimeRecord[]> {
@@ -2511,73 +2592,61 @@ export default function Ponto() {
 
       {/* ═══════════════════════════════════════════════════════════════════
           Modal de seleção contextual de tipo de batida
-          Aparece APENAS quando há ambiguidade real (entrada registrada e
-          o funcionário pode sair para almoço OU encerrar o dia).
+          Renderizado 100% a partir de getPunchModalConfig — sem botões
+          ou textos fixos no JSX. Suporta qualquer combinação de opções.
       ═══════════════════════════════════════════════════════════════════ */}
-      {punchTypeModal.visible && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <span className="text-3xl">🕐</span>
-              <div>
-                <h3 className="font-bold text-gray-800 text-base">Qual tipo de saída?</h3>
-                <p className="text-xs text-gray-500">Escolha o tipo correto para este registro</p>
+      {punchTypeModal.visible && (() => {
+        const modalCfg = getPunchModalConfig(punchTypeModal.options, todayRecords);
+        return (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">🕐</span>
+                <div>
+                  <h3 className="font-bold text-gray-800 text-base">{modalCfg.title}</h3>
+                  <p className="text-xs text-gray-500">Selecione o tipo correto para este registro</p>
+                </div>
+              </div>
+
+              <p className="text-sm text-gray-600 bg-blue-50 border border-blue-100 rounded-xl p-3">
+                {modalCfg.description}
+              </p>
+
+              <div className="flex flex-col gap-3">
+                {/* Botões gerados dinamicamente — um por opção retornada por getContextualPunchOptions */}
+                {modalCfg.buttons.map((btn) => (
+                  <button
+                    key={btn.type}
+                    onClick={() => {
+                      if (punchTypeModal.photo) {
+                        prosseguirComTipo({ base64String: punchTypeModal.photo }, btn.type);
+                      }
+                    }}
+                    className={`${btn.className} text-white font-semibold py-3 px-4 rounded-xl text-sm transition-colors text-left flex items-center gap-3`}
+                  >
+                    <span className="text-xl">{btn.emoji}</span>
+                    <div>
+                      <p className="font-bold">{btn.label}</p>
+                      {btn.sublabel && <p className="text-xs opacity-80">{btn.sublabel}</p>}
+                    </div>
+                  </button>
+                ))}
+
+                <button
+                  onClick={() => {
+                    setPunchTypeModal({ visible: false, photo: null, options: [] });
+                    isPunchingRef.current = false;
+                    setPunching(false);
+                  }}
+                  className="text-gray-500 hover:text-gray-700 text-sm py-1 text-center"
+                >
+                  Cancelar
+                </button>
               </div>
             </div>
-
-            <p className="text-sm text-gray-600 bg-blue-50 border border-blue-100 rounded-xl p-3">
-              Você já tem a <strong>Entrada</strong> registrada hoje. O que está acontecendo agora?
-            </p>
-
-            <div className="flex flex-col gap-3">
-              {punchTypeModal.options.includes('lunch_start') && (
-                <button
-                  onClick={() => {
-                    if (punchTypeModal.photo) {
-                      prosseguirComTipo({ base64String: punchTypeModal.photo }, 'lunch_start');
-                    }
-                  }}
-                  className="bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 px-4 rounded-xl text-sm transition-colors text-left flex items-center gap-3"
-                >
-                  <span className="text-xl">☀️</span>
-                  <div>
-                    <p className="font-bold">Saída para Almoço</p>
-                    <p className="text-xs text-amber-100">Vou retornar depois do almoço</p>
-                  </div>
-                </button>
-              )}
-
-              {punchTypeModal.options.includes('exit') && (
-                <button
-                  onClick={() => {
-                    if (punchTypeModal.photo) {
-                      prosseguirComTipo({ base64String: punchTypeModal.photo }, 'exit');
-                    }
-                  }}
-                  className="bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-4 rounded-xl text-sm transition-colors text-left flex items-center gap-3"
-                >
-                  <span className="text-xl">🏁</span>
-                  <div>
-                    <p className="font-bold">Saída Final (fim do expediente)</p>
-                    <p className="text-xs text-red-100">Encerrando o dia — saída antecipada ou sem almoço formal</p>
-                  </div>
-                </button>
-              )}
-
-              <button
-                onClick={() => {
-                  setPunchTypeModal({ visible: false, photo: null, options: [] });
-                  isPunchingRef.current = false;
-                  setPunching(false);
-                }}
-                className="text-gray-500 hover:text-gray-700 text-sm py-1 text-center"
-              >
-                Cancelar
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Modal de erro de geolocalização */}
       {geoErrorModal.visible && (

@@ -2,6 +2,131 @@
 
 ---
 
+## Alterações — Sessão 09/10/2026 — 14:00 (Modal data-driven + Saída Final após almoço reintroduzida)
+
+### Data/Hora
+2026-10-09 — 14:00 (Horário de Recife, BRT)
+
+### Arquivos modificados
+- `src/pages/Ponto.tsx` — Adição de `PUNCH_BUTTON_CONFIG`, `PUNCH_DONE_LABELS` e função pura `getPunchModalConfig`. JSX do modal substituído por render 100% data-driven (`modalCfg.buttons.map(...)`). `getContextualPunchOptions` restaurada para retornar `['lunch_end','exit']` em `entry+lunch_start`.
+
+### O que foi feito
+
+#### 1. `getContextualPunchOptions` — restaurada com 2 opções para entry+lunch_start
+```diff
+- if (!done.has('lunch_end')) return ['lunch_end']; // hotfix temporário
++ if (!done.has('lunch_end')) return ['lunch_end', 'exit']; // modal correto agora suporta
+```
+
+#### 2. Nova função pura `getPunchModalConfig` (L180–L218)
+Recebe `options: string[]` e `todayRecords: TimeRecord[]`. Devolve:
+- **`title`** — sempre `"Qual batida você está fazendo?"`
+- **`description`** — lista o que já foi registrado hoje (ex: `"Você já registrou Entrada e Saída para Almoço. O que está acontecendo agora?"`)
+- **`buttons`** — array de `{ type, emoji, label, sublabel, className }`, um por opção
+
+#### 3. JSX do modal — render 100% data-driven (sem botões/textos fixos)
+```tsx
+{modalCfg.buttons.map((btn) => (
+  <button
+    key={btn.type}
+    onClick={() => {
+      if (punchTypeModal.photo) {
+        prosseguirComTipo({ base64String: punchTypeModal.photo }, btn.type);
+      }
+    }}
+    className={`${btn.className} text-white font-semibold py-3 px-4 rounded-xl text-sm transition-colors text-left flex items-center gap-3`}
+  >
+    <span className="text-xl">{btn.emoji}</span>
+    <div>
+      <p className="font-bold">{btn.label}</p>
+      {btn.sublabel && <p className="text-xs opacity-80">{btn.sublabel}</p>}
+    </div>
+  </button>
+))}
+```
+`btn.type` é passado diretamente para `prosseguirComTipo` — garantia de que o type correto é enviado para cada botão.
+
+#### 4. Saída de `getPunchModalConfig` para os 5 estados
+
+| Estado | `getContextualPunchOptions` | Título | Descrição | Botões (type → label) |
+|---|---|---|---|---|
+| Nenhum registro | `['entry']` | *(sem modal — registra direto)* | — | — |
+| `entry` | `['lunch_start','exit']` | Qual batida você está fazendo? | Você já registrou Entrada hoje. O que está acontecendo agora? | `lunch_start` → Saída para Almoço · `exit` → Saída Final |
+| `entry+lunch_start` | `['lunch_end','exit']` | Qual batida você está fazendo? | Você já registrou Entrada e Saída para Almoço hoje. O que está acontecendo agora? | `lunch_end` → Retorno do Almoço · `exit` → Saída Final |
+| `entry+lunch_start+lunch_end` | `['exit']` | *(sem modal — registra direto)* | — | — |
+| `exit` | `[]` | *(dia encerrado — botão desaparece)* | — | — |
+
+#### 5. Verificações
+- `npx tsc --noEmit` → **✅ Sem erros**
+- `npm run build` → **✅ Sucesso (exit code 0, 6.38s, 3316 módulos)**
+
+---
+
+## Alterações — Sessão 09/10/2026 — 13:54 (HOTFIX: Bloqueio Retorno Almoço — getContextualPunchOptions)
+
+### Data/Hora
+2026-10-09 — 13:54 (Horário de Recife, BRT)
+
+### Arquivos modificados
+- `src/pages/Ponto.tsx` — Correção de 1 linha na função `getContextualPunchOptions` (linha 126): estado `entry + lunch_start` sem `lunch_end` passou a retornar `['lunch_end']` (1 opção → registra direto) em vez de `['lunch_end', 'exit']` (2 opções → abria modal que não tinha botão para `lunch_end`). JSDoc atualizado para refletir o comportamento correto.
+
+### O que foi feito
+
+#### Causa Raiz
+A função `getContextualPunchOptions` retornava `['lunch_end', 'exit']` quando o funcionário estava no estado `entry + lunch_start` (sem `lunch_end`). Com 2 opções, o sistema abria o modal contextual de seleção. Porém, o modal só possui botões para `lunch_start` e `exit` — não existe botão mapeado para `lunch_end`. Resultado: o funcionário via apenas o botão "Saída Final (fim do expediente)" e ficava impossibilitado de registrar o retorno do almoço.
+
+#### Correção (mudança mínima — 1 linha)
+```diff
+- // Saiu para almoço mas não retornou: ambiguidade (retorno almoço OU saída final)
+- if (!done.has('lunch_end')) return ['lunch_end', 'exit'];
++ // Saiu para almoço mas não retornou: única opção válida é o retorno do almoço
++ if (!done.has('lunch_end')) return ['lunch_end'];
+```
+
+#### Comportamento de `getContextualPunchOptions` por estado (pós-fix)
+| Estado do dia                              | Retorno da função        | Ação no handler                     |
+|--------------------------------------------|--------------------------|-------------------------------------|
+| Nenhuma batida                             | `['entry']`              | Registra entrada **direto**         |
+| entry                                      | `['lunch_start', 'exit']`| Abre **modal** (2 opções)           |
+| entry + lunch_start                        | `['lunch_end']`          | Registra retorno almoço **direto** ✅ |
+| entry + lunch_start + lunch_end            | `['exit']`               | Registra saída final **direto**     |
+| exit (encerrado)                           | `[]`                     | Exibe mensagem de dia encerrado     |
+
+#### Handler que decide "direto vs modal" (Ponto.tsx ~L784)
+```ts
+// 4. Se há exatamente uma opção (sem ambiguidade): prosseguir direto
+if (options.length === 1) {
+  await prosseguirComTipo(photo, options[0]);
+  return;
+}
+
+// 5. Há mais de uma opção (ambiguidade): exibir modal de seleção
+setPunchTypeModal({ visible: true, photo: photo.base64String ?? null, options });
+```
+Com `['lunch_end']` (length === 1), o handler chama `prosseguirComTipo` direto, sem abrir o modal.
+
+#### Verificações realizadas
+- `npx tsc --noEmit` → **✅ Sem erros**
+- `npm run build` → **✅ Sucesso (`exit code 0`, 18.56s, 3316 módulos transformados)**
+
+#### Dados (somente leitura — aguardando confirmação para correção manual)
+
+**(a) Funcionários com `entry + lunch_start` SEM `lunch_end` hoje (bloqueados pelo bug)**
+
+| Funcionário | Batidas do dia | Horários |
+|---|---|---|
+| ALISSON LUCAS PEREIRA DA SILVA | entry, lunch_start | 07:01, 12:32 |
+| Marcos Douglas | entry, lunch_start | 08:01, 12:17 |
+| Mariana Feliciano | entry, lunch_start | 08:09, 12:19 |
+
+⚠️ **ATENÇÃO**: Estes 3 funcionários estão travados — não conseguiram bater o retorno do almoço. Após o deploy do hotfix, poderão bater normalmente. Se quiser inserir `lunch_end` retroativo para os horários corretos, confirme caso a caso.
+
+**(b) Funcionários com `exit` SEM `lunch_end` hoje**
+
+Nenhum encontrado.
+
+---
+
 ## Alterações — Sessão 06/10/2026 — 09:10 (Resolução de Ambiguidade e Seleção Contextual no Ponto Eletrônico)
 
 ### Data/Hora
