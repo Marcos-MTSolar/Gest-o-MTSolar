@@ -162,6 +162,36 @@ Registro vazou para o dia 2026-10-07?           NÃO ✅
 4. **Preservação Absoluta da Lógica:**
    - Modificações estritamente restritas às funções visuais de `generatePDF` em `Ponto.tsx`. Nenhuma lógica de cálculo, datas ou rotas de backend foi alterada.
 
+## Alterações — Sessão 09/10/2026 — 08:20 (Tratamento de Erro React #31 na Saída Final e Padronização de Mensagens de Erro)
+
+### Data/Hora
+2026-10-09 — 08:23 (America/Recife / UTC-3)
+
+### Arquivos modificados
+- `src/pages/Ponto.tsx` — Adicionado o helper `extrairMensagemErro` que garante a conversão de qualquer tipo de erro (string, objeto `{ code, message }`, resposta de Axios/Capacitor ou `Error` nativo) em uma string amigável antes de ser armazenada no estado `message` e renderizada no JSX; substituição de todas as extrações inseguras `apiErr?.response?.data?.error ?? apiErr?.message` pelo helper; inclusão do componente `PontoErrorBoundary` em volta da interface inteira.
+- `src/components/PontoErrorBoundary.tsx` — [NOVO] Componente de captura de erros de renderização (React Error Boundary) exclusivo para a tela de Ponto Eletrônico, evitando que falhas inesperadas derrubem e reiniciem a aplicação.
+- `api/index.ts` — Ajuste na rota `POST /api/ponto/registrar` no bloco de tratamento de erro do Supabase/Postgres (`if (error)`), garantindo que mensagens de erro sejam convertidas em string antes do lançamento para a camada HTTP e enviando `err.message` consistente na resposta 500/400.
+- `RESUMO_MESTRE.md` — Atualização da documentação do sistema com o registro do problema, causa raiz e correções aplicadas.
+
+### O que foi feito
+
+#### 1. Diagnóstico da Causa Raiz do React Error #31
+- **Sintoma:** Ao registrar a batida de **SAÍDA FINAL** via modal contextual, a tela quebrava com a mensagem `Minified React error #31` (tentativa de renderizar um objeto diretamente no JSX).
+- **Causa Raiz Identificada:** Em `Ponto.tsx`, a extração de erro utilizava o operador nullish coalescing `const msg = apiErr?.response?.data?.error ?? apiErr?.message ?? 'Erro...'`. Quando o backend ou a biblioteca do Supabase devolvia uma resposta de erro no formato de objeto `{ code: '23505', message: '...' }` ou um objeto de erro customizado, o operador `??` mantinha o objeto (por ser truthy e não-nullish). Em seguida, `setMessage({ text: msg, type: 'error' })` colocava o próprio objeto no estado. Na renderização (`{message.text}`), o React lançava o erro fatal #31.
+
+#### 2. Solução Implementada e Validações
+1. **Helper `extrairMensagemErro` (`Ponto.tsx`):**
+   - Criada função utilitária com tratamento defensivo em cascata que inspeciona o objeto retornado e extrai rigorosamente uma string. Se receber objeto com propriedade `.message` ou `.error`, extrai a string correspondente; se não, serializa ou aplica fallback amigável.
+2. **Substituição em Todos os Pontos de Captura:**
+   - Atualizados todos os handlers (`prosseguirComTipo`, `handlePunch`, `handleGeoRetry`, `handleRecalculate`, `registrarSemLocalizacao`).
+3. **Resposta Consistente no Backend (`api/index.ts`):**
+   - Ajustado o tratamento no `POST /api/ponto/registrar` para garantir que exceções lançadas pelo Supabase/Postgres tenham sua mensagem extraída como string antes de retornar na resposta HTTP.
+4. **Resiliência com `PontoErrorBoundary` (`PontoErrorBoundary.tsx`):**
+   - Criado componente de contorno de erro no React que encapsula a interface do Ponto Eletrônico. Em caso de qualquer falha de renderização no cliente, exibe um painel elegante com botão de nova tentativa sem dar refresh brusco ou quebrar o app.
+5. **Validação e Compilação:**
+   - Testados cenários HTTP com scripts dedicados em `scratch/test_exit_scenarios.mjs` e `scratch/test_error_helper.mjs`.
+   - Executado `npx tsc --noEmit` (sucesso 0 erros) e `npm run build` (sucesso em 25.61s).
+
 ---
 
 ## Alterações — Sessão 04/09/2026 — 08:50 (Correção Crítica de Fuso Horário no Registro de Ponto e Desacoplamento de Erros de GPS)

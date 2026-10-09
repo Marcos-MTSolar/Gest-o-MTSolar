@@ -4309,7 +4309,11 @@ app.post('/api/ponto/registrar', authenticateToken, async (req: any, res) => {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // Erro do Supabase (PostgrestError): logar o objeto completo, devolver apenas a mensagem como string
+      console.error('[PONTO_REGISTRAR] Erro Supabase ao inserir time_record:', JSON.stringify(error));
+      throw new Error(error.message || `Erro ao registrar ponto no banco de dados (código: ${(error as any).code || 'desconhecido'}).`);
+    }
 
     // Alerta de ponto sem localização: notifica gestores (CEO/ADMIN) da empresa
     if (latitude === null || longitude === null) {
@@ -4348,9 +4352,15 @@ app.post('/api/ponto/registrar', authenticateToken, async (req: any, res) => {
     res.json(data);
 
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    // Garante que error sempre seja string — nunca um objeto Supabase ou Axios
+    const errorMsg = typeof err?.message === 'string' && err.message.length > 0
+      ? err.message
+      : 'Erro interno ao registrar ponto. Tente novamente.';
+    console.error('[PONTO_REGISTRAR] Erro inesperado:', err);
+    res.status(500).json({ error: errorMsg });
   }
 });
+
 
 // GET /api/ponto/fotos-verificacao — Verificação de fotos por gestor (CEO/ADMIN)
 app.get('/api/ponto/fotos-verificacao', authenticateToken, async (req: any, res) => {

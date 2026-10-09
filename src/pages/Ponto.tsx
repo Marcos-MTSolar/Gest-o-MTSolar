@@ -10,6 +10,39 @@ import { supabase } from '../lib/supabase';
 import { Trash2, MapPin, FileText, X, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getRecifeDateStr } from '../utils/dateUtils';
+import { PontoErrorBoundary } from '../components/PontoErrorBoundary';
+
+/**
+ * extrairMensagemErro: helper central de extração de mensagem de erro.
+ * Recebe QUALQUER valor (string, Error, objeto {code,message}, erro do Axios,
+ * erro do Capacitor Geolocation) e SEMPRE devolve uma string segura.
+ * Garante que nenhum objeto chegue ao JSX e cause o "React error #31".
+ */
+function extrairMensagemErro(err: unknown, fallback = 'Erro ao registrar ponto.'): string {
+  // 1. undefined/null → fallback
+  if (err == null) return fallback;
+  // 2. String direta
+  if (typeof err === 'string') return err || fallback;
+  // 3. Axios: response.data.error como string
+  const axiosErrData = (err as any)?.response?.data?.error;
+  if (axiosErrData !== undefined && axiosErrData !== null) {
+    if (typeof axiosErrData === 'string') return axiosErrData || fallback;
+    // 4. Axios: response.data.error como objeto {code, message}
+    if (typeof axiosErrData === 'object') {
+      if (typeof axiosErrData.message === 'string') return axiosErrData.message || fallback;
+      if (typeof axiosErrData.code === 'string') return axiosErrData.code || fallback;
+      return fallback;
+    }
+  }
+  // 5. Error nativo ou objeto com .message (inclui GeolocationPositionError)
+  const msgProp = (err as any)?.message;
+  if (typeof msgProp === 'string' && msgProp.length > 0) return msgProp;
+  // 6. Objeto com .code numérico (GeolocationPositionError sem .message legível)
+  const codeProp = (err as any)?.code;
+  if (codeProp !== undefined) return `Erro de geolocalização (código ${codeProp}).`;
+  // 7. Fallback final
+  return fallback;
+}
 
 
 /**
@@ -74,7 +107,7 @@ const TYPE_ORDER = ['entry', 'lunch_start', 'lunch_end', 'exit'];
  *   - [] se o dia já está encerrado (tem 'exit')
  *   - ['entry'] se não há nenhuma batida (sem ambiguidade)
  *   - ['lunch_start', 'exit'] se só há 'entry' (ambiguidade: saída almoço ou saída final)
- *   - ['lunch_end'] se há 'entry' + 'lunch_start' (sem ambiguidade: só pode ser retorno)
+ *   - ['lunch_end', 'exit'] se há 'entry' + 'lunch_start' (ambiguidade: retorno almoço OU saída final)
  *   - ['exit'] se há 'entry' + 'lunch_start' + 'lunch_end' (sem ambiguidade: só saída final)
  */
 function getContextualPunchOptions(todayRecords: TimeRecord[]): string[] {
@@ -89,8 +122,8 @@ function getContextualPunchOptions(todayRecords: TimeRecord[]): string[] {
   // Tem entrada mas não saiu para almoço: ambiguidade (saída almoço OU saída final)
   if (!done.has('lunch_start')) return ['lunch_start', 'exit'];
 
-  // Saiu para almoço mas não retornou: única opção é retorno
-  if (!done.has('lunch_end')) return ['lunch_end'];
+  // Saiu para almoço mas não retornou: ambiguidade (retorno almoço OU saída final)
+  if (!done.has('lunch_end')) return ['lunch_end', 'exit'];
 
   // Retornou do almoço mas não fez saída final: única opção é saída final
   return ['exit'];
@@ -624,7 +657,7 @@ export default function Ponto() {
         await fetchReport(selectedUser);
       }
     } catch (err: any) {
-      const errMsg = err?.response?.data?.error ?? 'Erro ao recalcular banco de horas.';
+      const errMsg = extrairMensagemErro(err, 'Erro ao recalcular banco de horas.');
       setMessage({ text: errMsg, type: 'error' });
     } finally {
       setRecalculating(false);
@@ -692,7 +725,7 @@ export default function Ponto() {
       // Falha ao capturar localização: exibe modal de geolocalização
       setGeoErrorModal({
         visible: true,
-        mensagem: geoErr?.message ?? 'Não foi possível obter a localização GPS.',
+        mensagem: extrairMensagemErro(geoErr, 'Não foi possível obter a localização GPS.'),
         pendingType: type,
         pendingPhoto: photo.base64String ?? null,
         tentativas: 1,
@@ -708,7 +741,7 @@ export default function Ponto() {
       await registrarPontoComLocalizacao(photo, localizacao.latitude, localizacao.longitude, type);
     } catch (apiErr: any) {
       // Erro da API HTTP (ex: 400 duplicação de tipo) -> exibe na tela, NÃO no modal de GPS!
-      const msg = apiErr?.response?.data?.error ?? apiErr?.message ?? 'Erro ao registrar ponto.';
+      const msg = extrairMensagemErro(apiErr);
       setMessage({ text: msg, type: 'error' });
     } finally {
       // 🔒 Debounce de 2.5s antes de liberar o botão
@@ -763,7 +796,7 @@ export default function Ponto() {
       // Não libera isPunchingRef aqui — o modal fica aberto aguardando a escolha
     } catch (err: any) {
       // Erros de câmera ou de rede ao registrar ponto
-      const msg = err?.response?.data?.error ?? err?.message ?? 'Erro ao registrar ponto.';
+      const msg = extrairMensagemErro(err);
       setMessage({ text: msg, type: 'error' });
       // 🔒 Debounce de 2.5s antes de liberar o botão para novos cliques
       setTimeout(() => {
@@ -787,7 +820,7 @@ export default function Ponto() {
     } catch (geoErr: any) {
       setGeoErrorModal(prev => ({
         ...prev,
-        mensagem: geoErr?.message ?? 'Localização GPS indisponível. Por favor, ative a localização no seu dispositivo/navegador.',
+        mensagem: extrairMensagemErro(geoErr, 'Localização GPS indisponível. Por favor, ative a localização no seu dispositivo/navegador.'),
         tentativas: novasTentativas,
       }));
       return;
@@ -801,7 +834,7 @@ export default function Ponto() {
         geoErrorModal.pendingType
       );
     } catch (apiErr: any) {
-      const msg = apiErr?.response?.data?.error ?? apiErr?.message ?? 'Erro ao registrar ponto.';
+      const msg = extrairMensagemErro(apiErr);
       setMessage({ text: msg, type: 'error' });
       setGeoErrorModal({ visible: false, mensagem: '', pendingType: null, pendingPhoto: null, tentativas: 0 });
     }
@@ -1222,6 +1255,7 @@ export default function Ponto() {
   const mySchedule = (schedules ?? []).find((s) => s.role === user?.role);
 
   return (
+    <PontoErrorBoundary>
     <div className="max-w-4xl mx-auto p-4">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Ponto Eletrônico</h1>
 
@@ -2588,7 +2622,7 @@ export default function Ponto() {
                       null,
                       geoErrorModal.pendingType
                     ).catch((err: any) => {
-                      setMessage({ text: err?.response?.data?.error ?? 'Erro ao registrar ponto.', type: 'error' });
+                      setMessage({ text: extrairMensagemErro(err), type: 'error' });
                       setGeoErrorModal({ visible: false, mensagem: '', pendingType: null, pendingPhoto: null, tentativas: 0 });
                     });
                   }}
@@ -2871,5 +2905,6 @@ export default function Ponto() {
         </div>
       )}
     </div>
+    </PontoErrorBoundary>
   );
 }
