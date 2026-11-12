@@ -6335,56 +6335,74 @@ async function kommoApi(endpoint: string, method: string = 'GET', body?: any, ti
   }
 }
 
-// SQL PARA EXECUTAR NO SUPABASE (MIGRATION PENDENTE):
-// ALTER TABLE users ADD COLUMN IF NOT EXISTS recebe_leads BOOLEAN DEFAULT false;
-// UPDATE users SET recebe_leads = true WHERE role = 'COMMERCIAL' AND name ILIKE '%Soraia%';
-// UPDATE users SET recebe_leads = true WHERE role = 'COMMERCIAL' AND name ILIKE '%Manoel%';
-
 // Helper: retorna o vendedor com menos atendimentos ativos entre os que recebem leads (Round-Robin)
+// Elegíveis: role=COMMERCIAL + active=true + recebe_leads=true (nenhum fallback por nome)
 async function getRoundRobinVendedor(companyId: string): Promise<{ id: number; name: string } | null> {
-  let vendedores: any[] = [];
-  
-  // 1. Tenta buscar vendedores com a coluna recebe_leads
-  let { data, error } = await supabaseAdmin
+  // 1. Busca vendedores COMMERCIAL ativos com recebe_leads=true
+  const { data: vendedores, error } = await supabaseAdmin
     .from('users')
     .select('id, name, recebe_leads')
     .eq('company_id', companyId)
     .eq('role', 'COMMERCIAL')
-    .eq('active', true);
+    .eq('active', true)
+    .eq('recebe_leads', true);
 
   if (error) {
-    console.warn('[ROUND-ROBIN] Coluna recebe_leads pode não existir. Buscando sem ela. Erro:', error.message);
-    const retry = await supabaseAdmin
-      .from('users')
-      .select('id, name')
-      .eq('company_id', companyId)
-      .eq('role', 'COMMERCIAL')
-      .eq('active', true);
-    vendedores = retry.data || [];
-  } else {
-    vendedores = data || [];
-  }
+    // Erro real de banco — não tentar adivinhar quem recebe leads
+    console.error('[ROUND-ROBIN] Erro ao consultar vendedores elegíveis:', error.message);
 
-  if (!vendedores || vendedores.length === 0) {
-    console.warn('[ROUND-ROBIN] Nenhum vendedor COMMERCIAL ativo encontrado.');
+    // Notifica CEO e ADMINs para que tomem providência
+    const { data: admins } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('company_id', companyId)
+      .in('role', ['CEO', 'ADMIN'])
+      .eq('active', true);
+
+    if (admins && admins.length > 0) {
+      await Promise.allSettled(
+        admins.map((admin: any) =>
+          sendPushNotification(
+            admin.id,
+            '🚨 Erro no Round-Robin',
+            `Falha ao buscar vendedores elegíveis: ${error.message}. Nenhum lead será atribuído automaticamente.`,
+            { type: 'general' }
+          )
+        )
+      );
+    }
+
     return null;
   }
 
-  // 2. Filtra os elegíveis
-  let elegiveis = vendedores.filter(v => v.recebe_leads === true);
+  // 2. Zero elegíveis — avisa CEO/ADMIN e retorna null
+  if (!vendedores || vendedores.length === 0) {
+    console.warn('[ROUND-ROBIN] Nenhum vendedor COMMERCIAL ativo com recebe_leads=true encontrado. Lead ficará em fila de espera.');
 
-  // 3. Fallback: Se só tiver 1 vendedor recebendo (ex: só a Soraia) ou nenhum, e Manoel Jordão estiver ativo
-  if (elegiveis.length < 2) {
-    console.warn('[ROUND-ROBIN] Fallback de segurança: Migration de recebe_leads pendente ou incompleta. Utilizando lista hardcoded (Soraia e Manoel).');
-    const fallbackList = vendedores.filter(v => v.name?.includes('Soraia') || v.name?.includes('Manoel'));
-    if (fallbackList.length > 0) {
-      elegiveis = fallbackList;
-    } else {
-      elegiveis = vendedores; // Último recurso: todos os comerciais ativos
+    const { data: admins } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('company_id', companyId)
+      .in('role', ['CEO', 'ADMIN'])
+      .eq('active', true);
+
+    if (admins && admins.length > 0) {
+      await Promise.allSettled(
+        admins.map((admin: any) =>
+          sendPushNotification(
+            admin.id,
+            '⚠️ Lead sem vendedor elegível',
+            'Nenhum vendedor com "Recebe Leads" ativo. O lead ficará em fila de espera até ser atribuído manualmente.',
+            { type: 'general' }
+          )
+        )
+      );
     }
+
+    return null;
   }
 
-  // 4. Para cada elegível, busca:
+  // 3. Para cada elegível, busca:
   //    (a) O created_at da última conversa atribuída (critério PRIMÁRIO de rotação)
   //    (b) O total de in_progress (critério SECUNDÁRIO — apenas para desempate)
   //
@@ -6393,7 +6411,7 @@ async function getRoundRobinVendedor(companyId: string): Promise<{ id: number; n
   // CRITÉRIO SECUNDÁRIO: apenas quando ambos nunca receberam lead (lastAssignedAt = null),
   // decide por menor contagem de in_progress.
   const enriched = await Promise.all(
-    elegiveis.map(async (v: any) => {
+    vendedores.map(async (v: any) => {
       // (a) Data do último lead atribuído
       const { data: lastConvData } = await supabaseAdmin
         .from('whatsapp_conversations')
@@ -6420,8 +6438,8 @@ async function getRoundRobinVendedor(companyId: string): Promise<{ id: number; n
     })
   );
 
-  // 5. Log detalhado para auditoria nos logs da Vercel
-  console.log(`[ROUND-ROBIN] ===== DISTRIBUIÇÃO ATUAL =====`);
+  // 4. Log detalhado para auditoria nos logs da Vercel
+  console.log(`[ROUND-ROBIN] ===== DISTRIBUIÇÃO ATUAL (elegíveis: ${enriched.length}) =====`);
   enriched.forEach((v: any) => {
     const ultimoLead = v.lastAssignedAt
       ? new Date(v.lastAssignedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
@@ -6429,28 +6447,15 @@ async function getRoundRobinVendedor(companyId: string): Promise<{ id: number; n
     console.log(`[ROUND-ROBIN]   ${v.name}: in_progress=${v.totalInProgress} | último lead atribuído: ${ultimoLead}`);
   });
 
-  // 6. Ordenação:
-  //    Primário  → lastAssignedAt ASC (null = nunca recebeu → vai primeiro)
-  //    Secundário → totalInProgress ASC (menor carga atual)
-  enriched.sort((a: any, b: any) => {
-    // Vendedor sem nenhuma conversa atribuída vai sempre primeiro
-    if (a.lastAssignedAt === null && b.lastAssignedAt !== null) return -1;
-    if (a.lastAssignedAt !== null && b.lastAssignedAt === null) return 1;
+  // 5. Escolhe o vendedor via função pura (ordenação idêntica à anterior)
+  const { escolherVendedor } = await import('./roundRobin.js');
+  const escolhido = escolherVendedor(enriched);
 
-    // Ambos nunca receberam → desempate por menor in_progress
-    if (a.lastAssignedAt === null && b.lastAssignedAt === null) {
-      return a.totalInProgress - b.totalInProgress;
-    }
+  if (!escolhido) {
+    console.error('[ROUND-ROBIN] escolherVendedor retornou null com lista não vazia — situação inesperada.');
+    return null;
+  }
 
-    // Critério primário: quem recebeu lead há mais tempo vai antes
-    const diff = new Date(a.lastAssignedAt).getTime() - new Date(b.lastAssignedAt).getTime();
-    if (diff !== 0) return diff;
-
-    // Mesmo timestamp (improvável): desempate por menor in_progress
-    return a.totalInProgress - b.totalInProgress;
-  });
-
-  const escolhido = enriched[0];
   const criterio = escolhido.lastAssignedAt === null
     ? 'nunca recebeu lead (null) — critério: menor in_progress'
     : `último lead em ${new Date(escolhido.lastAssignedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} — critério: mais antigo`;

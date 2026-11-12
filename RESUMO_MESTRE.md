@@ -2511,6 +2511,23 @@ O fluxo de processamento de mÃƒÂ­dias foi otimizado para evitar expiraÃƒÂ
 
 ---
 
+* **Correção crítica do Round-Robin — Fallback por nome que reintroduzia Soraia Castro (em licença-maternidade) no pool de leads — 12/11/2026 10:10 BRT:**
+  * *Problema:* `getRoundRobinVendedor()` em `api/index.ts` mantinha um fallback hardcoded por nome (L6377-6384 pré-correção): com menos de 2 vendedores com `recebe_leads=true`, filtrava pelo nome `'Soraia'` ou `'Manoel'`. Com Soraia em licença-maternidade (`recebe_leads=false`) e Manoel como único elegível (count=1 < 2), o fallback recolocava Soraia no pool, anulando a configuração. O banco confirmava: Soraia (id=7) com `recebe_leads=false` mas `active=true` — suficiente para entrar no fallback.
+  * *Impacto medido:* 50 conversas atribuídas à Soraia (id=7) desde 10/10/2026, todas `in_progress`, via WhatsApp direto (nenhuma via Kommo). 65 conversas atribuídas ao Manoel (id=20) no mesmo período.
+  * *O que foi feito:*
+    * **Tarefa A — Reescrita de `getRoundRobinVendedor()` (`api/index.ts`, ~L6338):**
+      * Query passa a filtrar diretamente no banco com `.eq('recebe_leads', true)` — sem etapa de filtro em memória posterior.
+      * Ramo `if (error)` obsoleto substituído por: loga o erro, notifica CEO/ADMIN via push e retorna `null`. Nunca tenta palpitar quem recebe leads.
+      * Com zero elegíveis: retorna `null` + envia push para CEO/ADMIN com texto `"⚠️ Lead sem vendedor elegível"`. O webhook já tratava `null` corretamente: conversa com `status='waiting'` e nota interna `"Aguardando atendente na fila"` (L6849/6922 sem alteração).
+      * Fallback por nome (`'Soraia'`/`'Manoel'`) e "último recurso: todos os comerciais" **removidos permanentemente**.
+    * **Tarefa A — Extração da função pura `escolherVendedor()` para `api/roundRobin.ts`:**
+      * Novo arquivo `api/roundRobin.ts` com interface `VendedorEnriquecido` e função pura `escolherVendedor()`. Ordenação idêntica à anterior: `lastAssignedAt null` primeiro, depois mais antigo, empate por menor `totalInProgress`.
+      * `getRoundRobinVendedor()` chama `escolherVendedor()` via `import('./roundRobin.js')`.
+    * **Tarefa B — Testes unitários `scratch/test_roundRobin.mjs`:** 6/6 casos passaram: (i) mais antigo vence; (ii) null vence data; (iii) empate de data → menor in_progress; (iv) único elegível retorna ele; (v) zero elegíveis → null; (bônus) dois null → menor in_progress.
+    * **Tarefa C — Validação:** `npx tsc --noEmit` código 0 (zero erros TypeScript). `npm run build` código 0. `git diff --stat`: 1 arquivo modificado (`api/index.ts`, +59/-54), 1 arquivo criado (`api/roundRobin.ts`).
+  * *Arquivos modificados:* `api/index.ts`, `api/roundRobin.ts` (novo), `scratch/test_roundRobin.mjs` (novo).
+  * *Aguardando:* aprovação do usuário para commit/push e validação com `GET /api/kommo/check-lead/:leadId`.
+
 * **Correção do Bug de PDF em Branco no Android WebView (Causa A + Causa B) — EM TESTE:**
   * *Problema:* PDF gerado no mobile (Android WebView/Capacitor) saía completamente em branco. No desktop (nova aba) funcionava normalmente. O log `pdf-debug-log.txt` não era gerado, indicando falha silenciosa antes mesmo do html2canvas.
   * *Causa A diagnosticada:* O HTML completo (com `<!DOCTYPE>`, `<html>`, `<head>`, `<style>`, `<body>`) era inserido via `container.innerHTML = htmlComBase64`. O browser descarta silenciosamente o `<head>` e o `<style>` nessa operação, deixando as classes CSS (`.page`, etc.) indefinidas. Os `pageDivs` tinham dimensões `0×0`, produzindo canvases em branco e um PDF sem XObjects.
