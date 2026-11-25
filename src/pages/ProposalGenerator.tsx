@@ -1,6 +1,7 @@
 // Página criada para MT Solar — Gerador de Propostas Solares
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import { maskCNPJ, maskPhone } from '../utils/masks';
 
 import { 
   User, 
@@ -467,10 +468,10 @@ export default function ProposalGenerator() {
     setEditingSupplier(supplier);
     setSupplierForm({
       razao_social: supplier.razao_social,
-      cnpj: supplier.cnpj || '',
+      cnpj: maskCNPJ(supplier.cnpj || ''),
       nome_fantasia: supplier.nome_fantasia || '',
       endereco: supplier.endereco || '',
-      telefone: supplier.telefone || '',
+      telefone: maskPhone(supplier.telefone || ''),
       email: supplier.email || ''
     });
     setShowSupplierModal(true);
@@ -3029,7 +3030,7 @@ export default function ProposalGenerator() {
                 <input 
                   type="text" 
                   value={formData.clientPhone}
-                  onChange={(e) => updateForm('clientPhone', e.target.value)}
+                  onChange={(e) => updateForm('clientPhone', maskPhone(e.target.value))}
                   className={inputStyle}
                   placeholder="(00) 00000-0000"
                 />
@@ -4716,7 +4717,7 @@ export default function ProposalGenerator() {
                 </div>
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-gray-700">CNPJ</label>
-                  <input type="text" value={supplierForm.cnpj} onChange={e => setSupplierForm(p => ({...p, cnpj: e.target.value}))} className={inputStyle} placeholder="00.000.000/0000-00" />
+                  <input type="text" value={supplierForm.cnpj} onChange={e => setSupplierForm(p => ({...p, cnpj: maskCNPJ(e.target.value)}))} className={inputStyle} placeholder="00.000.000/0000-00" />
                 </div>
                 <div className="space-y-1 col-span-2">
                   <label className="text-sm font-medium text-gray-700">Endereço</label>
@@ -4724,7 +4725,7 @@ export default function ProposalGenerator() {
                 </div>
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-gray-700">Telefone</label>
-                  <input type="text" value={supplierForm.telefone} onChange={e => setSupplierForm(p => ({...p, telefone: e.target.value}))} className={inputStyle} placeholder="(00) 00000-0000" />
+                  <input type="text" value={supplierForm.telefone} onChange={e => setSupplierForm(p => ({...p, telefone: maskPhone(e.target.value)}))} className={inputStyle} placeholder="(00) 00000-0000" />
                 </div>
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-gray-700">E-mail</label>

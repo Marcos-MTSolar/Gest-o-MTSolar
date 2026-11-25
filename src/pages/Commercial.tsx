@@ -5,6 +5,7 @@ import { sendUpdateNotification } from '../lib/notifications';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import confetti from 'canvas-confetti';
+import { maskCpfCnpj, maskPhone } from '../utils/masks';
 
 const ORIGENS_VENDA = [
   'Lead (Tráfego Pago)',
@@ -26,7 +27,7 @@ export default function Commercial() {
     name: '', phone: '', email: '', address: '', city: '', state: '', zip_code: '', cpf_cnpj: '', origem_venda: '',
     proposal_value: '', payment_method: 'cash', kit_supplier: '', pendencies: '', notes: '', finance_grace_period: 0,
     inversor_marca: '', inversor_modelo: '', inversor_potencia: '', 
-    modulo_potencia: '', modulo_modelo: '', estrutura_tipo: ''
+    modulo_potencia: '', modulo_modelo: '', module_quantity: '', estrutura_tipo: ''
   });
   const [homologacaoDocs, setHomologacaoDocs] = useState<{
     rg_cnh: File | null;
@@ -105,7 +106,7 @@ export default function Commercial() {
       setNewClient(prev => ({
         ...prev,
         name: proposal.client_name,
-        phone: raw.clientPhone || proposal.phone || '',
+        phone: maskPhone(raw.clientPhone || proposal.phone || ''),
         email: raw.clientEmail || proposal.email || '',
         address: raw.clientAddress || proposal.address || '',
         proposal_value: raw.valorFinalVenda || proposal.kit_value || '',
@@ -114,6 +115,7 @@ export default function Commercial() {
         inversor_potencia: raw.inverterPower || '',
         modulo_modelo: raw.moduleModel || '',
         modulo_potencia: raw.modulePower || '',
+        module_quantity: raw.moduleQty ? String(raw.moduleQty) : '',
         estrutura_tipo: raw.tipoEstrutura || ''
       }));
       
@@ -253,7 +255,7 @@ export default function Commercial() {
         name: '', phone: '', email: '', address: '', city: '', state: '', zip_code: '', cpf_cnpj: '',
         proposal_value: '', payment_method: 'cash', kit_supplier: '', pendencies: '', notes: '', finance_grace_period: 0,
         inversor_marca: '', inversor_modelo: '', inversor_potencia: '', 
-        modulo_potencia: '', modulo_modelo: '', estrutura_tipo: '', assigned_seller_id: ''
+        modulo_potencia: '', modulo_modelo: '', module_quantity: '', estrutura_tipo: '', assigned_seller_id: ''
       });
       setFormErrors({});
       setSelectedProposalId('');
@@ -423,12 +425,12 @@ export default function Commercial() {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">CPF/CNPJ *</label>
-                    <input placeholder="CPF/CNPJ" className={`w-full border p-2 rounded ${formErrors.cpf_cnpj ? 'border-red-500' : ''}`} value={newClient.cpf_cnpj} onChange={e => setNewClient({ ...newClient, cpf_cnpj: e.target.value })} />
+                    <input placeholder="CPF/CNPJ" className={`w-full border p-2 rounded ${formErrors.cpf_cnpj ? 'border-red-500' : ''}`} value={newClient.cpf_cnpj} onChange={e => setNewClient({ ...newClient, cpf_cnpj: maskCpfCnpj(e.target.value) })} />
                     {formErrors.cpf_cnpj && <p className="text-red-500 text-[10px] mt-1">{formErrors.cpf_cnpj}</p>}
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">TELEFONE *</label>
-                    <input placeholder="Telefone" className={`w-full border p-2 rounded ${formErrors.phone ? 'border-red-500' : ''}`} value={newClient.phone} onChange={e => setNewClient({ ...newClient, phone: e.target.value })} />
+                    <input placeholder="Telefone" className={`w-full border p-2 rounded ${formErrors.phone ? 'border-red-500' : ''}`} value={newClient.phone} onChange={e => setNewClient({ ...newClient, phone: maskPhone(e.target.value) })} />
                     {formErrors.phone && <p className="text-red-500 text-[10px] mt-1">{formErrors.phone}</p>}
                   </div>
                   <div className="md:col-span-2">
@@ -514,8 +516,8 @@ export default function Commercial() {
                       </div>
                     </div>
 
-                    <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
-                      <p className="md:col-span-2 text-[10px] font-black text-amber-800 uppercase tracking-widest">Módulo Fotovoltaico</p>
+                    <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
+                      <p className="md:col-span-3 text-[10px] font-black text-amber-800 uppercase tracking-widest">Módulo Fotovoltaico</p>
                       <div>
                         <label className="block text-[10px] font-bold text-gray-500 mb-1">POTÊNCIA (Wp) *</label>
                         <input type="number" placeholder="Ex: 585" className={`w-full border p-2 rounded bg-white ${formErrors.modulo_potencia ? 'border-red-500' : ''}`} value={newClient.modulo_potencia} onChange={e => setNewClient({ ...newClient, modulo_potencia: e.target.value })} />
@@ -525,6 +527,10 @@ export default function Commercial() {
                         <label className="block text-[10px] font-bold text-gray-500 mb-1">MODELO *</label>
                         <input placeholder="Ex: Jinko Bifacial" className={`w-full border p-2 rounded bg-white ${formErrors.modulo_modelo ? 'border-red-500' : ''}`} value={newClient.modulo_modelo} onChange={e => setNewClient({ ...newClient, modulo_modelo: e.target.value })} />
                         {formErrors.modulo_modelo && <p className="text-red-500 text-[10px] mt-1">{formErrors.modulo_modelo}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-500 mb-1">QUANTIDADE DE MÓDULOS</label>
+                        <input type="number" min={1} step={1} placeholder="Ex: 10" className="w-full border p-2 rounded bg-white" value={newClient.module_quantity} onChange={e => setNewClient({ ...newClient, module_quantity: e.target.value })} />
                       </div>
                     </div>
 
@@ -810,8 +816,8 @@ export default function Commercial() {
                 onClick={() => {
                   setEditClientData({
                     name: selectedProject.client_name || '',
-                    cpf_cnpj: selectedProject.cpf_cnpj || '',
-                    phone: selectedProject.phone || '',
+                    cpf_cnpj: maskCpfCnpj(selectedProject.cpf_cnpj || ''),
+                    phone: maskPhone(selectedProject.phone || ''),
                     email: selectedProject.email || '',
                     address: selectedProject.address || '',
                     city: selectedProject.city || '',
@@ -822,6 +828,7 @@ export default function Commercial() {
                     inversor_potencia: selectedProject.inversor_potencia || '',
                     modulo_potencia: selectedProject.modulo_potencia || '',
                     modulo_modelo: selectedProject.modulo_modelo || '',
+                    module_quantity: selectedProject.module_quantity ?? '',
                     estrutura_tipo: selectedProject.estrutura_tipo || '',
                     assigned_seller_id: selectedProject.assigned_seller_id || ''
                   });
@@ -1065,10 +1072,16 @@ export default function Commercial() {
 
       {/* Edit Client Modal */}
       {showEditClient && selectedProject && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-xl w-full max-w-2xl">
-            <h2 className="text-xl font-bold mb-4">Editar Cliente</h2>
-            <form onSubmit={handleEditClient} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="px-6 pt-6 pb-4 border-b shrink-0">
+              <h2 className="text-xl font-bold">Editar Cliente</h2>
+            </div>
+            <form onSubmit={handleEditClient} className="flex flex-col flex-1 min-h-0">
+              <div
+                className="flex-1 overflow-y-auto overscroll-contain p-6 grid grid-cols-1 md:grid-cols-2 gap-4"
+                style={{ WebkitOverflowScrolling: 'touch' }}
+              >
               <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-gray-500 mb-1">NOME COMPLETO *</label>
                 <input placeholder="Nome Completo" className={`w-full border p-2 rounded ${formErrors.name ? 'border-red-500' : ''}`} required value={editClientData.name} onChange={e => setEditClientData({ ...editClientData, name: e.target.value })} />
@@ -1076,12 +1089,12 @@ export default function Commercial() {
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1">CPF/CNPJ *</label>
-                <input placeholder="CPF/CNPJ" className={`w-full border p-2 rounded ${formErrors.cpf_cnpj ? 'border-red-500' : ''}`} value={editClientData.cpf_cnpj} onChange={e => setEditClientData({ ...editClientData, cpf_cnpj: e.target.value })} />
+                <input placeholder="CPF/CNPJ" className={`w-full border p-2 rounded ${formErrors.cpf_cnpj ? 'border-red-500' : ''}`} value={editClientData.cpf_cnpj} onChange={e => setEditClientData({ ...editClientData, cpf_cnpj: maskCpfCnpj(e.target.value) })} />
                 {formErrors.cpf_cnpj && <p className="text-red-500 text-[10px] mt-1">{formErrors.cpf_cnpj}</p>}
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1">TELEFONE *</label>
-                <input placeholder="Telefone" className={`w-full border p-2 rounded ${formErrors.phone ? 'border-red-500' : ''}`} value={editClientData.phone} onChange={e => setEditClientData({ ...editClientData, phone: e.target.value })} />
+                <input placeholder="Telefone" className={`w-full border p-2 rounded ${formErrors.phone ? 'border-red-500' : ''}`} value={editClientData.phone} onChange={e => setEditClientData({ ...editClientData, phone: maskPhone(e.target.value) })} />
                 {formErrors.phone && <p className="text-red-500 text-[10px] mt-1">{formErrors.phone}</p>}
               </div>
               <div className="md:col-span-2">
@@ -1167,8 +1180,8 @@ export default function Commercial() {
                   </div>
                 </div>
 
-                <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
-                  <p className="md:col-span-2 text-[10px] font-black text-amber-800 uppercase tracking-widest">Módulo Fotovoltaico</p>
+                <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
+                  <p className="md:col-span-3 text-[10px] font-black text-amber-800 uppercase tracking-widest">Módulo Fotovoltaico</p>
                   <div>
                     <label className="block text-[10px] font-bold text-gray-500 mb-1">POTÊNCIA (Wp) *</label>
                     <input type="number" placeholder="Ex: 585" className={`w-full border p-2 rounded bg-white ${formErrors.modulo_potencia ? 'border-red-500' : ''}`} value={editClientData.modulo_potencia} onChange={e => setEditClientData({ ...editClientData, modulo_potencia: e.target.value })} />
@@ -1178,6 +1191,10 @@ export default function Commercial() {
                     <label className="block text-[10px] font-bold text-gray-500 mb-1">MODELO *</label>
                     <input placeholder="Ex: Jinko Bifacial" className={`w-full border p-2 rounded bg-white ${formErrors.modulo_modelo ? 'border-red-500' : ''}`} value={editClientData.modulo_modelo} onChange={e => setEditClientData({ ...editClientData, modulo_modelo: e.target.value })} />
                     {formErrors.modulo_modelo && <p className="text-red-500 text-[10px] mt-1">{formErrors.modulo_modelo}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 mb-1">QUANTIDADE DE MÓDULOS</label>
+                    <input type="number" min={1} step={1} placeholder="Ex: 10" className="w-full border p-2 rounded bg-white" value={editClientData.module_quantity ?? ''} onChange={e => setEditClientData({ ...editClientData, module_quantity: e.target.value })} />
                   </div>
                 </div>
 
@@ -1200,7 +1217,9 @@ export default function Commercial() {
                 </div>
               </div>
 
-              <div className="md:col-span-2 flex justify-end gap-2 mt-4">
+              </div>
+
+              <div className="shrink-0 px-6 py-4 border-t bg-white flex justify-end gap-2">
                 <button type="button" onClick={() => setShowEditClient(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
                 <button type="submit" className="px-4 py-2 bg-blue-900 text-white rounded hover:bg-blue-800">Salvar Alterações</button>
               </div>

@@ -1,14 +1,22 @@
-import React, { useEffect, useState, Component } from 'react';
+import React, { useEffect, useState, useRef, Component } from 'react';
 import api from '../lib/api';
-import { CheckSquare, AlertTriangle, CheckCircle, FileText, ListChecks, Save, Lock, Unlock, Calendar, Trash2 } from 'lucide-react';
+import { CheckSquare, AlertTriangle, CheckCircle, FileText, ListChecks, Save, Lock, Unlock, Calendar, Trash2, Upload } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { deleteDocsHomologacao } from '../hooks/useHomologacaoDocs';
 import { sendUpdateNotification } from '../lib/notifications';
+import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast';
 
 export default function Homologation() {
+  const { user } = useAuth();
+  const canManageHomologation = ['CEO', 'ADMIN', 'COMMERCIAL'].includes(user?.role || '');
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [projectDocs, setProjectDocs] = useState<any[]>([]);
+  const [newDocType, setNewDocType] = useState<'rg_cnh' | 'conta_energia' | 'contas_beneficiarias' | 'contrato_social'>('rg_cnh');
+  const [newDocFile, setNewDocFile] = useState<File | null>(null);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const docFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [statusModal, setStatusModal] = useState<{ projectId: number, status: string, isOpen: boolean }>({ projectId: 0, status: '', isOpen: false });
   const [statusNote, setStatusNote] = useState('');
@@ -212,6 +220,94 @@ export default function Homologation() {
   const isChecklistComplete = checklist.length > 0 && checklist.every(i => i.completed);
   const isProcessLocked = !isChecklistComplete;
 
+  const loadMergedProjectDocs = async (projectId: number, companyId: string, prefetchedHomoDocs?: any[]) => {
+    // Buscar documentos do cliente no Supabase (documents) e combinar com homologation_documents (R2) sem duplicar
+    const { data: docs } = await supabase
+      .from('documents')
+      .select('*')
+      .eq('project_id', projectId)
+      .eq('company_id', companyId);
+
+    let homoCadastroDocs = prefetchedHomoDocs;
+    if (!homoCadastroDocs) {
+      const projRes = await api.get(`/api/projects/${projectId}`);
+      homoCadastroDocs = Array.isArray(projRes.data?.homologation_documents)
+        ? projRes.data.homologation_documents
+        : [];
+    }
+
+    const seenUrls = new Set<string>();
+    const mergedDocs: any[] = [];
+    for (const d of [...(docs || []), ...(homoCadastroDocs || [])]) {
+      const docUrl = d.url || d.file_url;
+      if (docUrl && !seenUrls.has(docUrl)) {
+        seenUrls.add(docUrl);
+        mergedDocs.push(d);
+      }
+    }
+    setProjectDocs(mergedDocs);
+  };
+
+  const handleAddClientDocument = async () => {
+    if (!selectedProject || !newDocFile) return;
+
+    const clientId = selectedProject.client_id;
+    const projectId = selectedProject.id;
+    if (!clientId || !projectId) {
+      toast.error('Dados do projeto ou cliente ausentes para anexar documento.');
+      return;
+    }
+
+    setUploadingDoc(true);
+    try {
+      const f = newDocFile;
+
+      // 1. Solicita URL pré-assinada ao backend (mesmo fluxo de Commercial.tsx)
+      const { data: presignData } = await api.get('/api/r2/presigned-url', {
+        params: {
+          fileName: f.name,
+          contentType: f.type || 'application/octet-stream',
+          clientId: String(clientId),
+          documentType: newDocType,
+        },
+      });
+
+      // 2. Faz upload DIRETO ao R2
+      const uploadRes = await fetch(presignData.presignedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': f.type || 'application/octet-stream' },
+        body: f,
+      });
+
+      if (!uploadRes.ok) {
+        throw new Error(`Upload ao R2 falhou: ${uploadRes.status}`);
+      }
+
+      // 3. Registra no banco em homologation_documents
+      await api.post('/api/homologation-documents/register', {
+        document_type: newDocType,
+        client_id: String(clientId),
+        project_id: String(projectId),
+        file_name: f.name,
+        file_url: presignData.publicUrl,
+        file_path: presignData.filePath,
+      });
+
+      await loadMergedProjectDocs(projectId, selectedProject.company_id);
+      setNewDocFile(null);
+      if (docFileInputRef.current) {
+        docFileInputRef.current.value = '';
+      }
+      toast.success('Documento adicionado com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao adicionar documento na homologação:', err);
+      const reason = err?.response?.data?.error || err?.message || 'erro desconhecido';
+      toast.error(`Erro ao enviar documento: ${reason}`);
+    } finally {
+      setUploadingDoc(false);
+    }
+  };
+
   const handleDelete = async (id: number, clientName: string) => {
     if (!window.confirm(`Tem certeza que deseja excluir o projeto de "${clientName}"? Esta ação não pode ser desfeita.`)) return;
     try {
@@ -303,13 +399,10 @@ export default function Homologation() {
                         setActiveTab('observations');
                       }
 
-                      // Buscar documentos do cliente no Supabase
-                      const { data: docs } = await supabase
-                        .from('documents')
-                        .select('*')
-                        .eq('project_id', p.id)
-                        .eq('company_id', p.company_id);
-                      setProjectDocs(docs || []);
+                      const homoCadastroDocs = Array.isArray(res.data?.homologation_documents)
+                        ? res.data.homologation_documents
+                        : [];
+                      await loadMergedProjectDocs(p.id, p.company_id, homoCadastroDocs);
                     }}
                     className="bg-blue-900 text-white px-5 py-2.5 rounded-lg hover:bg-blue-800 shadow shadow-blue-900/20 font-medium shrink-0"
                   >
@@ -484,19 +577,58 @@ export default function Homologation() {
                   <h3 className="text-lg font-bold mb-3 text-gray-800 flex items-center gap-2">
                     <FileText size={20} className="text-blue-600" /> Documentos do Cliente
                   </h3>
+
+                  {canManageHomologation && (
+                    <div className="mb-4 p-3 bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+                      <div className="sm:w-52">
+                        <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Tipo de Documento</label>
+                        <select
+                          value={newDocType}
+                          onChange={(e) => setNewDocType(e.target.value as any)}
+                          disabled={uploadingDoc}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                        >
+                          <option value="rg_cnh">RG / CNH</option>
+                          <option value="conta_energia">Conta de Energia</option>
+                          <option value="contas_beneficiarias">Contas Beneficiárias</option>
+                          <option value="contrato_social">Contrato Social</option>
+                        </select>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Arquivo</label>
+                        <input
+                          ref={docFileInputRef}
+                          type="file"
+                          disabled={uploadingDoc}
+                          onChange={(e) => setNewDocFile(e.target.files?.[0] || null)}
+                          className="w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleAddClientDocument}
+                        disabled={!newDocFile || uploadingDoc}
+                        className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      >
+                        <Upload size={16} />
+                        {uploadingDoc ? 'Enviando...' : 'Adicionar documento'}
+                      </button>
+                    </div>
+                  )}
+
                   {projectDocs && projectDocs.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {projectDocs.map((doc: any) => (
-                        <div key={doc.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-200 transition-all">
+                        <div key={`${doc.id}-${doc.url || doc.file_url}`} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-200 transition-all">
                           <div className="flex items-center gap-2 overflow-hidden">
                             <FileText size={16} className="text-blue-500 shrink-0" />
                             <div className="overflow-hidden">
-                              <p className="text-xs font-bold text-gray-700 truncate">{doc.title || 'Documento'}</p>
+                              <p className="text-xs font-bold text-gray-700 truncate">{doc.title || doc.file_name || 'Documento'}</p>
                               <p className="text-[10px] text-gray-400 truncate">{new Date(doc.created_at).toLocaleDateString('pt-BR')}</p>
                             </div>
                           </div>
                           <a
-                            href={doc.url}
+                            href={doc.url || doc.file_url}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:text-blue-800 p-1.5 hover:bg-blue-50 rounded-md transition-colors"

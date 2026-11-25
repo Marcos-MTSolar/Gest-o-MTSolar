@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { maskCpfCnpj, maskPhone } from '../utils/masks';
 
 const inputStyle = "w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all bg-white text-gray-800 placeholder-gray-400";
 const labelStyle = "block text-sm font-semibold text-gray-700 mb-1.5 ml-1";
@@ -118,8 +119,8 @@ export default function NeoenergiaProtocols() {
     setEditingId(p.id);
     setFormData({
       client_name: p.client_name,
-      cpf_cnpj: p.cpf_cnpj || '',
-      phone: p.phone || '',
+      cpf_cnpj: maskCpfCnpj(p.cpf_cnpj || ''),
+      phone: maskPhone(p.phone || ''),
       address: p.address || '',
       pendencia: p.pendencia,
       observacoes: p.observacoes || '',
@@ -327,7 +328,7 @@ export default function NeoenergiaProtocols() {
                   type="text"
                   className={inputStyle}
                   value={formData.cpf_cnpj}
-                  onChange={e => setFormData({ ...formData, cpf_cnpj: e.target.value })}
+                  onChange={e => setFormData({ ...formData, cpf_cnpj: maskCpfCnpj(e.target.value) })}
                   placeholder="000.000.000-00"
                 />
               </div>
@@ -338,7 +339,7 @@ export default function NeoenergiaProtocols() {
                   type="text"
                   className={inputStyle}
                   value={formData.phone}
-                  onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                  onChange={e => setFormData({ ...formData, phone: maskPhone(e.target.value) })}
                   placeholder="(00) 00000-0000"
                 />
               </div>

@@ -4,6 +4,7 @@ import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Pencil, Clock, Plus, X, UserMinus, UserCheck, Search, Loader2, FileText, Download, Trash, FileSpreadsheet } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { maskCPF } from '../utils/masks';
 
 type UserProfile = {
   id: number;
@@ -61,14 +62,8 @@ export default function Funcionarios() {
   const [certFile, setCertFile] = useState<File | null>(null);
   const [savingCert, setSavingCert] = useState(false);
 
-  const formatCPF = (value: string) => {
-    return value
-      .replace(/\D/g, '')
-      .replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-  };
-
   const handleCPFChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatCPF(e.target.value);
+    const formatted = maskCPF(e.target.value);
     setFormData(prev => ({ ...prev, cpf: formatted }));
   };
 
@@ -112,7 +107,7 @@ export default function Funcionarios() {
       password: '', // Leave empty for optional change
       role: user.role,
       active: user.active,
-      cpf: user.cpf || '',
+      cpf: maskCPF(user.cpf || ''),
       cargo: user.cargo || user.role,
       data_admissao: user.data_admissao || '',
     });
@@ -132,7 +127,7 @@ export default function Funcionarios() {
         email: user.email,
         role: user.role,
         active: nextActive,
-        cpf: user.cpf || '',
+        cpf: maskCPF(user.cpf || ''),
         cargo: user.cargo || user.role,
         data_admissao: user.data_admissao || null,
         recebe_leads: user.recebe_leads ?? false,

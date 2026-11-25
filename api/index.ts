@@ -434,16 +434,45 @@ app.get('/api/clients', authenticateToken, async (req: any, res) => {
   res.json(clients);
 });
 
+// Remove máscara de CPF/CNPJ para persistência padronizada (somente dígitos ou null)
+function normalizarCpfCnpj(raw?: string | null): string | null {
+  const digits = raw ? String(raw).replace(/\D/g, '') : '';
+  return digits || null;
+}
+
+// Gera variantes (só dígitos e mascarada) para busca de duplicidade compatível com registros antigos
+function gerarVariantesCpfCnpj(digits: string): string[] {
+  if (digits.length === 11) {
+    return [digits, digits.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4')];
+  }
+  if (digits.length === 14) {
+    return [digits, digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')];
+  }
+  return [digits];
+}
+
 app.post('/api/clients', authenticateToken, async (req: any, res) => {
   const { 
-    name, phone: rawPhoneInput, email, address, city, state, cpf_cnpj, origem_venda = null,
+    name, phone: rawPhoneInput, email, address, city, state, cpf_cnpj: rawCpfCnpj, origem_venda = null,
     proposal_value, payment_method, kit_supplier, pendencies, notes, finance_grace_period,
     inversor_marca = null, inversor_modelo = null, inversor_potencia = null,
     modulo_modelo = null, modulo_potencia = null, estrutura_tipo = null,
+    module_quantity = null,
     assigned_seller_id
   } = req.body;
 
+  // Validação de module_quantity: inteiro positivo ou vazio (null)
+  let parsedModuleQuantity: number | null = null;
+  if (module_quantity !== null && module_quantity !== undefined && String(module_quantity).trim() !== '') {
+    const num = Number(module_quantity);
+    if (!Number.isInteger(num) || num < 1) {
+      return res.status(400).json({ error: 'Quantidade de módulos deve ser um número inteiro positivo.' });
+    }
+    parsedModuleQuantity = num;
+  }
+
   const phone = rawPhoneInput ? normalizarTelefoneBR(rawPhoneInput) : null;
+  const cpf_cnpj = normalizarCpfCnpj(rawCpfCnpj);
 
   let finalAssignedSellerId = assigned_seller_id || null;
   if (req.user.role === 'COMMERCIAL') {
@@ -451,22 +480,28 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
   }
 
   try {
-    // Verificar duplicidade por telefone ou CPF antes de inserir
+    // Verificar duplicidade por telefone ou CPF/CNPJ (com e sem máscara) antes de inserir
     if (phone || cpf_cnpj) {
-      let dupQuery = supabaseAdmin
-        .from('clients')
-        .select('id, name, phone, cpf_cnpj, created_by, users(name)')
-        .eq('company_id', req.user.company_id);
-
-      if (phone && cpf_cnpj) {
-        dupQuery = dupQuery.or(`phone.eq.${phone},cpf_cnpj.eq.${cpf_cnpj}`);
-      } else if (phone) {
-        dupQuery = dupQuery.eq('phone', phone);
-      } else {
-        dupQuery = dupQuery.eq('cpf_cnpj', cpf_cnpj);
+      const orConditions: string[] = [];
+      if (phone) orConditions.push(`phone.eq.${phone}`);
+      if (cpf_cnpj) {
+        for (const variante of gerarVariantesCpfCnpj(cpf_cnpj)) {
+          orConditions.push(`cpf_cnpj.eq.${variante}`);
+        }
       }
 
-      const { data: existing } = await dupQuery.maybeSingle();
+      const { data: existing, error: dupError } = await supabaseAdmin
+        .from('clients')
+        .select('id, name, phone, cpf_cnpj, created_by, users!clients_created_by_fkey(name)')
+        .eq('company_id', req.user.company_id)
+        .or(orConditions.join(','))
+        .limit(1)
+        .maybeSingle();
+
+      if (dupError) {
+        console.error('[clients POST] Erro ao verificar duplicidade:', dupError.code || dupError.message);
+        return res.status(500).json({ error: 'Erro ao verificar duplicidade do cliente.' });
+      }
 
       if (existing) {
         const cadastradoPor = (existing as any).users?.name || 'outro usuário';
@@ -551,7 +586,11 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
       status: 'pendente_comercial',
       company_id: req.user.company_id
     });
-    await supabase.from('technical_data').insert({ project_id: project.id, company_id: req.user.company_id });
+    await supabase.from('technical_data').insert({
+      project_id: project.id,
+      module_quantity: parsedModuleQuantity,
+      company_id: req.user.company_id
+    });
 
     res.json({ id: client.id, project_id: project?.id });
   } catch (error: any) {
@@ -562,11 +601,29 @@ app.post('/api/clients', authenticateToken, async (req: any, res) => {
 
 app.put('/api/clients/:id', authenticateToken, async (req: any, res) => {
   const { 
-    name, phone, email, address, city, state, cpf_cnpj, origem_venda = null,
+    name, phone: rawPhoneInput, email, address, city, state, cpf_cnpj: rawCpfCnpj, origem_venda = null,
     inversor_marca = null, inversor_modelo = null, inversor_potencia = null,
     modulo_modelo = null, modulo_potencia = null, estrutura_tipo = null,
+    module_quantity,
     assigned_seller_id
   } = req.body;
+
+  const phone = rawPhoneInput ? normalizarTelefoneBR(rawPhoneInput) : null;
+  const cpf_cnpj = normalizarCpfCnpj(rawCpfCnpj);
+
+  // Validação de module_quantity quando enviado: inteiro positivo ou vazio (null)
+  let parsedModuleQuantity: number | null | undefined = undefined;
+  if (module_quantity !== undefined) {
+    if (module_quantity === null || String(module_quantity).trim() === '') {
+      parsedModuleQuantity = null;
+    } else {
+      const num = Number(module_quantity);
+      if (!Number.isInteger(num) || num < 1) {
+        return res.status(400).json({ error: 'Quantidade de módulos deve ser um número inteiro positivo.' });
+      }
+      parsedModuleQuantity = num;
+    }
+  }
 
   const updatePayload: any = {
     name,
@@ -613,6 +670,24 @@ app.put('/api/clients/:id', authenticateToken, async (req: any, res) => {
 
   if (updateError) {
     return res.status(500).json({ error: updateError.message });
+  }
+
+  // Sincroniza module_quantity em technical_data dos projetos do cliente (mesma fonte de Technical.tsx e KitPurchase.tsx)
+  if (parsedModuleQuantity !== undefined) {
+    const { data: clientProjects } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('client_id', req.params.id)
+      .eq('company_id', req.user.company_id);
+
+    if (clientProjects && clientProjects.length > 0) {
+      const projectIds = clientProjects.map((p: any) => p.id);
+      await supabase
+        .from('technical_data')
+        .update({ module_quantity: parsedModuleQuantity, updated_at: new Date() })
+        .in('project_id', projectIds)
+        .eq('company_id', req.user.company_id);
+    }
   }
 
   res.json({ success: true });
@@ -716,7 +791,19 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
 
   if (!project) return res.status(404).json({ error: 'Project not found' });
 
-  const { data: documents } = await supabase.from('documents').select('*').eq('project_id', project.id);
+  const { data: documents } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('project_id', project.id)
+    .eq('company_id', req.user.company_id);
+
+  const { data: homologationDocs } = await supabase
+    .from('homologation_documents')
+    .select('*')
+    .eq('project_id', project.id)
+    .eq('company_id', req.user.company_id)
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false });
 
   // Flatten
   const techData = (Array.isArray(project.technical_data) ? project.technical_data[0] : project.technical_data) || {};
@@ -779,7 +866,8 @@ app.get('/api/projects/:id', authenticateToken, async (req: any, res) => {
     photo_connection_point: techData.photo_connection_point,
     photo_aterramento_padrao: techData.photo_aterramento_padrao,
 
-    documents
+    documents,
+    homologation_documents: homologationDocs || []
   };
 
   res.json(formatted);

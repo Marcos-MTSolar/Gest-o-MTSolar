@@ -17,6 +17,7 @@ import {
 import jsPDF from 'jspdf';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
+import { maskCpfCnpj } from '../utils/masks';
 
 interface KitItem {
   id: string;
@@ -84,24 +85,7 @@ export default function Contracts() {
   };
 
   // BLOCO 4 — Máscara dinâmica de CPF (11 dígitos) ou CNPJ (14 dígitos)
-  const formatarCpfCnpj = (valor: string): string => {
-    // Remove todos os caracteres não numéricos e limita a 14 dígitos
-    const numeros = valor.replace(/\D/g, '').slice(0, 14);
-    if (numeros.length <= 11) {
-      // Formato CPF: 000.000.000-00
-      return numeros
-        .replace(/^(\d{3})(\d)/, '$1.$2')
-        .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
-        .replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2');
-    } else {
-      // Formato CNPJ: 00.000.000/0000-00
-      return numeros
-        .replace(/^(\d{2})(\d)/, '$1.$2')
-        .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
-        .replace(/\.(\d{3})(\d)/, '.$1/$2')
-        .replace(/(\/\d{4})(\d{1,2})$/, '$1-$2');
-    }
-  };
+  const formatarCpfCnpj = (valor: string): string => maskCpfCnpj(valor);
 
   const gerarPDF = async () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });

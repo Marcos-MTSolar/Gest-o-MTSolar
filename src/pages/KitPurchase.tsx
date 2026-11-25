@@ -282,6 +282,14 @@ export default function KitPurchase() {
                   className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Quantidade de Módulos</label>
+                <div className="w-full border p-3 rounded-lg bg-gray-50 text-gray-800 font-semibold">
+                  {selectedProject.module_quantity !== null && selectedProject.module_quantity !== undefined && selectedProject.module_quantity !== ''
+                    ? selectedProject.module_quantity
+                    : '—'}
+                </div>
+              </div>
 
               {/* Novos campos: Dados de Compra e Entrega */}
               <div className="md:col-span-2 border-t pt-5 mt-2">
