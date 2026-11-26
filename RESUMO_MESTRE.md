@@ -3527,3 +3527,17 @@ pm run build ? Sucesso (uilt in 6.93s, 3317 módulos).
 ### Atualização — 2026-11-25 15:11
 - **O que foi feito:** Adicionada a funcionalidade de anexar documentos na seção "Documentos do Cliente" em `Homologation.tsx` (seletor de tipo `rg_cnh`, `conta_energia`, `contas_beneficiarias`, `contrato_social`, input de arquivo e botão "Adicionar documento" restrito aos roles `CEO`, `ADMIN` e `COMMERCIAL`), reutilizando o fluxo R2 (`GET /api/r2/presigned-url` → `PUT` direto ao R2 → `POST /api/homologation-documents/register`), recarregando e deduplicando a lista e exibindo toast com `react-hot-toast`.
 - **Arquivos modificados:** `src/pages/Homologation.tsx` (linhas 1–9, 10–18, 223–310, 400–404, 575–616).
+
+
+---
+
+### Atualização — 2026-11-26 06:01
+- **O que foi feito:** Reorganização do menu lateral em `src/components/Layout.tsx` com Dashboard fixo no topo e 5 grupos recolhíveis (`Dia a dia`, `Atendimento e Vendas`, `Obras e Técnica`, `Neoenergia`, `Administração`), mantendo todos os 22 itens, rotas, ícones e regras de visibilidade por role (incluindo `allowedPaths` do `COMMERCIAL` e `Origem de Vendas` exclusivo do `CEO`), persistência em `localStorage` (`sidebarOpenGroups`), abertura automática do grupo da rota ativa, indicador de mensagens não lidas quando `Dia a dia` estiver fechado e suporte ao modo colapsado do tablet (`md:w-16 hover:md:w-64`).
+- **Arquivos modificados:** `src/components/Layout.tsx` (linhas 28–31, 109–232, 267–311).
+
+
+---
+
+### Atualização — 2026-11-26 06:36
+- **O que foi feito:** Ajustado o menu lateral em `src/components/Layout.tsx` para comportamento de acordeão (apenas um grupo aberto por vez): `toggleGroup` abre o grupo clicado e fecha os demais (ou fecha todos se já estava aberto), navegação abre apenas o grupo da rota ativa fechando os outros, e inicialização via `localStorage` (`sidebarOpenGroups`) normaliza estados antigos com múltiplos grupos abertos.
+- **Arquivos modificados:** `src/components/Layout.tsx` (linhas 184–223).

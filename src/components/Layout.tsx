@@ -27,7 +27,8 @@ import {
   FileCheck,
   Clock,
   Table,
-  TrendingUp
+  TrendingUp,
+  ChevronDown
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
@@ -105,33 +106,64 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const menuItems = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
-    { name: 'Comercial', path: '/commercial', icon: Briefcase, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
-    { name: 'Atendimento', path: '/whatsapp', icon: MessageCircle, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
-    { name: 'Reg. Atendimentos', path: '/registro-atendimentos', icon: Table, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
-    { name: 'Origem de Vendas', path: '/origem-vendas', icon: TrendingUp, roles: ['CEO'] },
-    { name: 'Agenda', path: '/agenda', icon: Calendar, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
-    { name: 'Cronograma', path: '/cronograma', icon: Calendar, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
-    { name: 'Protocolos Neoenergia', path: '/neoenergia', icon: ClipboardList, roles: ['CEO', 'ADMIN'] },
-    { name: 'Gerador de Proposta', path: '/proposal-generator', icon: FileSpreadsheet, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
-    { name: 'Calculadora', path: '/calculadora', icon: Zap, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
-    { name: 'Ponto Eletrônico', path: '/ponto', icon: Clock, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
-    { name: 'Kit Solar', path: '/kit-purchase', icon: ShoppingCart, roles: ['CEO', 'ADMIN'] },
-    { name: 'Contratos', path: '/contracts', icon: FileSignature, roles: ['CEO', 'ADMIN'] },
-    { name: 'Técnica', path: '/technical', icon: Wrench, roles: ['CEO', 'ADMIN', 'TECHNICAL', 'COMMERCIAL'] },
-    { name: 'Homologação', path: '/homologation', icon: FileCheck, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
-    { name: 'Obra', path: '/obra', icon: Hammer, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
-    { name: 'Estoque', path: '/estoque', icon: Package, roles: ['CEO', 'ADMIN'] },
-    { name: 'Finalizados', path: '/finished', icon: Archive, roles: ['CEO', 'ADMIN'] },
-    { name: 'Mensagens', path: '/messages', icon: MessageSquare, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
-    { name: 'Funcionários', path: '/funcionarios', icon: Users, roles: ['CEO', 'ADMIN'] },
-    { name: 'Usuários', path: '/users', icon: Users, roles: ['CEO', 'ADMIN'] },
-    { name: 'Configurações', path: '/settings', icon: Settings, roles: ['CEO', 'ADMIN'] },
+  const dashboardItem = { name: 'Dashboard', path: '/', icon: LayoutDashboard, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] };
+
+  const menuGroups = [
+    {
+      id: 'dia_a_dia',
+      title: 'Dia a dia',
+      items: [
+        { name: 'Agenda', path: '/agenda', icon: Calendar, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
+        { name: 'Mensagens', path: '/messages', icon: MessageSquare, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
+        { name: 'Ponto Eletrônico', path: '/ponto', icon: Clock, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
+      ],
+    },
+    {
+      id: 'atendimento_vendas',
+      title: 'Atendimento e Vendas',
+      items: [
+        { name: 'Atendimento', path: '/whatsapp', icon: MessageCircle, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
+        { name: 'Reg. Atendimentos', path: '/registro-atendimentos', icon: Table, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
+        { name: 'Comercial', path: '/commercial', icon: Briefcase, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
+        { name: 'Gerador de Proposta', path: '/proposal-generator', icon: FileSpreadsheet, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
+        { name: 'Calculadora', path: '/calculadora', icon: Zap, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
+        { name: 'Contratos', path: '/contracts', icon: FileSignature, roles: ['CEO', 'ADMIN'] },
+        { name: 'Origem de Vendas', path: '/origem-vendas', icon: TrendingUp, roles: ['CEO'] },
+      ],
+    },
+    {
+      id: 'obras_tecnica',
+      title: 'Obras e Técnica',
+      items: [
+        { name: 'Técnica', path: '/technical', icon: Wrench, roles: ['CEO', 'ADMIN', 'TECHNICAL', 'COMMERCIAL'] },
+        { name: 'Cronograma', path: '/cronograma', icon: Calendar, roles: ['CEO', 'ADMIN', 'COMMERCIAL', 'TECHNICAL'] },
+        { name: 'Obra', path: '/obra', icon: Hammer, roles: ['CEO', 'ADMIN', 'TECHNICAL'] },
+        { name: 'Estoque', path: '/estoque', icon: Package, roles: ['CEO', 'ADMIN'] },
+      ],
+    },
+    {
+      id: 'neoenergia',
+      title: 'Neoenergia',
+      items: [
+        { name: 'Kit Solar', path: '/kit-purchase', icon: ShoppingCart, roles: ['CEO', 'ADMIN'] },
+        { name: 'Homologação', path: '/homologation', icon: FileCheck, roles: ['CEO', 'ADMIN', 'COMMERCIAL'] },
+        { name: 'Protocolos Neoenergia', path: '/neoenergia', icon: ClipboardList, roles: ['CEO', 'ADMIN'] },
+        { name: 'Finalizados', path: '/finished', icon: Archive, roles: ['CEO', 'ADMIN'] },
+      ],
+    },
+    {
+      id: 'administracao',
+      title: 'Administração',
+      items: [
+        { name: 'Funcionários', path: '/funcionarios', icon: Users, roles: ['CEO', 'ADMIN'] },
+        { name: 'Usuários', path: '/users', icon: Users, roles: ['CEO', 'ADMIN'] },
+        { name: 'Configurações', path: '/settings', icon: Settings, roles: ['CEO', 'ADMIN'] },
+      ],
+    },
   ];
 
   const isCommercial = user?.role?.toUpperCase() === 'COMMERCIAL';
-  const filteredItems = menuItems.filter(item => {
+  const isItemVisible = (item: { path: string; roles: string[] }) => {
     const hasRole = !item.roles || item.roles.includes(user?.role || '');
     if (isCommercial) {
       // Vendedor: Dashboard, Comercial, Atendimento, Agenda, Gerador de Proposta, Calculadora, Ponto Eletrônico e Técnica
@@ -139,7 +171,83 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       return allowedPaths.includes(item.path);
     }
     return hasRole;
+  };
+
+  const showDashboard = isItemVisible(dashboardItem);
+  const visibleGroups = menuGroups
+    .map(group => ({
+      ...group,
+      items: group.items.filter(isItemVisible),
+    }))
+    .filter(group => group.items.length > 0);
+
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    const activeGroup = menuGroups.find(g => g.items.some(i => i.path === location.pathname));
+    const fallbackState = activeGroup ? { [activeGroup.id]: true } : {};
+    try {
+      const saved = localStorage.getItem('sidebarOpenGroups');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          const openKeys = Object.keys(parsed).filter(k => Boolean(parsed[k]));
+          if (openKeys.length === 0) return {};
+          if (openKeys.length === 1) return { [openKeys[0]]: true };
+          // Formato antigo com mais de um grupo aberto: mantém apenas o da rota ativa (ou todos fechados)
+          return fallbackState;
+        }
+      }
+    } catch {
+      // Ignora JSON inválido ou bloqueio de localStorage
+    }
+    return fallbackState;
   });
+
+  useEffect(() => {
+    const activeGroup = menuGroups.find(g => g.items.some(i => i.path === location.pathname));
+    if (activeGroup) {
+      setOpenGroups(prev => {
+        const otherOpen = Object.keys(prev).some(k => k !== activeGroup.id && prev[k]);
+        if (prev[activeGroup.id] && !otherOpen) return prev;
+        return { [activeGroup.id]: true };
+      });
+    }
+  }, [location.pathname]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('sidebarOpenGroups', JSON.stringify(openGroups));
+    } catch {
+      // Ignora erro ao persistir no localStorage
+    }
+  }, [openGroups]);
+
+  const toggleGroup = (groupId: string) => {
+    setOpenGroups(prev => (prev[groupId] ? {} : { [groupId]: true }));
+  };
+
+  const renderMenuLink = (item: { name: string; path: string; icon: any }) => (
+    <Link
+      key={item.path}
+      to={item.path}
+      className={cn(
+        "flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors relative whitespace-nowrap overflow-hidden",
+        location.pathname === item.path
+          ? "bg-blue-800 text-amber-400"
+          : "text-gray-300 hover:bg-blue-800 hover:text-white"
+      )}
+      onClick={() => { if (window.innerWidth < 768) setIsOpen(false); }}
+    >
+      <item.icon className="w-5 h-5 mr-3 shrink-0" />
+      <span className="transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100 lg:opacity-100">
+        {item.name}
+      </span>
+      {item.name === 'Mensagens' && unreadCount > 0 && (
+        <span className="absolute right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100 lg:opacity-100">
+          {unreadCount}
+        </span>
+      )}
+    </Link>
+  );
 
   return (
     <div className="flex h-screen bg-gray-100 overflow-hidden">
@@ -165,30 +273,49 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="flex flex-col justify-between h-[calc(100%-5rem)] overflow-hidden">
-          <nav className="flex-1 px-2 py-4 space-y-2 overflow-y-auto custom-scrollbar">
-            {filteredItems.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={cn(
-                  "flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors relative whitespace-nowrap overflow-hidden",
-                  location.pathname === item.path
-                    ? "bg-blue-800 text-amber-400"
-                    : "text-gray-300 hover:bg-blue-800 hover:text-white"
-                )}
-                onClick={() => { if (window.innerWidth < 768) setIsOpen(false); }}
-              >
-                <item.icon className="w-5 h-5 mr-3 shrink-0" />
-                <span className="transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100 lg:opacity-100">
-                  {item.name}
-                </span>
-                {item.name === 'Mensagens' && unreadCount > 0 && (
-                  <span className="absolute right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100 lg:opacity-100">
-                    {unreadCount}
-                  </span>
-                )}
-              </Link>
-            ))}
+          <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto custom-scrollbar">
+            {showDashboard && renderMenuLink(dashboardItem)}
+
+            {visibleGroups.map((group) => {
+              const isGroupOpen = !!openGroups[group.id];
+              const showUnreadDot = group.id === 'dia_a_dia' && !isGroupOpen && unreadCount > 0;
+
+              return (
+                <div key={group.id} className="pt-2">
+                  {/* Linha fina separadora visível apenas no tablet colapsado (sem hover) */}
+                  <div className="hidden md:block md:group-hover:hidden lg:hidden my-2 border-t border-blue-800/80" />
+
+                  <button
+                    type="button"
+                    aria-expanded={isGroupOpen}
+                    onClick={() => toggleGroup(group.id)}
+                    className="flex md:hidden md:group-hover:flex lg:flex items-center justify-between w-full px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-blue-300 hover:text-amber-400 transition-colors whitespace-nowrap overflow-hidden"
+                  >
+                    <span className="flex items-center gap-2">
+                      {group.title}
+                      {showUnreadDot && (
+                        <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" aria-label="Mensagens não lidas" />
+                      )}
+                    </span>
+                    <ChevronDown
+                      className={cn(
+                        "w-4 h-4 shrink-0 transition-transform duration-200",
+                        isGroupOpen ? "rotate-180" : ""
+                      )}
+                    />
+                  </button>
+
+                  <div
+                    className={cn(
+                      "space-y-1 mt-1",
+                      isGroupOpen ? "block" : "hidden md:block md:group-hover:hidden lg:hidden"
+                    )}
+                  >
+                    {group.items.map(renderMenuLink)}
+                  </div>
+                </div>
+              );
+            })}
           </nav>
 
           <div className="p-4 border-t border-blue-800 whitespace-nowrap overflow-hidden">
