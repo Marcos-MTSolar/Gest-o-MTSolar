@@ -17,6 +17,7 @@ type UserProfile = {
   cargo?: string;
   data_admissao?: string;
   recebe_leads?: boolean;
+  controla_ponto?: boolean;
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -45,6 +46,7 @@ export default function Funcionarios() {
     cpf: '',
     cargo: '',
     data_admissao: '',
+    controla_ponto: true,
   });
   const [submitting, setSubmitting] = useState(false);
   
@@ -95,6 +97,7 @@ export default function Funcionarios() {
       cpf: '',
       cargo: '',
       data_admissao: '',
+      controla_ponto: true,
     });
     setIsModalOpen(true);
   };
@@ -110,6 +113,7 @@ export default function Funcionarios() {
       cpf: maskCPF(user.cpf || ''),
       cargo: user.cargo || user.role,
       data_admissao: user.data_admissao || '',
+      controla_ponto: user.controla_ponto ?? true,
     });
     setIsModalOpen(true);
   };
@@ -174,6 +178,7 @@ export default function Funcionarios() {
         data_admissao: formData.data_admissao || null,
         // Preserva recebe_leads do usuário original ao editar
         recebe_leads: editingUser?.recebe_leads ?? false,
+        controla_ponto: formData.controla_ponto,
       };
 
       if (editingUser) {
@@ -540,6 +545,24 @@ export default function Funcionarios() {
                 <label htmlFor="active-checkbox" className="text-sm font-semibold text-gray-700 cursor-pointer select-none">
                   Status Ativo (Permitir acesso ao sistema)
                 </label>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <input
+                  type="checkbox"
+                  id="controla-ponto-checkbox"
+                  checked={formData.controla_ponto}
+                  onChange={(e) => setFormData({ ...formData, controla_ponto: e.target.checked })}
+                  className="w-4 h-4 text-blue-900 border-gray-300 rounded focus:ring-blue-900"
+                />
+                <div>
+                  <label htmlFor="controla-ponto-checkbox" className="text-sm font-semibold text-gray-700 cursor-pointer select-none">
+                    Controla ponto e banco de horas
+                  </label>
+                  <p className="text-xs text-gray-500">
+                    Desmarque para sócios ou cargos de gestão isentos de controle de jornada. Confirme com seu contador.
+                  </p>
+                </div>
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-150">

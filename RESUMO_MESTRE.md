@@ -3412,7 +3412,8 @@ Esta seÃƒÂ§ÃƒÂ£o rastreia os arquivos de migration que foram criados no 
 - **?? CRÍTICO:** 127 URLs do Supabase em proposal_history.url_arquivo — devem ser migradas para R2 antes de cancelar o plano Pro
 - **?? MÉDIO:** 5 documentos em documents.url e 2 registros em proposal_history.raw_data ainda com URL do Supabase
 - **Banco:** 32,78 MB total; whatsapp_messages é o maior objeto (10 MB)
-- **R2:** bucket mtsolar-media, URL pública via domínio 2.dev (sem domínio próprio)
+- **R2:** bucket mtsolar-media, URL pública via domínio 
+2.dev (sem domínio próprio)
 - **Cron cleanup-proposals** ainda apaga do Supabase Storage bucket propostas — precisa ser migrado para R2
 - **src/pages/Obra.tsx** ainda faz upload para Supabase Storage bucket obras-fotos — divergência com backend
 
@@ -3437,7 +3438,8 @@ eoenergia_protocols
 - proposal_history.url_arquivo: 127 URLs apontando para bucket propostas -> **127 existem** no storage (0 faltantes).
 - documents.url: 5 URLs apontando para bucket uploads -> **5 existem** no storage (0 faltantes).
 - proposal_history.raw_data (jsonb): 8 URLs apontando para bucket uploads/proposals -> **8 existem** no storage (0 faltantes).
-- Propostas com url_arquivo IS NULL: 352 propostas (100% delas com aw_data técnico/comercial preenchido e intacto).
+- Propostas com url_arquivo IS NULL: 352 propostas (100% delas com 
+aw_data técnico/comercial preenchido e intacto).
 - Total atual no Supabase Storage: 527 objetos, 430,38 MB (propostas: 410 obj / 376,81 MB; uploads: 95 obj / 40,19 MB; homologacao-docs: 22 obj / 13,38 MB).
 
 ---
@@ -3447,7 +3449,8 @@ eoenergia_protocols
 **Data/Hora:** 25/11/2026 13:56 (America/Recife)  
 **Causa identificada:** O cadastro em Commercial.tsx envia os documentos para o Cloudflare R2 via presigned URL e registra na tabela homologation_documents, enquanto Homologation.tsx (ao clicar em "Gerenciar") lia apenas a tabela documents.  
 **O que foi feito:**
-- pi/index.ts (GET /api/projects/:id, L719–734 e L796): Adicionado filtro explícito company_id em documents, consulta a homologation_documents filtrando por project_id, company_id (eq.user.company_id) e expires_at > NOW(), retornando homologation_documents no payload do projeto.
+- pi/index.ts (GET /api/projects/:id, L719–734 e L796): Adicionado filtro explícito company_id em documents, consulta a homologation_documents filtrando por project_id, company_id (
+eq.user.company_id) e expires_at > NOW(), retornando homologation_documents no payload do projeto.
 - src/pages/Homologation.tsx (L306–326 e L503–523): Ao abrir "Gerenciar", unifica documents e homologation_documents no estado projectDocs com deduplicação por URL (url || file_url) e renderiza nome (doc.title || doc.file_name) e link de abertura (doc.url || doc.file_url).
 **Validações:**
 - 
@@ -3464,7 +3467,8 @@ pm run build ? Sucesso (uilt in 7.86s, 3316 módulos).
 **O que foi feito:**
 - pi/index.ts (POST /api/clients, L438–455 e L565–569; PUT /api/clients/:id, L578–598 e L646–661): Recebe module_quantity, valida como inteiro positivo (>= 1) ou 
 ull (vazio), grava na criação de 	echnical_data e sincroniza em 	echnical_data ao editar o cliente (filtrado por company_id).
-- src/pages/Commercial.tsx (L25–30, L115–119, L256–259, L518–535, L828–831, L1176–1195): Adicionado campo numérico module_quantity (inteiro, min={1}, step={1}) em "Novo Cliente", "Editar Cliente" e no preenchimento via proposta (aw.moduleQty).
+- src/pages/Commercial.tsx (L25–30, L115–119, L256–259, L518–535, L828–831, L1176–1195): Adicionado campo numérico module_quantity (inteiro, min={1}, step={1}) em "Novo Cliente", "Editar Cliente" e no preenchimento via proposta (
+aw.moduleQty).
 - src/pages/KitPurchase.tsx (L285–293): Exibe "Quantidade de Módulos" junto aos dados do kit usando selectedProject.module_quantity (exibindo "—" para projetos antigos sem valor).
 **Validações:**
 - 
@@ -3541,3 +3545,157 @@ pm run build ? Sucesso (uilt in 6.93s, 3317 módulos).
 ### Atualização — 2026-11-26 06:36
 - **O que foi feito:** Ajustado o menu lateral em `src/components/Layout.tsx` para comportamento de acordeão (apenas um grupo aberto por vez): `toggleGroup` abre o grupo clicado e fecha os demais (ou fecha todos se já estava aberto), navegação abre apenas o grupo da rota ativa fechando os outros, e inicialização via `localStorage` (`sidebarOpenGroups`) normaliza estados antigos com múltiplos grupos abertos.
 - **Arquivos modificados:** `src/components/Layout.tsx` (linhas 184–223).
+
+
+---
+
+### Atualização — 2026-11-26 08:43
+- **O que foi feito:** Adicionado o bloco ankAccumulated (previousBalance, periodMovement, ccumulatedBalance, previousUntil) ao retorno de GET /api/ponto/relatorio/:userId e criada a rota somente leitura GET /api/hour-bank/history?user_id=&months=12 (máx. 24 meses) com paginação via .range() em etchHourBankEntriesPaginated para contornar o limite de 1000 linhas do Supabase, respeitando isolamento multi-tenant (company_id), fuso America/Recife (getRecifeDateStr) e meses sem lançamentos com movimento  .
+- **Arquivos modificados:** pi/index.ts (linhas 4935–5080 e 5756–5863).
+
+
+---
+
+### Atualização — 2026-11-26 08:48
+- **O que foi feito:** Implementadas em src/pages/Ponto.tsx as telas do fluxo de ajuste de ponto e espelho assinado mensal:
+  1. Aba **Histórico**: botão "+ Solicitar ajuste" e botão "Solicitar ajuste" por dia (com destaque âmbar para dias com batida faltante) abrindo modal com data, tipo de batida, horário, categoria do motivo, descrição (mín. 15 caracteres com contador), aviso de 30 dias, checkbox obrigatório de aceite eletrônico e exibição do número e data/hora do aceite após envio.
+  2. Seção **Meus ajustes** na aba Histórico com seletor de mês, listagem de ajustes do mês (número, data, batida, status e observação do gestor) e botão "Ver espelho assinado" do próprio mês quando disponível.
+  3. Aba **Ajustes** (CEO/ADMIN): filtro por mês, botão "Registrar ajuste em nome do colaborador" (mesmo modal sem checkbox de aceite, com aviso de assinatura mensal), listagem completa e ações de Aprovar (exibindo erro do backend em auto-aprovação) e Rejeitar (modal com observação obrigatória).
+  4. Aba **Relatórios (Gestor)**: botões "Anexar espelho assinado" (POST /api/ponto/documento-mensal) e "Ver espelho assinado" (GET /api/ponto/documento-mensal) para o mês selecionado.
+- **Arquivos modificados:** src/pages/Ponto.tsx (linhas 10, 77–135, 572–604, 679–717, 775–778, 1043–1177, 1674–2036, 2642–2746, 3411–3662).
+
+
+---
+
+### Atualização — 2026-11-26 09:00
+- **O que foi feito:** Implementado Prompt 4 — saldo acumulado e histórico mensal do banco de horas no PDF e na tela:
+  1. **PDF — RESUMO DO BANCO DE HORAS:** Renomeada a linha 'Saldo Total do Banco de Horas' para 'Saldo do Período'; adicionadas 2 novas linhas ('Saldo anterior até dd/mm/aaaa' e 'Saldo acumulado') quando bankAccumulated disponível; boxHeight expandido de 27 para 36mm dinamicamente; generatePDF tornado async para buscar ajustes antes de gerar o anexo.
+  2. **PDF — Anexo de ajustes:** Chamada a appendAjustesAnexoToPdf() inserida no generatePDF após a página 1; busca ajustes via GET /api/ponto/ajustes; rodapé 'Pág. x/y' adicionado em todas as páginas quando houver mais de 1.
+  3. **Tela — Relatório do gestor:** Card 'Saldo Acumulado' adicionado após os 5 cards existentes (visível quando bankAccumulated disponível); tabela 'Histórico do Banco de Horas' (12 meses) adicionada abaixo do card.
+  4. **Tela — Aba Banco de Horas (funcionário):** Tabela 'Histórico Mensal do Banco de Horas' adicionada abaixo do extrato detalhado.
+  5. **Estados novos:** bankAccumulated, hourBankHistory, loadingHourBankHistory; função fetchHourBankHistory(); fetchReport() popula bankAccumulated; useEffect inicial chama fetchHourBankHistory().
+- **Arquivos modificados:**
+  - src/pages/Ponto.tsx (import linha 13; estados linhas 498-510; useEffect linha 621; fetchHourBankHistory linhas 760-771; fetchReport linhas 800-801; catch fetchReport linha 847; generatePDF async linha 1232; RESUMO box linhas 1488-1600; chamada anexo+rodapé linhas 1623-1660; card acumulado+tabela gestor linhas 2295-2347; tabela bancohoras funcionário linhas 2537-2578).
+  - src/utils/ajusteAnexoPdf.ts (criado em sessão anterior).
+- **Validação:** npx tsc --noEmit OK (0 erros); npm run build OK (built in 6.42s).
+
+
+
+
+---
+
+### Atualização — 2026-11-26 16:15
+- **O que foi feito:** Implementado backend completo dos ajustes de ponto v2 (backend do Prompt 1):
+
+#### PASSO 0 — Contrato front→back conferido
+| Chamada | Método | URL | Corpo/Params | Campos lidos no front |
+|---|---|---|---|---|
+| Listar ajustes (gestor) | GET | /api/ponto/ajustes?month=YYYY-MM | — | array de ajustes |
+| Listar ajustes (funcionário) | GET | /api/ponto/ajustes?user_id=X&month=YYYY-MM | — | array de ajustes |
+| Buscar doc mensal (funcionário) | GET | /api/ponto/documento-mensal?user_id=X&year_month=YYYY-MM | — | es.data.url / es.data.signedUrl |
+| Buscar doc mensal (gestor) | GET | /api/ponto/documento-mensal?user_id=X&year_month=YYYY-MM | — | es.data.url / es.data.signedUrl |
+| Criar ajuste | POST | /api/ponto/ajuste | {adjustment_type, reference_date, punch_type, requested_timestamp, reason_category, reason_text, time_record_id?, accept?, user_id?} | created.document_number, created.requested_ack_at |
+| Revisar ajuste | PUT | /api/ponto/ajuste/:id | {status, review_note?} | — |
+| Anexar espelho | POST | /api/ponto/documento-mensal | multipart: user_id, year_month, document | — |
+| PDF — ajustes do mês | GET | /api/ponto/ajustes?user_id=X&month=YYYY-MM | — | array AjusteAnexoItem[] |
+
+Campos usados pelo justeAnexoPdf.ts atendidos: document_number, eference_date, punch_type, original_timestamp, equested_timestamp, 
+ew_timestamp, eason_category, eason_text, justification, equested_ack_at, equested_by_name, user_name, eviewed_by_name, eviewed_at, eview_note, created_at, status, 	ime_records.type, 	ime_records.timestamp.
+
+#### Implementado:
+1. **Migration** supabase/migrations/20261126_ponto_ajustes_v2.sql (NÃO executada):
+   - ADD COLUMN IF NOT EXISTS em 	ime_adjustments: user_id, adjustment_type, reason_category, reason_text, punch_type, reference_date, requested_timestamp, original_timestamp, requested_ack_at, ack_text_version, review_note, document_number
+   - Índice único parcial em (company_id, document_number) e índice em (company_id, user_id, reference_date)
+   - Backfill user_id e reference_date de registros antigos via JOIN com time_records
+   - ADD COLUMN IF NOT EXISTS em 	ime_records: source (DEFAULT 'app'), original_timestamp, adjustment_id
+   - Tabela djustment_sequence (company_id, year, last_number) + função SQL 
+ext_adjustment_number() — numeração atômica AJ-AAAA-000123
+   - Tabela ponto_monthly_documents (uuid PK, company_id, user_id, year_month, document_path, uploaded_by, uploaded_at) com UNIQUE (company_id, user_id, year_month) e RLS habilitado sem políticas
+2. **api/r2.ts** — adicionado getSignedReadUrl(filePath, expiresInSeconds=300) para URL assinada de leitura GET privada
+3. **api/index.ts** — rotas substituídas/adicionadas:
+   - POST /api/ponto/ajuste: compatibilidade com formato antigo (time_record_id+justification+new_timestamp) + formato novo completo com validações (accept obrigatório para funcionário, bloqueio de data futura/prazo 30 dias/atestado/duplicata, geração de document_number via RPC, gravar requested_ack_at com hora do servidor, CEO/ADMIN pode abrir em nome de outro)
+   - PUT /api/ponto/ajuste/:id: bloqueio auto-aprovação (403 se req.user.id === user_id ou === requested_by), review_note obrigatória na rejeição, preserva original_timestamp, insere novo time_record para batida inexistente (source='ajuste'), recalcula banco de horas com reference_date em Recife (nunca UTC split), notifica funcionário via push + notifications
+   - GET /api/ponto/ajustes: funcionário vê só os próprios (403 para outro user_id), CEO/ADMIN vê qualquer usuário da empresa, filtra por mês via reference_date, sem user_id retorna pendentes da empresa, normaliza requested_by_name/reviewed_by_name/user_name, limit 200
+   - POST /api/ponto/documento-mensal: multer.single('document') com validação de tipo e tamanho (10MB), upload para R2 privado em ponto-docs/{company_id}/{user_id}/{year_month}/..., UPSERT em ponto_monthly_documents, retorna URL assinada de leitura
+   - GET /api/ponto/documento-mensal: funcionário só vê o próprio, CEO/ADMIN qualquer da empresa, 404 se não existe, retorna URL assinada GET com validade 300s
+- **Arquivos modificados:**
+  - pi/index.ts (linhas 5142–5750 aprox., rotas de ajuste completas substituídas e rotas de documento mensal adicionadas)
+  - pi/r2.ts (linha 90–101: adicionado getSignedReadUrl)
+  - supabase/migrations/20261126_ponto_ajustes_v2.sql (criado — NÃO executado)
+- **Validação:** npx tsc --noEmit OK (0 erros); npm run build OK (built in 6.84s).
+
+
+---
+
+### Atualização — 2026-11-26 16:38
+- **O que foi feito:** Otimização de performance em calculateHourBankForPeriod e GET /api/ponto/relatorio/:userId, além de correção de timeout e HTTP 400 em Ponto.tsx:
+  1. **pi/index.ts — calculateHourBankForPeriod (linhas 4529–4858):** Refatorada mantendo 100% da regra de negócio (validada com teste de equivalência em 3 usuários × 2 períodos com **0 diferenças**):
+     - Carga única de dados em paralelo (Promise.all para DELETE automático created_by IS NULL, work_schedules, 	ime_records, holidays, medical_certificates, 	ime_off_requests) após consulta de users.role, seguida de um único SELECT * em hour_bank do período.
+     - Cálculo dia a dia em memória preservando trava do dia atual, AUTO_TYPES/isAuto, created_by/ctorId, arredondamento a 2 casas e log [HB_CALC_DAY].
+     - Aplicação em lote: até 1 DELETE (.in('id', idsToDelete)), 1 UPSERT (onConflict: 'id') e 1 INSERT (array).
+  2. **pi/index.ts — GET /api/ponto/relatorio/:userId (linhas 4964–5076):** Consultas independentes pós-cálculo (	ime_records, hour_bank do período e etchHourBankEntriesPaginated para ankAccumulated) executadas em paralelo via Promise.all.
+  3. **src/pages/Ponto.tsx:**
+     - etchCompanyInfo (linhas 557–565): removida seleção da coluna inexistente cnpj em companies (seleciona apenas 
+ame), eliminando os HTTP 400 no navegador.
+     - etchReport (linhas 786–788): timeout específico desta chamada aumentado para 30000 ms (sem alterar o timeout global de src/lib/api.ts).
+- **Arquivos modificados:**
+  - pi/index.ts (linhas 4529–4858 e 4982–5023)
+  - src/pages/Ponto.tsx (linhas 557–565 e 786–788)
+- **Validação:** Teste de equivalência (usuários 1, 5 e 22; períodos 01/10–31/10 e 01/11–26/11): **0 diferenças**; 
+px tsc --noEmit OK; 
+pm run build OK (✓ built in 6.60s).
+
+
+---
+
+### Atualiza��o � 2026-11-27 04:27 (America/Recife)
+
+**O que foi feito:** Implementa��o de isen��o de controle de jornada (controla_ponto) para usu�rios e corre��o do anexo de ajustes no PDF.
+
+#### Arquivos modificados e linhas alteradas:
+
+1. **supabase/migrations/20261126_add_controla_ponto_users.sql** (criado na sess�o anterior � N�O executado):
+   - ALTER TABLE users ADD COLUMN IF NOT EXISTS controla_ponto boolean NOT NULL DEFAULT true;
+
+2. **api/index.ts** � ajustes de backend:
+   - GET /api/users: seleciona controla_ponto
+   - POST /api/users: aceita e grava controla_ponto (boolean, default true)
+   - PUT /api/users/:id: salva controla_ponto se presente
+   - calculateHourBankForPeriod: retorna imediatamente se controla_ponto === false
+   - GET /api/ponto/relatorio/:userId: retorna controlaPonto:false+zeros para isentos
+   - GET /api/hour-bank/summary: retorna controlaPonto:false+zeros para isentos
+   - GET /api/hour-bank: retorna controlaPonto:false+entries:[]+balance:0 para isentos
+   - GET /api/hour-bank/history: retorna [] para isentos
+   - POST /api/hour-bank/recalculate: pula usu�rios isentos
+   - POST /api/ponto/ajuste: gestor pedindo para si exige aceite eletr�nico
+   - CORRE��O: removidos 4 blocos incorretos de verifica��o controla_ponto em rotas erradas (GET /api/ponto/historico, fetchHourBankEntriesPaginated, GET /api/ponto/ajustes, GET /api/holidays, GET /api/medical-certificates, GET /api/time-off-requests)
+
+3. **src/pages/Funcionarios.tsx** � checkbox controla_ponto:
+   - Tipo UserProfile: adicionado controla_ponto?: boolean
+   - Estado formData: adicionado controla_ponto: true
+   - handleOpenCreate: reset inclui controla_ponto: true
+   - handleOpenEdit: carrega controla_ponto: user.controla_ponto ?? true
+   - handleSubmit payload: inclui controla_ponto: formData.controla_ponto
+   - Modal: checkbox 'Controla ponto e banco de horas' adicionado ap�s Status Ativo
+
+4. **src/pages/Ponto.tsx** � l�gica de isento:
+   - Novo estado controlaPonto (boolean, default true)
+   - fetchReport: seta setControlaPonto a partir de data.controlaPonto
+   - PDF: texto schedule sem prefixo redundante quando nao configurado
+   - PDF: tipoDia sempre '-' para isento
+   - PDF: caixa RESUMO DO BANCO DE HORAS compacta com aviso de isento
+   - Card Saldo Acumulado oculto para isento
+   - Tabela Hist�rico oculta para isento
+   - Badge Falta oculto para isento
+   - Aviso 'Colaborador isento' exibido no lugar dos cards de resumo
+   - Modal ajuste: checkbox de aceite vis�vel para gestor pedindo para si mesmo
+   - handleRequestAdjust: gestor-para-si envia payload.accept = true
+
+5. **src/utils/ajusteAnexoPdf.ts** � corre��es do anexo:
+   - Tipo AjusteAnexoItem: campos requested_by e user_id adicionados
+   - Coluna N�: largura 18 ? 26mm; demais colunas reposicionadas
+   - L�gica solicText: aceite eletr�nico / registrado por gestor / registrado pelo pr�prio
+
+**Valida��o:**
+- npx tsc --noEmit => 0 erros
+- npm run build => built in 6.58s

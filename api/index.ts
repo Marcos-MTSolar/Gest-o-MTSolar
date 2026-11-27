@@ -276,7 +276,7 @@ app.get('/api/users', authenticateToken, async (req: any, res) => {
 
   let { data: users, error } = await supabase
     .from('users')
-    .select('id, name, email, role, active, created_at, cpf, cargo, data_admissao, recebe_leads')
+    .select('id, name, email, role, active, created_at, cpf, cargo, data_admissao, recebe_leads, controla_ponto')
     .eq('company_id', req.user.company_id);
 
   if (error) return res.status(400).json({ error: error.message });
@@ -285,7 +285,12 @@ app.get('/api/users', authenticateToken, async (req: any, res) => {
 
 app.post('/api/users', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CEO' && req.user.role !== 'ADMIN') return res.sendStatus(403);
-  const { name, email, password, role, cpf, cargo, data_admissao } = req.body;
+  const { name, email, password, role, cpf, cargo, data_admissao, controla_ponto } = req.body;
+
+  if ('controla_ponto' in req.body && typeof controla_ponto !== 'boolean') {
+    return res.status(400).json({ error: 'controla_ponto deve ser boolean' });
+  }
+
   const hash = bcrypt.hashSync(password, 10);
 
   const fullInsert: any = {
@@ -296,7 +301,8 @@ app.post('/api/users', authenticateToken, async (req: any, res) => {
     company_id: req.user.company_id,
     cpf: cpf || null,
     cargo: cargo || null,
-    data_admissao: data_admissao || null
+    data_admissao: data_admissao || null,
+    controla_ponto: 'controla_ponto' in req.body ? controla_ponto : true,
   };
 
   let { data, error } = await supabase.from('users').insert(fullInsert).select().single();
@@ -308,7 +314,11 @@ app.post('/api/users', authenticateToken, async (req: any, res) => {
 app.put('/api/users/:id', authenticateToken, async (req: any, res) => {
   if (req.user.role !== 'CEO' && req.user.role !== 'ADMIN') return res.sendStatus(403);
 
-  const { name, email, role, active, password, cpf, cargo, data_admissao, recebe_leads } = req.body;
+  const { name, email, role, active, password, cpf, cargo, data_admissao, recebe_leads, controla_ponto } = req.body;
+
+  if ('controla_ponto' in req.body && typeof controla_ponto !== 'boolean') {
+    return res.status(400).json({ error: 'controla_ponto deve ser boolean' });
+  }
 
   // Campos base que sempre são enviados no PUT
   const fullUpdate: any = {
@@ -317,6 +327,10 @@ app.put('/api/users/:id', authenticateToken, async (req: any, res) => {
     role,
     active: active ? true : false,
   };
+
+  if ('controla_ponto' in req.body) {
+    fullUpdate.controla_ponto = controla_ponto;
+  }
 
   // Proteção contra sobrescrita acidental: só atualiza cpf se ele veio explicitamente no body
   // Isso evita que cpf='' (string vazia) converta para null e apague o CPF salvo no banco
@@ -4527,27 +4541,74 @@ app.get('/api/ponto/historico', authenticateToken, async (req: any, res) => {
 // - Grava ou atualiza os lançamentos na tabela `hour_bank` de forma idempotente.
 // =============================================================================
 async function calculateHourBankForPeriod(userId: number, startDateStr: string, endDateStr: string, companyId: string, actorId?: number) {
-  // Obter detalhes do usuário para saber a role/jornada
+  const startDateClean = startDateStr.split('T')[0];
+  const endDateClean = endDateStr.split('T')[0];
+
+  // (a) Carga única de dados: busca role e controla_ponto do usuário e, em paralelo, limpa automáticos + carrega bases do período
   const { data: user, error: userErr } = await supabaseAdmin
     .from('users')
-    .select('role')
+    .select('role, controla_ponto')
     .eq('id', userId)
     .single();
   if (userErr || !user) throw new Error('Usuário não encontrado.');
+  if (user.controla_ponto === false) {
+    return;
+  }
 
   const role = user.role;
+  const { todayStart: startISO } = getRecifeDayBounds(startDateClean);
+  const { todayEnd: endISO } = getRecifeDayBounds(endDateClean);
 
-  // Deleta os lançamentos automáticos anteriores no período para garantir idempotência e recálculo limpo
-  const startDateClean = startDateStr.split('T')[0];
-  const endDateClean = endDateStr.split('T')[0];
-  const { error: cleanErr } = await supabaseAdmin
-    .from('hour_bank')
-    .delete()
-    .eq('company_id', companyId)
-    .eq('user_id', userId)
-    .is('created_by', null)
-    .gte('reference_date', startDateClean)
-    .lte('reference_date', endDateClean);
+  const [
+    { error: cleanErr },
+    { data: schedule },
+    { data: timeRecords },
+    { data: holidays },
+    { data: certificates },
+    { data: timeOffRequests },
+  ] = await Promise.all([
+    supabaseAdmin
+      .from('hour_bank')
+      .delete()
+      .eq('company_id', companyId)
+      .eq('user_id', userId)
+      .is('created_by', null)
+      .gte('reference_date', startDateClean)
+      .lte('reference_date', endDateClean),
+    supabaseAdmin
+      .from('work_schedules')
+      .select('*')
+      .eq('company_id', companyId)
+      .eq('role', role)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('time_records')
+      .select('*')
+      .eq('company_id', companyId)
+      .eq('user_id', userId)
+      .in('status', ['pending', 'approved', 'adjustment_requested'])
+      .gte('timestamp', startISO)
+      .lte('timestamp', endISO),
+    supabaseAdmin
+      .from('holidays')
+      .select('*')
+      .eq('company_id', companyId),
+    supabaseAdmin
+      .from('medical_certificates')
+      .select('*')
+      .eq('company_id', companyId)
+      .eq('user_id', userId)
+      .gte('end_date', startDateClean)
+      .lte('start_date', endDateClean),
+    supabaseAdmin
+      .from('time_off_requests')
+      .select('*')
+      .eq('company_id', companyId)
+      .eq('user_id', userId)
+      .eq('status', 'approved')
+      .gte('date', startDateClean)
+      .lte('date', endDateClean),
+  ]);
 
   if (cleanErr) {
     console.error(`[HB_CALC] Erro ao limpar lançamentos automáticos do user ${userId}:`, cleanErr.message);
@@ -4555,17 +4616,25 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
     console.log(`[HB_CALC] Lançamentos automáticos anteriores limpos para o user ${userId} de ${startDateClean} a ${endDateClean}`);
   }
 
-  // Obter o expediente esperado da role do usuário
-  const { data: schedule, error: schedErr } = await supabaseAdmin
-    .from('work_schedules')
+  // Único SELECT de hour_bank do período feito DEPOIS do DELETE em lote acima
+  const { data: existingHBPeriod, error: hbFetchErr } = await supabaseAdmin
+    .from('hour_bank')
     .select('*')
     .eq('company_id', companyId)
-    .eq('role', role)
-    .maybeSingle();
+    .eq('user_id', userId)
+    .gte('reference_date', startDateClean)
+    .lte('reference_date', endDateClean);
+
+  if (hbFetchErr) throw hbFetchErr;
+
+  const existingByDay: Record<string, any[]> = {};
+  (existingHBPeriod || []).forEach((hb: any) => {
+    if (!existingByDay[hb.reference_date]) existingByDay[hb.reference_date] = [];
+    existingByDay[hb.reference_date].push(hb);
+  });
 
   // Jornada padrão diária: 8 horas (se não configurado)
   let expectedDailyHours = 8;
-  let isSaturdayWorkDay = false; // Por padrão, sábado não é dia útil, a menos que configurado na jornada ou se queira estender.
   if (schedule) {
     const parseTime = (t: string) => {
       const [h, m] = t.split(':').map(Number);
@@ -4578,47 +4647,6 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
     expectedDailyHours = (lunchStart - entry) + (exit - lunchEnd);
   }
 
-  // Parse datas no fuso America/Recife
-  const { todayStart: startISO } = getRecifeDayBounds(startDateStr.split('T')[0]);
-  const { todayEnd: endISO } = getRecifeDayBounds(endDateStr.split('T')[0]);
-
-  // Buscar todos os registros de ponto do usuário no período (com limites corretos em America/Recife)
-  // CORREÇÃO BUG (2026-08-19 / 2026-10-06): Garante uso de getRecifeDayBounds para que batidas noturnas
-  // (ex: 21:21 BRT = 00:21 UTC do dia seguinte) fiquem dentro do intervalo de busca do dia correto.
-  const { data: timeRecords } = await supabaseAdmin
-    .from('time_records')
-    .select('*')
-    .eq('company_id', companyId)
-    .eq('user_id', userId)
-    .in('status', ['pending', 'approved', 'adjustment_requested'])
-    .gte('timestamp', startISO)
-    .lte('timestamp', endISO);
-
-  // Buscar feriados
-  const { data: holidays } = await supabaseAdmin
-    .from('holidays')
-    .select('*')
-    .eq('company_id', companyId);
-
-  // Buscar atestados médicos do usuário que cruzam o período
-  const { data: certificates } = await supabaseAdmin
-    .from('medical_certificates')
-    .select('*')
-    .eq('company_id', companyId)
-    .eq('user_id', userId)
-    .gte('end_date', startDateStr.split('T')[0])
-    .lte('start_date', endDateStr.split('T')[0]);
-
-  // Buscar folgas/compensações aprovadas
-  const { data: timeOffRequests } = await supabaseAdmin
-    .from('time_off_requests')
-    .select('*')
-    .eq('company_id', companyId)
-    .eq('user_id', userId)
-    .eq('status', 'approved')
-    .gte('date', startDateStr.split('T')[0])
-    .lte('date', endDateStr.split('T')[0]);
-
   // Agrupar registros de ponto por dia (YYYY-MM-DD local em America/Recife)
   const recordsByDay: Record<string, any[]> = {};
   if (timeRecords) {
@@ -4629,16 +4657,27 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
     });
   }
 
-  let curDateStr = startDateStr.split('T')[0];
-  const endDateCleanStr = endDateStr.split('T')[0];
+  const AUTO_TYPES = [
+    'falta', 'jornada_incompleta', 'hora_extra_normal',
+    'hora_extra_fds_feriado', 'folga_abatida', 'compensacao',
+    'feriado_abonado', 'atestado_abonado'
+  ];
 
-  while (curDateStr <= endDateCleanStr) {
+  const todayKey = getRecifeDateStr();
+  const { currentTimeVal } = getRecifeTimeVal();
+
+  const idsToDelete: number[] = [];
+  const rowsToUpdate: any[] = [];
+  const rowsToInsert: any[] = [];
+
+  // (b) Cálculo em memória, dia a dia
+  let curDateStr = startDateClean;
+  while (curDateStr <= endDateClean) {
     const dayKey = curDateStr;
     const [, month, day] = dayKey.split('-');
 
-    // Instancia objeto Date no fuso de Recife às 12:00 para determinar o dia da semana sem desvio de fuso
     const currentDate = new Date(`${dayKey}T12:00:00.000-03:00`);
-    const dayOfWeek = currentDate.getDay(); // 0 = Domingo, 6 = Sábado
+    const dayOfWeek = currentDate.getDay();
     const isSunday = dayOfWeek === 0;
     const isSaturday = dayOfWeek === 6;
 
@@ -4663,8 +4702,6 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
     // 3. Verificar folgas aprovadas
     const approvedTimeOff = timeOffRequests ? timeOffRequests.find(t => t.date === dayKey) : null;
 
-    // Jornada esperada para este dia específico
-    // Sábado pode ou não ser dia de trabalho. Por convenção básica da CLT/empresa, assumimos segunda a sexta como úteis (jornada inteira).
     const isWorkDay = !isSunday && !isSaturday && !isHolidayDay;
     const currentExpectedHours = isWorkDay ? expectedDailyHours : 0;
 
@@ -4672,9 +4709,8 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
     const dayPoints = recordsByDay[dayKey] || [];
     let workedHours = 0;
     if (dayPoints.length >= 2) {
-      // Ordenar batidas pelo timestamp
       dayPoints.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-      
+
       const firstEntry = dayPoints.find(p => p.type === 'entry');
       const firstLunchStart = dayPoints.find(p => p.type === 'lunch_start');
       const firstLunchEnd = dayPoints.find(p => p.type === 'lunch_end');
@@ -4691,54 +4727,44 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
       if (lunchEndTime && exitTime && exitTime > lunchEndTime) {
         workedHours += (exitTime.getTime() - lunchEndTime.getTime()) / 3600000;
       }
-      // Caso o funcionário só tenha batido entrada e saída direto (sem almoço)
       if (entryTime && exitTime && !lunchStartTime && exitTime > entryTime) {
         workedHours = (exitTime.getTime() - entryTime.getTime()) / 3600000;
       }
     }
 
-    // Determinar o tipo de lançamento a fazer
     let insertHours = 0;
     let insertType: string | null = null;
     let multiplier = 1.0;
     let description = '';
 
     if (workedHours > 0) {
-      // Funcionário trabalhou neste dia
       if (isSunday || isHolidayDay) {
-        // Horas extras em domingos/feriados
         insertHours = workedHours;
         insertType = 'hora_extra_fds_feriado';
-        
-        // Se houver compensacao_horas aprovado para esse dia, multiplicador é 1.0 (sem adicional de 100%)
         const isCompensated = approvedTimeOff && approvedTimeOff.type === 'compensacao_horas';
         multiplier = isCompensated ? 1.0 : 2.0;
-        description = isHolidayDay 
-          ? `Trabalho no feriado: ${holidayName}${isCompensated ? ' (Compensado)' : ''}` 
+        description = isHolidayDay
+          ? `Trabalho no feriado: ${holidayName}${isCompensated ? ' (Compensado)' : ''}`
           : `Trabalho no domingo${isCompensated ? ' (Compensado)' : ''}`;
       } else {
-        // Dia de semana / Sábado
         const diff = workedHours - currentExpectedHours;
         const isCompensated = approvedTimeOff && approvedTimeOff.type === 'compensacao_horas';
         const isFolgaAbatida = approvedTimeOff && approvedTimeOff.type === 'folga_abate_banco';
 
         if (diff > 0) {
-          // Fez hora extra em dia útil
           insertHours = diff;
           insertType = 'hora_extra_normal';
           multiplier = isCompensated ? 1.0 : 1.5;
           description = `Hora extra em dia útil${isCompensated ? ' (Compensado)' : ''}. Carga: ${workedHours.toFixed(2)}h (Esperado: ${currentExpectedHours.toFixed(2)}h)`;
         } else if (diff < 0) {
           if (isCompensated || isFolgaAbatida) {
-            // Se tem compensação de horas ou folga aprovada, não gera débito de jornada incompleta
             insertType = isFolgaAbatida ? 'folga_abatida' : 'compensacao';
             const hoursToAbate = (approvedTimeOff?.hours && parseFloat(approvedTimeOff.hours) > 0) ? parseFloat(approvedTimeOff.hours) : currentExpectedHours;
             insertHours = isFolgaAbatida ? -hoursToAbate : 0;
             multiplier = 1.0;
             description = `Jornada parcial em dia de ${isFolgaAbatida ? 'folga' : 'compensação'} aprovada.`;
           } else {
-            // Trabalhou menos do que deveria -> Débito de Jornada Incompleta
-            insertHours = diff; // Valor negativo
+            insertHours = diff;
             insertType = 'jornada_incompleta';
             multiplier = 1.0;
             description = `Jornada incompleta. Carga: ${workedHours.toFixed(2)}h (Esperado: ${currentExpectedHours.toFixed(2)}h)`;
@@ -4746,34 +4772,28 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
         }
       }
     } else {
-      // Funcionário NÃO trabalhou neste dia (workedHours === 0)
       if (isHolidayDay) {
-        // Feriado abonado
         insertHours = 0;
         insertType = 'feriado_abonado';
         description = `Feriado abonado: ${holidayName}`;
       } else if (isMedicalDay) {
-        // Atestado médico
         insertHours = 0;
         insertType = 'atestado_abonado';
         description = 'Atestado médico abonado';
       } else if (approvedTimeOff && approvedTimeOff.type === 'folga_abate_banco') {
-        // Folga aprovada que abate do banco de horas
-        const hoursToAbate = (approvedTimeOff.hours && parseFloat(approvedTimeOff.hours) > 0) 
-          ? parseFloat(approvedTimeOff.hours) 
+        const hoursToAbate = (approvedTimeOff.hours && parseFloat(approvedTimeOff.hours) > 0)
+          ? parseFloat(approvedTimeOff.hours)
           : currentExpectedHours;
-        insertHours = -hoursToAbate; // Débito da folga (jornada prevista em work_schedules)
+        insertHours = -hoursToAbate;
         insertType = 'folga_abatida';
         multiplier = 1.0;
         description = `Folga compensada aprovada. Observações: ${approvedTimeOff.notes || '—'}`;
       } else if (approvedTimeOff && approvedTimeOff.type === 'compensacao_horas') {
-        // Compensação de horas aprovada para um dia sem trabalho -> dia neutro (não gera falta)
         insertHours = 0;
         insertType = 'compensacao';
         multiplier = 1.0;
         description = `Compensação de horas aprovada (dia neutro). Observações: ${approvedTimeOff.notes || '—'}`;
       } else if (currentExpectedHours > 0) {
-        // Dia útil comum de trabalho e não apareceu -> Falta total
         insertHours = -currentExpectedHours;
         insertType = 'falta';
         multiplier = 1.0;
@@ -4781,53 +4801,27 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
       }
     }
 
-    // Trava para o dia atual em andamento no fuso America/Recife (Evita classificar como Falta ou Jornada Incompleta prematuramente)
-    const todayKey = getRecifeDateStr();
+    // Trava para o dia atual em andamento no fuso America/Recife
     if (dayKey === todayKey) {
-      let exitTimeVal = 18.0; // Padrão 18:00
+      let exitTimeVal = 18.0;
       if (schedule && schedule.exit_time) {
         const [h, m] = schedule.exit_time.split(':').map(Number);
         exitTimeVal = h + m / 60;
       }
-      // Se o dia avaliado for HOJE e o expediente de hoje ainda não acabou, impede lançamentos de débito (falta ou jornada incompleta)
-      const todayStr = getRecifeDateStr();
-      if (dayKey === todayStr) {
-        const { currentTimeVal } = getRecifeTimeVal();
-        if (currentTimeVal < exitTimeVal && (insertHours < 0 || insertType === 'falta' || insertType === 'jornada_incompleta')) {
-          insertType = null;
-          insertHours = 0;
-        }
+      if (currentTimeVal < exitTimeVal && (insertHours < 0 || insertType === 'falta' || insertType === 'jornada_incompleta')) {
+        insertType = null;
+        insertHours = 0;
       }
     }
 
-    const AUTO_TYPES = [
-      'falta', 'jornada_incompleta', 'hora_extra_normal', 
-      'hora_extra_fds_feriado', 'folga_abatida', 'compensacao', 
-      'feriado_abonado', 'atestado_abonado'
-    ];
-
-    // Busca todos os lançamentos existentes no banco de horas para a data
-    const { data: existingHBList } = await supabaseAdmin
-      .from('hour_bank')
-      .select('id, type, created_by')
-      .eq('company_id', companyId)
-      .eq('user_id', userId)
-      .eq('reference_date', dayKey);
-
-    // Deleta lançamentos automáticos anteriores que conflitem com o novo insertType
-    if (existingHBList && existingHBList.length > 0) {
-      for (const hb of existingHBList) {
-        const isAuto = !hb.created_by || AUTO_TYPES.includes(hb.type);
-        if (isAuto && hb.type !== insertType) {
-          await supabaseAdmin
-            .from('hour_bank')
-            .delete()
-            .eq('id', hb.id);
-        }
+    const existingHBList = existingByDay[dayKey] || [];
+    for (const hb of existingHBList) {
+      const isAuto = !hb.created_by || AUTO_TYPES.includes(hb.type);
+      if (isAuto && hb.type !== insertType) {
+        idsToDelete.push(hb.id);
       }
     }
 
-    // Se identificou um lançamento relevante, grava de forma idempotente
     if (insertType) {
       const payload: any = {
         company_id: companyId,
@@ -4839,27 +4833,43 @@ async function calculateHourBankForPeriod(userId: number, startDateStr: string, 
         description,
       };
 
-      const match = (existingHBList ?? []).find((hb: any) => hb.type === insertType);
+      const match = existingHBList.find((hb: any) => hb.type === insertType);
       if (match && (!match.created_by || match.created_by === actorId || AUTO_TYPES.includes(match.type))) {
-        await supabaseAdmin
-          .from('hour_bank')
-          .update(payload)
-          .eq('id', match.id);
+        rowsToUpdate.push({ ...match, ...payload, id: match.id });
       } else if (!match) {
         if (actorId) payload.created_by = actorId;
-        await supabaseAdmin
-          .from('hour_bank')
-          .insert(payload);
+        rowsToInsert.push(payload);
       }
     }
 
-    // Log temporário detalhado para fins de diagnóstico (tarefa 4 do diagnóstico)
     console.log(`[HB_CALC_DAY] user=${userId} | dia=${dayKey} | trabalhadas=${workedHours.toFixed(2)}h | esperado=${currentExpectedHours.toFixed(2)}h | excedente=${insertHours.toFixed(2)}h | lancado=${insertType || 'nenhum'} | mult=${multiplier}`);
 
-    // Avança 1 dia com precisão no fuso America/Recife
     const nextDayObj = new Date(`${curDateStr}T12:00:00.000-03:00`);
     nextDayObj.setDate(nextDayObj.getDate() + 1);
     curDateStr = getRecifeDateStr(nextDayObj);
+  }
+
+  // (c) Aplicação em lote
+  if (idsToDelete.length > 0) {
+    const { error: delErr } = await supabaseAdmin
+      .from('hour_bank')
+      .delete()
+      .in('id', idsToDelete);
+    if (delErr) throw delErr;
+  }
+
+  if (rowsToUpdate.length > 0) {
+    const { error: updErr } = await supabaseAdmin
+      .from('hour_bank')
+      .upsert(rowsToUpdate, { onConflict: 'id' });
+    if (updErr) throw updErr;
+  }
+
+  if (rowsToInsert.length > 0) {
+    const { error: insErr } = await supabaseAdmin
+      .from('hour_bank')
+      .insert(rowsToInsert);
+    if (insErr) throw insErr;
   }
 }
 
@@ -4873,6 +4883,25 @@ app.get('/api/hour-bank/summary', authenticateToken, async (req: any, res) => {
 
     if (!startDate || !endDate) {
       return res.status(400).json({ error: 'startDate e endDate são obrigatórios.' });
+    }
+
+    // Verifica se o usuário controla ponto (usuário isento não lê nem grava hour_bank)
+    const { data: targetUserControl } = await supabaseAdmin
+      .from('users')
+      .select('controla_ponto')
+      .eq('id', targetUserId)
+      .eq('company_id', req.user.company_id)
+      .maybeSingle();
+
+    if (targetUserControl?.controla_ponto === false) {
+      return res.json({
+        controlaPonto: false,
+        extraNormal: 0,
+        extraFds: 0,
+        devendo: 0,
+        abonados: 0,
+        balance: 0,
+      });
     }
 
     // Garante que o banco de horas está atualizado rodando o cálculo sob demanda
@@ -4921,6 +4950,7 @@ app.get('/api/hour-bank/summary', authenticateToken, async (req: any, res) => {
     });
 
     res.json({
+      controlaPonto: true,
       extraNormal: Math.round(extraNormal * 100) / 100,
       extraFds: Math.round(extraFds * 100) / 100,
       devendo: Math.round(devendo * 100) / 100,
@@ -4931,6 +4961,41 @@ app.get('/api/hour-bank/summary', authenticateToken, async (req: any, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Helper de paginação para leitura agregada de hour_bank sem limite de 1000 linhas do Supabase
+async function fetchHourBankEntriesPaginated(
+  companyId: string,
+  userId: number,
+  options?: { ltDate?: string; lteDate?: string }
+): Promise<Array<{ reference_date: string; hours: any; multiplier: any; type: string }>> {
+  const pageSize = 1000;
+  let from = 0;
+  const allRows: Array<{ reference_date: string; hours: any; multiplier: any; type: string }> = [];
+
+  while (true) {
+    let query = supabaseAdmin
+      .from('hour_bank')
+      .select('reference_date, hours, multiplier, type')
+      .eq('company_id', companyId)
+      .eq('user_id', userId)
+      .order('reference_date', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (options?.ltDate) query = query.lt('reference_date', options.ltDate);
+    if (options?.lteDate) query = query.lte('reference_date', options.lteDate);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+
+    allRows.push(...data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return allRows;
+}
 
 // GET /api/ponto/relatorio/:userId — Consolidado mensal (CEO/ADMIN)
 app.get('/api/ponto/relatorio/:userId', authenticateToken, async (req: any, res) => {
@@ -4951,29 +5016,74 @@ app.get('/api/ponto/relatorio/:userId', authenticateToken, async (req: any, res)
     const { todayStart: startISO } = getRecifeDayBounds(startDateClean);
     const { todayEnd: endISO } = getRecifeDayBounds(endDateClean);
 
+    const targetUserIdNum = parseInt(userId, 10);
+    const prevDayObj = new Date(`${startDateClean}T12:00:00.000-03:00`);
+    prevDayObj.setDate(prevDayObj.getDate() - 1);
+    const previousUntil = getRecifeDateStr(prevDayObj);
+
+    const { data: targetUserRow } = await supabaseAdmin
+      .from('users')
+      .select('controla_ponto')
+      .eq('id', userId)
+      .eq('company_id', req.user.company_id)
+      .maybeSingle();
+
+    if (targetUserRow?.controla_ponto === false) {
+      // Usuário isento de controle de jornada: retorna apenas as batidas, sem calcular nem ler hour_bank
+      const { data: records, error } = await supabaseAdmin
+        .from('time_records')
+        .select('*, users(name, role, cpf, cargo, data_admissao)')
+        .eq('company_id', req.user.company_id)
+        .eq('user_id', userId)
+        .gte('timestamp', startISO)
+        .lte('timestamp', endISO)
+        .order('timestamp', { ascending: true });
+
+      if (error) throw error;
+
+      return res.json({
+        controlaPonto: false,
+        records: records || [],
+        hourBank: [],
+        bankAccumulated: {
+          previousBalance: 0,
+          periodMovement: 0,
+          accumulatedBalance: 0,
+          previousUntil,
+        },
+      });
+    }
+
     // Roda o cálculo dinâmico do banco de horas para garantir consistência
     await calculateHourBankForPeriod(userId, startDateClean, endDateClean, req.user.company_id);
 
-    // Busca as batidas de ponto com limites de fuso America/Recife corretos
-    const { data: records, error } = await supabaseAdmin
-      .from('time_records')
-      .select('*, users(name, role, cpf, cargo, data_admissao)')
-      .eq('company_id', req.user.company_id)
-      .eq('user_id', userId)
-      .gte('timestamp', startISO)
-      .lte('timestamp', endISO)
-      .order('timestamp', { ascending: true });
+    // Consultas independentes pós-cálculo em paralelo
+    const [
+      { data: records, error },
+      { data: hbEntries },
+      previousEntries,
+    ] = await Promise.all([
+      supabaseAdmin
+        .from('time_records')
+        .select('*, users(name, role, cpf, cargo, data_admissao)')
+        .eq('company_id', req.user.company_id)
+        .eq('user_id', userId)
+        .gte('timestamp', startISO)
+        .lte('timestamp', endISO)
+        .order('timestamp', { ascending: true }),
+      supabaseAdmin
+        .from('hour_bank')
+        .select('*')
+        .eq('company_id', req.user.company_id)
+        .eq('user_id', userId)
+        .gte('reference_date', startDateClean)
+        .lte('reference_date', endDateClean),
+      fetchHourBankEntriesPaginated(req.user.company_id, targetUserIdNum, {
+        ltDate: startDateClean,
+      }),
+    ]);
 
     if (error) throw error;
-
-    // Busca os lançamentos detalhados do banco de horas para cruzar no relatório
-    const { data: hbEntries } = await supabaseAdmin
-      .from('hour_bank')
-      .select('*')
-      .eq('company_id', req.user.company_id)
-      .eq('user_id', userId)
-      .gte('reference_date', (start as string).split('T')[0])
-      .lte('reference_date', (end as string).split('T')[0]);
 
     // Enriquecer lançamentos de atestado_abonado com o CID da tabela medical_certificates.
     // Isso permite exibir o CID correto no relatório em tela e no PDF gerado.
@@ -4981,16 +5091,13 @@ app.get('/api/ponto/relatorio/:userId', authenticateToken, async (req: any, res)
     const hasAtestado = enrichedHbEntries.some(e => e.type === 'atestado_abonado');
 
     if (hasAtestado) {
-      const startDateStr = (start as string).split('T')[0];
-      const endDateStr = (end as string).split('T')[0];
-
       const { data: certs } = await supabaseAdmin
         .from('medical_certificates')
         .select('start_date, end_date, cid')
         .eq('company_id', req.user.company_id)
         .eq('user_id', userId)
-        .lte('start_date', endDateStr)
-        .gte('end_date', startDateStr);
+        .lte('start_date', endDateClean)
+        .gte('end_date', startDateClean);
 
       if (certs && certs.length > 0) {
         // Para cada lançamento de atestado, encontrar o atestado cujo intervalo contém reference_date
@@ -5005,9 +5112,29 @@ app.get('/api/ponto/relatorio/:userId', authenticateToken, async (req: any, res)
       }
     }
 
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const previousBalanceRaw = previousEntries.reduce((sum, e) => {
+      const hrs = parseFloat(e.hours);
+      const mult = parseFloat(e.multiplier) || 1.0;
+      return sum + (hrs * mult);
+    }, 0);
+
+    const periodMovementRaw = (hbEntries || []).reduce((sum, e) => {
+      const hrs = parseFloat(e.hours);
+      const mult = parseFloat(e.multiplier) || 1.0;
+      return sum + (hrs * mult);
+    }, 0);
+
     res.json({
+      controlaPonto: true,
       records: records || [],
-      hourBank: enrichedHbEntries
+      hourBank: enrichedHbEntries,
+      bankAccumulated: {
+        previousBalance: round2(previousBalanceRaw),
+        periodMovement: round2(periodMovementRaw),
+        accumulatedBalance: round2(previousBalanceRaw + periodMovementRaw),
+        previousUntil,
+      }
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -5075,47 +5202,261 @@ app.delete('/api/ponto/usuario/:userId/registros', authenticateToken, async (req
   }
 });
 
-// POST /api/ponto/ajuste — Solicita correção de batida
+// =============================================================================
+// MÓDULO: AJUSTES DE PONTO v2 — aceite eletrônico, numeração e documento mensal
+// =============================================================================
+
+/** Prazo máximo (dias) para abrir pedido de ajuste retroativo */
+const ADJUSTMENT_MAX_DAYS = 30;
+
+/** Categorias válidas de motivo */
+const VALID_REASON_CATEGORIES = ['esqueci_de_bater','falha_aplicativo','sem_sinal','gps_ou_camera_falhou','outro'];
+
+/** Helper: retorna a data de Recife ('YYYY-MM-DD') de um timestamp ISO ou Date */
+function reifeDateOf(ts: string | Date): string {
+  return getRecifeDateStr(typeof ts === 'string' ? new Date(ts) : ts);
+}
+
+// POST /api/ponto/ajuste — Solicita correção de batida (formatos antigo e novo)
 app.post('/api/ponto/ajuste', authenticateToken, async (req: any, res) => {
   try {
-    const { time_record_id, justification, new_timestamp } = req.body;
+    const companyId: string = req.user.company_id;
+    const actorId: number  = req.user.id;
+    const isManager = ['CEO','ADMIN'].includes(req.user.role);
 
-    if (!time_record_id || !justification || !new_timestamp) {
-      return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
+    const {
+      // Formato antigo (compatibilidade)
+      time_record_id: legacyRecordId,
+      justification: legacyJustification,
+      new_timestamp: legacyNewTs,
+      // Formato novo
+      reference_date,
+      punch_type,
+      requested_timestamp,
+      reason_category,
+      reason_text,
+      adjustment_type,
+      accept,
+      user_id: bodyUserId,
+    } = req.body;
+
+    // ----------------------------------------------------------------
+    // Formato antigo: mantém compatibilidade total
+    // ----------------------------------------------------------------
+    if (legacyRecordId && legacyJustification && legacyNewTs && !reference_date) {
+      const { data: record } = await supabaseAdmin
+        .from('time_records')
+        .select('id, company_id, user_id, type')
+        .eq('id', legacyRecordId)
+        .eq('company_id', companyId)
+        .single();
+
+      if (!record) return res.status(404).json({ error: 'Registro não encontrado' });
+
+      const year = new Date().getFullYear();
+      const { data: docNumRow } = await supabaseAdmin.rpc('next_adjustment_number', {
+        p_company_id: companyId,
+        p_year: year,
+      });
+
+      const { data: adj, error: adjErr } = await supabaseAdmin
+        .from('time_adjustments')
+        .insert({
+          company_id: companyId,
+          time_record_id: legacyRecordId,
+          requested_by: actorId,
+          user_id: record.user_id,
+          justification: legacyJustification,
+          reason_text: legacyJustification,
+          new_timestamp: legacyNewTs,
+          requested_timestamp: legacyNewTs,
+          punch_type: record.type,
+          reference_date: reifeDateOf(legacyNewTs),
+          adjustment_type: 'correcao_horario',
+          status: 'pending',
+          document_number: docNumRow,
+        })
+        .select()
+        .single();
+
+      if (adjErr) throw adjErr;
+
+      await supabaseAdmin
+        .from('time_records')
+        .update({ status: 'adjustment_requested' })
+        .eq('id', legacyRecordId);
+
+      await supabase.from('logs').insert({
+        user_id: actorId,
+        action: 'AJUSTE_SOLICITADO',
+        details: `Ajuste ${adj.document_number} solicitado (formato legado) para record ${legacyRecordId}`,
+        company_id: companyId,
+      });
+
+      return res.json(adj);
     }
 
-    const { data: record } = await supabaseAdmin
-      .from('time_records')
-      .select('id, company_id')
-      .eq('id', time_record_id)
-      .eq('company_id', req.user.company_id)
-      .single();
-
-    if (!record) {
-      return res.status(404).json({ error: 'Registro não encontrado' });
+    // ----------------------------------------------------------------
+    // Formato novo: validações completas
+    // ----------------------------------------------------------------
+    if (!reference_date || !punch_type || !requested_timestamp || !reason_text) {
+      return res.status(400).json({ error: 'Campos obrigatórios: reference_date, punch_type, requested_timestamp, reason_text' });
     }
 
-    const { data, error } = await supabaseAdmin
+    // Usuário alvo
+    let targetUserId: number;
+    if (isManager && bodyUserId && Number(bodyUserId) !== actorId) {
+      // Gestor abrindo em nome de outro funcionário
+      const targetUid = Number(bodyUserId);
+      const { data: targetUser } = await supabaseAdmin
+        .from('users')
+        .select('id, company_id')
+        .eq('id', targetUid)
+        .eq('company_id', companyId)
+        .single();
+      if (!targetUser) return res.status(404).json({ error: 'Usuário alvo não encontrado nesta empresa' });
+      targetUserId = targetUid;
+    } else {
+      // Próprio usuário abrindo o pedido (funcionário ou gestor para si): aceite obrigatório
+      if (!accept) {
+        return res.status(400).json({ error: 'É obrigatório aceitar o termo (accept: true) para registrar o pedido.' });
+      }
+      targetUserId = actorId;
+    }
+
+    // Validar category
+    if (reason_category && !VALID_REASON_CATEGORIES.includes(reason_category)) {
+      return res.status(400).json({ error: 'reason_category inválida' });
+    }
+    // Validar reason_text mínimo
+    if (!reason_text || reason_text.trim().length < 15) {
+      return res.status(400).json({ error: 'reason_text deve ter pelo menos 15 caracteres' });
+    }
+    // Validar punch_type
+    if (!['entry','lunch_start','lunch_end','exit'].includes(punch_type)) {
+      return res.status(400).json({ error: 'punch_type inválido' });
+    }
+
+    // Validar data: não futura e dentro de ADJUSTMENT_MAX_DAYS dias
+    const todayRecife = getRecifeDateStr();
+    if (reference_date > todayRecife) {
+      return res.status(400).json({ error: 'Não é possível solicitar ajuste para data futura' });
+    }
+    const msPerDay = 86400000;
+    const diffDays = (new Date(todayRecife).getTime() - new Date(reference_date).getTime()) / msPerDay;
+    if (diffDays > ADJUSTMENT_MAX_DAYS) {
+      return res.status(400).json({ error: `Ajuste fora do prazo de ${ADJUSTMENT_MAX_DAYS} dias` });
+    }
+
+    // Bloqueio se dia coberto por atestado
+    const { data: certCheck } = await supabaseAdmin
+      .from('medical_certificates')
+      .select('id')
+      .eq('company_id', companyId)
+      .eq('user_id', targetUserId)
+      .lte('start_date', reference_date)
+      .gte('end_date', reference_date)
+      .limit(1);
+    if (certCheck && certCheck.length > 0) {
+      return res.status(400).json({ error: 'Não é possível solicitar ajuste para dia coberto por atestado médico' });
+    }
+
+    // Sem pedido pendente duplicado (mesma data + tipo de batida)
+    const { data: dupCheck } = await supabaseAdmin
       .from('time_adjustments')
-      .insert({
-        company_id: req.user.company_id,
-        time_record_id,
-        requested_by: req.user.id,
-        justification,
-        new_timestamp,
-        status: 'pending',
-      })
+      .select('id')
+      .eq('company_id', companyId)
+      .eq('user_id', targetUserId)
+      .eq('reference_date', reference_date)
+      .eq('punch_type', punch_type)
+      .eq('status', 'pending')
+      .limit(1);
+    if (dupCheck && dupCheck.length > 0) {
+      return res.status(400).json({ error: 'Já existe um pedido pendente para esta batida nesta data' });
+    }
+
+    // Buscar registro original (se existir para correção de horário)
+    let recordId: number | null = null;
+    let origTs: string | null = null;
+    let resolvedAdjType = adjustment_type || 'batida_esquecida';
+
+    if (req.body.time_record_id) {
+      // Correção de batida existente
+      const { data: existingRec } = await supabaseAdmin
+        .from('time_records')
+        .select('id, company_id, user_id, timestamp, type')
+        .eq('id', req.body.time_record_id)
+        .eq('company_id', companyId)
+        .single();
+      if (!existingRec) return res.status(404).json({ error: 'Registro de ponto não encontrado' });
+      if (existingRec.user_id !== targetUserId) return res.status(403).json({ error: 'Registro não pertence ao usuário alvo' });
+      recordId = existingRec.id;
+      origTs = existingRec.timestamp;
+      resolvedAdjType = 'correcao_horario';
+    }
+
+    // Gerar número sequencial atômico
+    const year = new Date().getFullYear();
+    const { data: docNumRow, error: seqErr } = await supabaseAdmin.rpc('next_adjustment_number', {
+      p_company_id: companyId,
+      p_year: year,
+    });
+    if (seqErr) throw seqErr;
+
+    const nowIso = new Date().toISOString();
+    const insertPayload: Record<string, any> = {
+      company_id: companyId,
+      user_id: targetUserId,
+      requested_by: actorId,
+      status: 'pending',
+      adjustment_type: resolvedAdjType,
+      reason_category: reason_category ?? null,
+      reason_text: reason_text.trim(),
+      justification: reason_text.trim(),
+      punch_type,
+      reference_date,
+      requested_timestamp,
+      new_timestamp: requested_timestamp,
+      document_number: docNumRow,
+    };
+
+    if (recordId) {
+      insertPayload.time_record_id = recordId;
+      insertPayload.original_timestamp = origTs;
+    }
+
+    if (accept && targetUserId === actorId) {
+      // Próprio colaborador (inclusive gestor pedindo para si): gravar aceite eletrônico com hora do servidor
+      insertPayload.requested_ack_at = nowIso;
+      insertPayload.ack_text_version = 'v1';
+    }
+    // Gestor abrindo em nome de outro: requested_ack_at fica nulo (sem aceite)
+
+    const { data: adj, error: adjErr } = await supabaseAdmin
+      .from('time_adjustments')
+      .insert(insertPayload)
       .select()
       .single();
 
-    if (error) throw error;
+    if (adjErr) throw adjErr;
 
-    await supabaseAdmin
-      .from('time_records')
-      .update({ status: 'adjustment_requested' })
-      .eq('id', time_record_id);
+    // Atualizar status do time_record se houver
+    if (recordId) {
+      await supabaseAdmin
+        .from('time_records')
+        .update({ status: 'adjustment_requested' })
+        .eq('id', recordId);
+    }
 
-    res.json(data);
+    // Log
+    await supabase.from('logs').insert({
+      user_id: actorId,
+      action: 'AJUSTE_SOLICITADO',
+      details: `Ajuste ${adj.document_number} — ${punch_type} em ${reference_date} para user ${targetUserId}`,
+      company_id: companyId,
+    });
+
+    return res.json(adj);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -5129,10 +5470,13 @@ app.put('/api/ponto/ajuste/:id', authenticateToken, async (req: any, res) => {
     }
 
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, review_note } = req.body;
 
     if (!['approved', 'rejected'].includes(status)) {
       return res.status(400).json({ error: 'Status inválido' });
+    }
+    if (status === 'rejected' && !review_note?.trim()) {
+      return res.status(400).json({ error: 'Informe uma observação (review_note) para rejeitar o ajuste' });
     }
 
     const { data: adjustment, error: fetchError } = await supabaseAdmin
@@ -5146,52 +5490,147 @@ app.put('/api/ponto/ajuste/:id', authenticateToken, async (req: any, res) => {
       return res.status(404).json({ error: 'Ajuste não encontrado' });
     }
 
+    // Bloqueio auto-aprovação: quem avalia não pode ser o funcionário alvo nem quem abriu
+    if (req.user.id === adjustment.user_id || req.user.id === adjustment.requested_by) {
+      return res.status(403).json({ error: 'Você não pode avaliar um ajuste que é seu ou que você mesmo abriu' });
+    }
+
+    const nowIso = new Date().toISOString();
+
     await supabaseAdmin
       .from('time_adjustments')
       .update({
         status,
         reviewed_by: req.user.id,
-        reviewed_at: new Date().toISOString(),
+        reviewed_at: nowIso,
+        review_note: review_note?.trim() ?? null,
       })
       .eq('id', id);
 
     if (status === 'approved') {
-      await supabaseAdmin
-        .from('time_records')
-        .update({
-          timestamp: adjustment.new_timestamp,
-          status: 'approved',
-        })
-        .eq('id', adjustment.time_record_id);
+      const targetUserId: number = adjustment.user_id;
+      const targetCompanyId: string = adjustment.company_id;
 
-      // Recálculo automático do dia afetado após aprovação do ajuste:
-      // garante que o banco de horas reflita imediatamente o horário corrigido.
-      try {
-        const dayOfAdjustment = adjustment.new_timestamp.split('T')[0];
-        // Busca o usuário do registro de ponto para obter company_id e user_id
-        const { data: affectedRecord } = await supabaseAdmin
-          .from('time_records')
-          .select('user_id, company_id')
-          .eq('id', adjustment.time_record_id)
-          .single();
-        if (affectedRecord) {
-          await calculateHourBankForPeriod(
-            affectedRecord.user_id,
-            dayOfAdjustment,
-            dayOfAdjustment,
-            affectedRecord.company_id,
-            req.user.id
-          );
+      if (adjustment.time_record_id) {
+        // Correção de batida existente
+        // Preservar original_timestamp se ainda nulo
+        if (!adjustment.original_timestamp) {
+          const { data: origRec } = await supabaseAdmin
+            .from('time_records')
+            .select('timestamp')
+            .eq('id', adjustment.time_record_id)
+            .single();
+          if (origRec?.timestamp) {
+            await supabaseAdmin
+              .from('time_adjustments')
+              .update({ original_timestamp: origRec.timestamp })
+              .eq('id', id);
+          }
         }
-      } catch (recalcErr: any) {
-        // Não bloqueia a resposta se o recálculo falhar — apenas loga
-        console.warn('[AJUSTE_APROVADO] Falha no recálculo automático do banco de horas:', recalcErr?.message);
+        await supabaseAdmin
+          .from('time_records')
+          .update({
+            timestamp: adjustment.requested_timestamp ?? adjustment.new_timestamp,
+            status: 'approved',
+            adjustment_id: Number(id),
+          })
+          .eq('id', adjustment.time_record_id);
+      } else {
+        // Batida inexistente — inserir novo time_record
+        const refDate = adjustment.reference_date
+          ? adjustment.reference_date
+          : reifeDateOf(adjustment.requested_timestamp ?? adjustment.new_timestamp);
+        await supabaseAdmin
+          .from('time_records')
+          .insert({
+            company_id: targetCompanyId,
+            user_id: targetUserId,
+            type: adjustment.punch_type,
+            timestamp: adjustment.requested_timestamp ?? adjustment.new_timestamp,
+            status: 'approved',
+            source: 'ajuste',
+            adjustment_id: Number(id),
+          });
       }
+
+      // Recalcular banco de horas usando reference_date em Recife (NUNCA UTC split)
+      try {
+        const dayStr = adjustment.reference_date
+          ?? reifeDateOf(adjustment.requested_timestamp ?? adjustment.new_timestamp);
+        await calculateHourBankForPeriod(
+          targetUserId,
+          dayStr,
+          dayStr,
+          targetCompanyId,
+          req.user.id
+        );
+      } catch (recalcErr: any) {
+        console.warn('[AJUSTE_APROVADO] Falha no recálculo:', recalcErr?.message);
+      }
+
+      // Notificar funcionário
+      try {
+        const docNum = adjustment.document_number ?? `#${id}`;
+        await sendPushNotification(
+          targetUserId,
+          'Ajuste de Ponto Aprovado',
+          `Sua solicitação ${docNum} foi aprovada.`,
+          { type: 'ponto_ajuste' }
+        );
+        await supabaseAdmin.from('notifications').insert({
+          company_id: targetCompanyId,
+          user_id: targetUserId,
+          message: `Sua solicitação de ajuste ${docNum} foi aprovada.`,
+          type: 'ponto_ajuste_aprovado',
+          read: false,
+          created_at: nowIso,
+        });
+      } catch (notifErr: any) {
+        console.warn('[AJUSTE_APROVADO] Falha na notificação:', notifErr?.message);
+      }
+
+      await supabase.from('logs').insert({
+        user_id: req.user.id,
+        action: 'AJUSTE_APROVADO',
+        details: `Ajuste ${adjustment.document_number ?? id} aprovado`,
+        company_id: req.user.company_id,
+      });
     } else {
-      await supabaseAdmin
-        .from('time_records')
-        .update({ status: 'pending' })
-        .eq('id', adjustment.time_record_id);
+      // Rejeição — reverter status do time_record se existir
+      if (adjustment.time_record_id) {
+        await supabaseAdmin
+          .from('time_records')
+          .update({ status: 'pending' })
+          .eq('id', adjustment.time_record_id);
+      }
+
+      // Notificar funcionário
+      try {
+        const docNum = adjustment.document_number ?? `#${id}`;
+        await sendPushNotification(
+          adjustment.user_id,
+          'Ajuste de Ponto Rejeitado',
+          `Sua solicitação ${docNum} foi rejeitada. Obs.: ${review_note}`,
+          { type: 'ponto_ajuste' }
+        );
+        await supabaseAdmin.from('notifications').insert({
+          company_id: req.user.company_id,
+          user_id: adjustment.user_id,
+          message: `Sua solicitação de ajuste ${docNum} foi rejeitada. Obs.: ${review_note}`,
+          type: 'ponto_ajuste_rejeitado',
+          read: false,
+          created_at: nowIso,
+        });
+      } catch (notifErr: any) {
+        console.warn('[AJUSTE_REJEITADO] Falha na notificação:', notifErr?.message);
+      }
+
+      await supabase.from('logs').insert({
+        user_id: req.user.id,
+        action: 'AJUSTE_REJEITADO',
+        details: `Ajuste ${adjustment.document_number ?? id} rejeitado. Obs.: ${review_note}`,
+        company_id: req.user.company_id,
+      });
     }
 
     res.json({ success: true });
@@ -5200,22 +5639,161 @@ app.put('/api/ponto/ajuste/:id', authenticateToken, async (req: any, res) => {
   }
 });
 
-// GET /api/ponto/ajustes — Lista ajustes pendentes (CEO/ADMIN)
+// GET /api/ponto/ajustes — Lista ajustes por usuário/mês ou pendentes da empresa
 app.get('/api/ponto/ajustes', authenticateToken, async (req: any, res) => {
   try {
-    if (!['CEO', 'ADMIN'].includes(req.user.role)) {
+    const companyId: string = req.user.company_id;
+    const isManager = ['CEO','ADMIN'].includes(req.user.role);
+    const { user_id: qUserId, month } = req.query as { user_id?: string; month?: string };
+
+    // Funcionário solicitando dados de outro usuário → 403
+    if (qUserId && !isManager && Number(qUserId) !== req.user.id) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+    // Funcionário sem parâmetro user_id → só vê os próprios
+    if (!qUserId && !isManager) {
       return res.status(403).json({ error: 'Acesso negado' });
     }
 
-    const { data, error } = await supabaseAdmin
+    // Monta a query base com joins para nomes
+    let query = supabaseAdmin
       .from('time_adjustments')
-      .select('*, time_records(*), users!time_adjustments_requested_by_fkey(name, role)')
-      .eq('company_id', req.user.company_id)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
+      .select([
+        '*',
+        'time_records(type, timestamp)',
+        'requester:users!time_adjustments_requested_by_fkey(name)',
+        'reviewer:users!time_adjustments_reviewed_by_fkey(name)',
+        'employee:users!time_adjustments_user_id_fkey(name)',
+      ].join(', '))
+      .eq('company_id', companyId)
+      .order('reference_date', { ascending: true })
+      .order('created_at', { ascending: true })
+      .limit(200);
 
+    if (qUserId) {
+      query = query.eq('user_id', Number(qUserId));
+    }
+
+    if (month) {
+      // Filtra por mês usando reference_date (data de Recife do ajuste)
+      const [yr, mo] = month.split('-');
+      const firstDay = `${yr}-${mo}-01`;
+      // Último dia do mês
+      const lastDay = new Date(Number(yr), Number(mo), 0).toISOString().split('T')[0];
+      query = query.gte('reference_date', firstDay).lte('reference_date', lastDay);
+    } else if (!qUserId && isManager) {
+      // CEO/ADMIN sem user_id nem mês → pendentes da empresa (comportamento atual)
+      query = query.eq('status', 'pending');
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
-    res.json(data);
+
+    // Normalizar nomes para o contrato esperado pelo front e pelo ajusteAnexoPdf
+    const normalized = (data ?? []).map((adj: any) => ({
+      ...adj,
+      requested_by_name: adj.requester?.name ?? null,
+      reviewed_by_name: adj.reviewer?.name ?? null,
+      user_name: adj.employee?.name ?? null,
+      // Garantir que time_records esteja acessível (para punch_type fallback no PDF)
+    }));
+
+    res.json(normalized);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/ponto/documento-mensal — Upload do espelho assinado (CEO/ADMIN)
+app.post('/api/ponto/documento-mensal', authenticateToken, upload.single('document'), async (req: any, res) => {
+  try {
+    if (!['CEO','ADMIN'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    const file = req.file as Express.Multer.File | undefined;
+    if (!file) return res.status(400).json({ error: 'Arquivo não enviado' });
+
+    // Validar tipo
+    if (!['application/pdf','image/jpeg','image/png'].includes(file.mimetype)) {
+      return res.status(400).json({ error: 'Tipo de arquivo não suportado (pdf/jpg/png)' });
+    }
+    // Validar tamanho (10 MB)
+    if (file.size > 10 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Arquivo excede 10 MB' });
+    }
+
+    const { user_id, year_month } = req.body;
+    if (!user_id || !year_month) return res.status(400).json({ error: 'user_id e year_month são obrigatórios' });
+
+    // Validar que o usuário alvo pertence à mesma empresa
+    const { data: targetUser } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('id', Number(user_id))
+      .eq('company_id', req.user.company_id)
+      .single();
+    if (!targetUser) return res.status(404).json({ error: 'Usuário não encontrado nesta empresa' });
+
+    const { uploadToR2, getSignedReadUrl } = await import('./r2.js');
+
+    const ext = file.mimetype === 'application/pdf' ? 'pdf' : (file.mimetype === 'image/png' ? 'png' : 'jpg');
+    const docPath = `ponto-docs/${req.user.company_id}/${user_id}/${year_month}/espelho-${Date.now()}.${ext}`;
+
+    await uploadToR2(file.buffer, docPath, file.mimetype);
+
+    // Gravar ou atualizar ponto_monthly_documents (UPSERT por unique constraint)
+    const { error: upsertErr } = await supabaseAdmin
+      .from('ponto_monthly_documents')
+      .upsert({
+        company_id: req.user.company_id,
+        user_id: Number(user_id),
+        year_month,
+        document_path: docPath,
+        uploaded_by: req.user.id,
+        uploaded_at: new Date().toISOString(),
+      }, { onConflict: 'company_id,user_id,year_month' });
+
+    if (upsertErr) throw upsertErr;
+
+    await supabase.from('logs').insert({
+      user_id: req.user.id,
+      action: 'ESPELHO_MENSAL_UPLOAD',
+      details: `Espelho ${year_month} do usuário ${user_id} enviado para R2: ${docPath}`,
+      company_id: req.user.company_id,
+    });
+
+    const signedUrl = await getSignedReadUrl(docPath, 300);
+    res.json({ success: true, url: signedUrl });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/ponto/documento-mensal — URL assinada de leitura do espelho (CEO/ADMIN ou próprio funcionário)
+app.get('/api/ponto/documento-mensal', authenticateToken, async (req: any, res) => {
+  try {
+    const { user_id, year_month } = req.query as { user_id?: string; year_month?: string };
+    if (!user_id || !year_month) return res.status(400).json({ error: 'user_id e year_month são obrigatórios' });
+
+    const isManager = ['CEO','ADMIN'].includes(req.user.role);
+    if (!isManager && Number(user_id) !== req.user.id) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    const { data: doc } = await supabaseAdmin
+      .from('ponto_monthly_documents')
+      .select('document_path')
+      .eq('company_id', req.user.company_id)
+      .eq('user_id', Number(user_id))
+      .eq('year_month', year_month)
+      .single();
+
+    if (!doc) return res.status(404).json({ error: 'Documento não encontrado' });
+
+    const { getSignedReadUrl } = await import('./r2.js');
+    const signedUrl = await getSignedReadUrl(doc.document_path, 300);
+    res.json({ url: signedUrl, signedUrl });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -5689,12 +6267,134 @@ app.put('/api/time-off-requests/:id', authenticateToken, async (req: any, res) =
 // MÓDULO: BANCO DE HORAS (hour_bank)
 // =============================================================================
 
+// GET /api/hour-bank/history — Histórico mensal do banco de horas (somente leitura)
+app.get('/api/hour-bank/history', authenticateToken, async (req: any, res) => {
+  try {
+    const isManager = ['CEO', 'ADMIN'].includes(req.user.role);
+    const rawUserId = req.query.user_id as string | undefined;
+
+    if (!isManager && rawUserId && parseInt(rawUserId, 10) !== req.user.id) {
+      return res.status(403).json({ error: 'Acesso negado. Você só pode consultar o próprio histórico.' });
+    }
+
+    const targetUserId = isManager && rawUserId ? parseInt(rawUserId, 10) : req.user.id;
+    if (isNaN(targetUserId)) {
+      return res.status(400).json({ error: 'user_id inválido.' });
+    }
+
+    // Valida que o usuário alvo pertence à mesma empresa e verifica controla_ponto
+    const { data: targetUser, error: userErr } = await supabaseAdmin
+      .from('users')
+      .select('id, controla_ponto')
+      .eq('id', targetUserId)
+      .eq('company_id', req.user.company_id)
+      .maybeSingle();
+
+    if (userErr) throw userErr;
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Usuário não encontrado nesta empresa.' });
+    }
+    if (targetUser.controla_ponto === false) {
+      return res.json([]);
+    }
+
+    let monthsCount = req.query.months ? parseInt(req.query.months as string, 10) : 12;
+    if (isNaN(monthsCount) || monthsCount < 1) monthsCount = 12;
+    if (monthsCount > 24) monthsCount = 24;
+
+    // Monta a janela de meses no fuso America/Recife terminando no mês atual
+    const todayStr = getRecifeDateStr();
+    const [curYear, curMonth] = todayStr.split('-').map(Number);
+
+    const monthsList: string[] = [];
+    for (let i = monthsCount - 1; i >= 0; i--) {
+      const totalMonths = curYear * 12 + (curMonth - 1) - i;
+      const y = Math.floor(totalMonths / 12);
+      const m = (totalMonths % 12) + 1;
+      monthsList.push(`${y}-${String(m).padStart(2, '0')}`);
+    }
+
+    const firstMonthStart = `${monthsList[0]}-01`;
+    const nextMonthTotal = curYear * 12 + curMonth; // mês seguinte ao atual (0-indexed)
+    const nextY = Math.floor(nextMonthTotal / 12);
+    const nextM = (nextMonthTotal % 12) + 1;
+    const nextMonthStart = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
+
+    // Única consulta agregada (paginada contra limite de 1000 linhas) até o fim do mês atual
+    const entries = await fetchHourBankEntriesPaginated(req.user.company_id, targetUserId, {
+      ltDate: nextMonthStart,
+    });
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    let runningBalance = 0;
+
+    const byMonth: Record<string, { movement: number; extras: number; debts: number }> = {};
+    for (const m of monthsList) {
+      byMonth[m] = { movement: 0, extras: 0, debts: 0 };
+    }
+
+    for (const e of entries) {
+      const hrs = parseFloat(e.hours);
+      const mult = parseFloat(e.multiplier) || 1.0;
+      const val = hrs * mult;
+
+      if (e.reference_date < firstMonthStart) {
+        runningBalance += val;
+      } else {
+        const monthKey = e.reference_date.slice(0, 7);
+        if (byMonth[monthKey]) {
+          byMonth[monthKey].movement += val;
+          if (hrs > 0) {
+            byMonth[monthKey].extras += val;
+          } else if (hrs < 0) {
+            byMonth[monthKey].debts += Math.abs(hrs);
+          }
+        }
+      }
+    }
+
+    const history = monthsList.map((month) => {
+      const previousBalance = round2(runningBalance);
+      const agg = byMonth[month];
+      runningBalance += agg.movement;
+      const closingBalance = round2(runningBalance);
+
+      return {
+        month,
+        previousBalance,
+        movement: round2(agg.movement),
+        closingBalance,
+        extras: round2(agg.extras),
+        debts: round2(agg.debts),
+      };
+    });
+
+    res.json(history);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/hour-bank — Lista lançamentos do banco de horas (?userId=X&startDate=Y&endDate=Z)
 // CEO/ADMIN podem consultar qualquer funcionário; funcionários veem apenas o próprio saldo.
 app.get('/api/hour-bank', authenticateToken, async (req: any, res) => {
   try {
     const { userId, startDate, endDate } = req.query;
     const isManager = ['CEO', 'ADMIN'].includes(req.user.role);
+
+    const targetUid = !isManager ? req.user.id : (userId ? parseInt(userId as string, 10) : null);
+    if (targetUid) {
+      const { data: targetUserControl } = await supabaseAdmin
+        .from('users')
+        .select('controla_ponto')
+        .eq('id', targetUid)
+        .eq('company_id', req.user.company_id)
+        .maybeSingle();
+
+      if (targetUserControl?.controla_ponto === false) {
+        return res.json({ controlaPonto: false, entries: [], balance: 0 });
+      }
+    }
 
     let query = supabaseAdmin
       .from('hour_bank')
@@ -5722,7 +6422,7 @@ app.get('/api/hour-bank', authenticateToken, async (req: any, res) => {
       return sum + (hrs * mult);
     }, 0);
 
-    res.json({ entries: data ?? [], balance: Math.round(balance * 100) / 100 });
+    res.json({ controlaPonto: true, entries: data ?? [], balance: Math.round(balance * 100) / 100 });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -5803,28 +6503,38 @@ app.post('/api/hour-bank/recalculate', authenticateToken, async (req: any, res) 
     const startDateStr = startDate.split('T')[0];
     const endDateStr = endDate.split('T')[0];
 
-    // Determinar quais usuários recalcular
+    // Determinar quais usuários recalcular (pulando isentos: controla_ponto = false)
     let targetUserIds: number[] = [];
     if (userId) {
       // Recalcula apenas o funcionário informado (validando que pertence à empresa)
       const { data: targetUser } = await supabaseAdmin
         .from('users')
-        .select('id')
+        .select('id, controla_ponto')
         .eq('id', parseInt(userId, 10))
         .eq('company_id', companyId)
         .maybeSingle();
       if (!targetUser) {
         return res.status(404).json({ error: 'Usuário não encontrado ou não pertence a esta empresa.' });
       }
+      if (targetUser.controla_ponto === false) {
+        return res.json({
+          totalUsuariosRecalculados: 0,
+          totalFaltasRemovidas: 0,
+          resultados: [],
+          skippedExempt: true,
+        });
+      }
       targetUserIds = [parseInt(userId, 10)];
     } else {
-      // Recalcula TODOS os funcionários ativos da empresa
+      // Recalcula TODOS os funcionários ativos da empresa que controlam ponto
       const { data: allCompanyUsers } = await supabaseAdmin
         .from('users')
-        .select('id')
+        .select('id, controla_ponto')
         .eq('company_id', companyId)
         .eq('active', true);
-      targetUserIds = (allCompanyUsers ?? []).map((u: any) => u.id);
+      targetUserIds = (allCompanyUsers ?? [])
+        .filter((u: any) => u.controla_ponto !== false)
+        .map((u: any) => u.id);
     }
 
     if (targetUserIds.length === 0) {

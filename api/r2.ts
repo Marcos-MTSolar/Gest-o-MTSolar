@@ -87,3 +87,15 @@ export async function generatePresignedUrl(
   });
   return getSignedUrl(r2Client, command, { expiresIn: expiresInSeconds });
 }
+
+/** URL assinada de LEITURA (GET) com validade curta — nunca expor URL pública r2.dev para arquivos privados */
+export async function getSignedReadUrl(
+  filePath: string,
+  expiresInSeconds = 300
+): Promise<string> {
+  const command = new GetObjectCommand({
+    Bucket: getR2Bucket(),
+    Key: filePath,
+  });
+  return getSignedUrl(r2Client, command, { expiresIn: expiresInSeconds });
+}

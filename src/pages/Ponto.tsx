@@ -7,9 +7,10 @@ import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import jsPDF from 'jspdf';
 import { supabase } from '../lib/supabase';
-import { Trash2, MapPin, FileText, X, ExternalLink } from 'lucide-react';
+import { Trash2, MapPin, FileText, X, ExternalLink, Upload, AlertCircle, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getRecifeDateStr } from '../utils/dateUtils';
+import { appendAjustesAnexoToPdf } from '../utils/ajusteAnexoPdf';
 import { PontoErrorBoundary } from '../components/PontoErrorBoundary';
 
 /**
@@ -76,14 +77,66 @@ type WorkSchedule = {
 
 type TimeAdjustment = {
   id: number;
-  time_record_id: number;
-  justification: string;
-  new_timestamp: string;
+  time_record_id: number | null;
+  user_id?: number;
+  user_name?: string;
+  requested_by?: number;
+  requested_by_name?: string;
+  reviewed_by?: number | null;
+  reviewed_by_name?: string | null;
+  adjustment_type?: 'batida_esquecida' | 'falha_app' | 'correcao_horario';
+  reason_category?: string;
+  reason_text?: string;
+  justification?: string;
+  punch_type?: 'entry' | 'lunch_start' | 'lunch_end' | 'exit';
+  reference_date?: string;
+  requested_timestamp?: string;
+  new_timestamp?: string;
+  original_timestamp?: string | null;
+  requested_ack_at?: string | null;
+  ack_text_version?: string | null;
+  reviewed_at?: string | null;
+  review_note?: string | null;
+  document_number?: string | null;
   status: string;
   created_at: string;
-  users: { name: string; role: string };
-  time_records: TimeRecord;
+  users?: { name: string; role: string };
+  time_records?: TimeRecord | null;
 };
+
+const ADJUSTMENT_REASON_LABELS: Record<string, string> = {
+  esqueci_de_bater: 'Esqueci de bater',
+  falha_aplicativo: 'Falha do aplicativo',
+  sem_sinal: 'Sem sinal',
+  gps_ou_camera_falhou: 'GPS ou câmera falhou',
+  outro: 'Outro',
+};
+
+function formatRecifeDateTime(iso?: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleString('pt-BR', {
+    timeZone: 'America/Recife',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function getRecifeTimeHHMM(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString('pt-BR', {
+    timeZone: 'America/Recife',
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 const TYPE_LABELS: Record<string, string> = {
   entry: 'Entrada',
@@ -445,6 +498,17 @@ export default function Ponto() {
   const [hourBankSummary, setHourBankSummary] = useState<{
     extraNormal: number; extraFds: number; devendo: number; abonados: number; balance: number;
   } | null>(null);
+  const [bankAccumulated, setBankAccumulated] = useState<{
+    previousBalance: number;
+    periodMovement: number;
+    accumulatedBalance: number;
+    previousUntil: string;
+  } | null>(null);
+  const [controlaPonto, setControlaPonto] = useState<boolean>(true);
+  const [hourBankHistory, setHourBankHistory] = useState<Array<{
+    month: string; previousBalance: number; movement: number; closingBalance: number;
+  }>>([]);
+  const [loadingHourBankHistory, setLoadingHourBankHistory] = useState(false);
   const [startDate, setStartDate] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
@@ -493,21 +557,12 @@ export default function Ponto() {
         try {
           const { data } = await supabase
             .from('companies')
-            .select('name, cnpj')
+            .select('name')
             .eq('id', user.company_id)
             .maybeSingle();
 
           if (data) {
-            setCompanyInfo(data);
-          } else {
-            const { data: fallbackData } = await supabase
-              .from('companies')
-              .select('name')
-              .eq('id', user.company_id)
-              .maybeSingle();
-            if (fallbackData) {
-              setCompanyInfo({ name: fallbackData.name });
-            }
+            setCompanyInfo({ name: data.name });
           }
         } catch (err) {
           console.error('Error fetching company info:', err);
@@ -517,11 +572,37 @@ export default function Ponto() {
     fetchCompanyInfo();
   }, [user?.company_id]);
 
-  // Ajuste
+  // Ajuste de ponto (funcionário e gestor)
   const [adjustments, setAdjustments] = useState<TimeAdjustment[]>([]);
-  const [adjustingRecord, setAdjustingRecord] = useState<TimeRecord | null>(null);
-  const [adjustJustification, setAdjustJustification] = useState('');
-  const [adjustNewTime, setAdjustNewTime] = useState('');
+  const [managerAdjustMonth, setManagerAdjustMonth] = useState(() => getRecifeDateStr().slice(0, 7));
+  const [myAdjustments, setMyAdjustments] = useState<TimeAdjustment[]>([]);
+  const [myAdjustMonth, setMyAdjustMonth] = useState(() => getRecifeDateStr().slice(0, 7));
+  const [loadingMyAdjustments, setLoadingMyAdjustments] = useState(false);
+
+  // Modal unificado de solicitação/registro de ajuste
+  const [adjustModalOpen, setAdjustModalOpen] = useState(false);
+  const [adjustModalMode, setAdjustModalMode] = useState<'employee' | 'manager'>('employee');
+  const [adjustTargetUserId, setAdjustTargetUserId] = useState<string>('');
+  const [adjustRecordId, setAdjustRecordId] = useState<number | null>(null);
+  const [adjustDate, setAdjustDate] = useState('');
+  const [adjustPunchType, setAdjustPunchType] = useState<'entry' | 'lunch_start' | 'lunch_end' | 'exit'>('entry');
+  const [adjustTime, setAdjustTime] = useState('');
+  const [adjustReasonCategory, setAdjustReasonCategory] = useState('esqueci_de_bater');
+  const [adjustReasonText, setAdjustReasonText] = useState('');
+  const [adjustAccept, setAdjustAccept] = useState(false);
+  const [submittingAdjust, setSubmittingAdjust] = useState(false);
+  const [lastCreatedAdjustment, setLastCreatedAdjustment] = useState<{ document_number?: string; requested_ack_at?: string | null } | null>(null);
+
+  // Modal de rejeição (observação obrigatória)
+  const [rejectModalAdj, setRejectModalAdj] = useState<TimeAdjustment | null>(null);
+  const [rejectNote, setRejectNote] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+
+  // Espelho assinado mensal (R2 privado via URL assinada)
+  const [managerMonthlyDocUrl, setManagerMonthlyDocUrl] = useState<string | null>(null);
+  const [uploadingMonthlyDoc, setUploadingMonthlyDoc] = useState(false);
+  const [myMonthlyDocUrl, setMyMonthlyDocUrl] = useState<string | null>(null);
+  const monthlyDocInputRef = useRef<HTMLInputElement | null>(null);
 
   // Schedules editor
   const [editSchedule, setEditSchedule] = useState<WorkSchedule | null>(null);
@@ -530,9 +611,12 @@ export default function Ponto() {
     fetchSchedules();
     fetchHistory();
     fetchMyHourBank();
+    fetchHourBankHistory();
+    fetchMyAdjustments(myAdjustMonth);
+    fetchMyMonthlyDoc(myAdjustMonth);
     if (isManager) {
       fetchAllUsers();
-      fetchPendingAdjustments();
+      fetchPendingAdjustments(managerAdjustMonth);
       fetchHolidays(String(new Date().getFullYear()));
       fetchPendingTimeOffRequests();
     }
@@ -596,12 +680,48 @@ export default function Ponto() {
   }
 
 
-  async function fetchPendingAdjustments() {
+  async function fetchPendingAdjustments(monthStr = managerAdjustMonth) {
     try {
-      const res = await api.get('/api/ponto/ajustes');
+      const res = await api.get(`/api/ponto/ajustes?month=${monthStr}`);
       setAdjustments(res.data ?? []);
     } catch {
       setAdjustments([]);
+    }
+  }
+
+  async function fetchMyAdjustments(monthStr = myAdjustMonth) {
+    if (!user?.id) return;
+    try {
+      setLoadingMyAdjustments(true);
+      const res = await api.get(`/api/ponto/ajustes?user_id=${user.id}&month=${monthStr}`);
+      setMyAdjustments(res.data ?? []);
+    } catch {
+      setMyAdjustments([]);
+    } finally {
+      setLoadingMyAdjustments(false);
+    }
+  }
+
+  async function fetchMyMonthlyDoc(monthStr = myAdjustMonth) {
+    if (!user?.id || !monthStr) return;
+    try {
+      const res = await api.get(`/api/ponto/documento-mensal?user_id=${user.id}&year_month=${monthStr}`);
+      setMyMonthlyDocUrl(res.data?.url ?? res.data?.signedUrl ?? null);
+    } catch {
+      setMyMonthlyDocUrl(null);
+    }
+  }
+
+  async function fetchManagerMonthlyDoc(userId: number, monthStr: string) {
+    if (!userId || !monthStr) {
+      setManagerMonthlyDocUrl(null);
+      return;
+    }
+    try {
+      const res = await api.get(`/api/ponto/documento-mensal?user_id=${userId}&year_month=${monthStr}`);
+      setManagerMonthlyDocUrl(res.data?.url ?? res.data?.signedUrl ?? null);
+    } catch {
+      setManagerMonthlyDocUrl(null);
     }
   }
 
@@ -628,6 +748,19 @@ export default function Ponto() {
     }
   }
 
+  async function fetchHourBankHistory(userId?: number) {
+    try {
+      setLoadingHourBankHistory(true);
+      const url = userId ? `/api/hour-bank/history?user_id=${userId}&months=12` : '/api/hour-bank/history?months=12';
+      const res = await api.get(url);
+      setHourBankHistory(res.data ?? []);
+    } catch {
+      setHourBankHistory([]);
+    } finally {
+      setLoadingHourBankHistory(false);
+    }
+  }
+
   async function fetchPendingTimeOffRequests() {
     try {
       setLoadingTimeOffRequests(true);
@@ -651,13 +784,21 @@ export default function Ponto() {
       setLoading(true);
       const start = startDate;
       const end = `${endDate}T23:59:59`;
-      const res = await api.get(`/api/ponto/relatorio/${userId}?start=${start}&end=${end}`);
+      const res = await api.get(`/api/ponto/relatorio/${userId}?start=${start}&end=${end}`, {
+        timeout: 30000,
+      });
       // Novo formato: { records: [...], hourBank: [...] }
       const data = res.data;
       const records = Array.isArray(data) ? data : (data?.records ?? []);
       const hb = Array.isArray(data) ? [] : (data?.hourBank ?? []);
       setReportRecords(records);
       setHourBankEntries(hb);
+      setControlaPonto(Array.isArray(data) ? true : (data?.controlaPonto ?? true));
+      setBankAccumulated(Array.isArray(data) ? null : (data?.bankAccumulated ?? null));
+      fetchHourBankHistory(userId);
+      if (startDate) {
+        fetchManagerMonthlyDoc(userId, startDate.slice(0, 7));
+      }
 
       // Calcula o resumo localmente a partir dos lançamentos retornados aplicando o multiplier da CLT
       let extraNormal = 0, extraFds = 0, devendo = 0, abonados = 0, balance = 0;
@@ -694,6 +835,7 @@ export default function Ponto() {
       setReportRecords([]);
       setHourBankEntries([]);
       setHourBankSummary(null);
+      setBankAccumulated(null);
     } finally {
       setLoading(false);
     }
@@ -921,30 +1063,149 @@ export default function Ponto() {
     }
   }
 
+  function openAdjustModal(opts: {
+    mode: 'employee' | 'manager';
+    record?: TimeRecord | null;
+    date?: string;
+    punchType?: 'entry' | 'lunch_start' | 'lunch_end' | 'exit';
+  }) {
+    setAdjustModalMode(opts.mode);
+    setAdjustRecordId(opts.record?.id ?? null);
+    const defaultDate = opts.record
+      ? getRecifeDateStr(opts.record.timestamp)
+      : (opts.date || getRecifeDateStr());
+    setAdjustDate(defaultDate);
+    setAdjustPunchType(opts.record?.type ?? opts.punchType ?? 'entry');
+    setAdjustTime(opts.record ? getRecifeTimeHHMM(opts.record.timestamp) : '');
+    setAdjustReasonCategory('esqueci_de_bater');
+    setAdjustReasonText('');
+    setAdjustAccept(false);
+    setAdjustTargetUserId('');
+    setLastCreatedAdjustment(null);
+    setAdjustModalOpen(true);
+  }
+
   async function handleRequestAdjust() {
-    if (!adjustingRecord || !adjustJustification || !adjustNewTime) return;
+    if (!adjustDate || !adjustPunchType || !adjustTime) {
+      toast.error('Preencha data, tipo de batida e horário.');
+      return;
+    }
+    if (adjustReasonText.trim().length < 15) {
+      toast.error('A descrição do motivo deve ter no mínimo 15 caracteres.');
+      return;
+    }
+    if (adjustModalMode === 'employee' && !adjustAccept) {
+      toast.error('É obrigatório marcar o termo de aceite para enviar.');
+      return;
+    }
+    if (adjustModalMode === 'manager' && !adjustTargetUserId) {
+      toast.error('Selecione o colaborador.');
+      return;
+    }
+    const isManagerForSelf = adjustModalMode === 'manager' && Number(adjustTargetUserId) === user?.id;
+    if (isManagerForSelf && !adjustAccept) {
+      toast.error('É obrigatório marcar o termo de aceite para enviar.');
+      return;
+    }
+
+    const requestedTimestamp = `${adjustDate}T${adjustTime}:00-03:00`;
+    const adjustmentType = adjustRecordId
+      ? 'correcao_horario'
+      : (['falha_aplicativo', 'sem_sinal', 'gps_ou_camera_falhou'].includes(adjustReasonCategory)
+        ? 'falha_app'
+        : 'batida_esquecida');
+
     try {
-      await api.post('/api/ponto/ajuste', {
-        time_record_id: adjustingRecord.id,
-        justification: adjustJustification,
-        new_timestamp: new Date(adjustNewTime).toISOString(),
+      setSubmittingAdjust(true);
+      const payload: any = {
+        adjustment_type: adjustmentType,
+        reference_date: adjustDate,
+        punch_type: adjustPunchType,
+        requested_timestamp: requestedTimestamp,
+        reason_category: adjustReasonCategory,
+        reason_text: adjustReasonText.trim(),
+      };
+      if (adjustRecordId) {
+        payload.time_record_id = adjustRecordId;
+      }
+      if (adjustModalMode === 'employee' || isManagerForSelf) {
+        payload.accept = true;
+      } else {
+        payload.user_id = Number(adjustTargetUserId);
+      }
+
+      const res = await api.post('/api/ponto/ajuste', payload);
+      const created = res.data;
+      setLastCreatedAdjustment({
+        document_number: created?.document_number,
+        requested_ack_at: created?.requested_ack_at ?? null,
       });
-      setMessage({ text: 'Solicitação de ajuste enviada.', type: 'success' });
-      setAdjustingRecord(null);
-      setAdjustJustification('');
-      setAdjustNewTime('');
+      toast.success(
+        created?.document_number
+          ? `Solicitação ${created.document_number} registrada com sucesso!`
+          : 'Solicitação de ajuste enviada.'
+      );
       fetchHistory();
-    } catch {
-      setMessage({ text: 'Erro ao solicitar ajuste.', type: 'error' });
+      fetchMyAdjustments(myAdjustMonth);
+      if (isManager) fetchPendingAdjustments(managerAdjustMonth);
+    } catch (err: any) {
+      toast.error(extrairMensagemErro(err, 'Erro ao solicitar ajuste.'));
+    } finally {
+      setSubmittingAdjust(false);
     }
   }
 
-  async function handleReviewAdjust(id: number, status: 'approved' | 'rejected') {
+  async function handleReviewAdjust(id: number, status: 'approved' | 'rejected', reviewNote?: string) {
+    if (status === 'rejected' && !reviewNote?.trim()) {
+      toast.error('Informe uma observação para rejeitar o ajuste.');
+      return;
+    }
     try {
-      await api.put(`/api/ponto/ajuste/${id}`, { status });
-      fetchPendingAdjustments();
+      setSubmittingReview(true);
+      await api.put(`/api/ponto/ajuste/${id}`, {
+        status,
+        ...(reviewNote?.trim() ? { review_note: reviewNote.trim() } : {}),
+      });
+      toast.success(status === 'approved' ? 'Ajuste aprovado com sucesso.' : 'Ajuste rejeitado.');
+      setRejectModalAdj(null);
+      setRejectNote('');
+      fetchPendingAdjustments(managerAdjustMonth);
+      fetchMyAdjustments(myAdjustMonth);
       if (selectedUser) fetchReport(selectedUser);
-    } catch {}
+    } catch (err: any) {
+      toast.error(extrairMensagemErro(err, 'Erro ao avaliar ajuste.'));
+    } finally {
+      setSubmittingReview(false);
+    }
+  }
+
+  async function handleUploadMonthlyDoc(file: File) {
+    if (!selectedUser || !startDate) return;
+    const yearMonth = startDate.slice(0, 7);
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('O arquivo deve ter no máximo 10 MB.');
+      return;
+    }
+    try {
+      setUploadingMonthlyDoc(true);
+      const fd = new FormData();
+      fd.append('user_id', String(selectedUser));
+      fd.append('year_month', yearMonth);
+      fd.append('document', file);
+      await api.post('/api/ponto/documento-mensal', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      toast.success('Espelho assinado anexado com sucesso!');
+      fetchManagerMonthlyDoc(selectedUser, yearMonth);
+      if (selectedUser === user?.id) {
+        fetchMyMonthlyDoc(myAdjustMonth);
+      }
+    } catch (err: any) {
+      toast.error(extrairMensagemErro(err, 'Erro ao anexar espelho assinado.'));
+    } finally {
+      setUploadingMonthlyDoc(false);
+      if (monthlyDocInputRef.current) monthlyDocInputRef.current.value = '';
+    }
   }
 
   async function handleSaveSchedule() {
@@ -968,7 +1229,7 @@ export default function Ponto() {
   // Logomarca com cores sólidas — Logomarca.png (azul e amarelo vivos, melhor visibilidade no PDF)
   const LOGO_URL = '/Logomarca.png';
 
-  function generatePDF() {
+  async function generatePDF() {
     if (!(reportRecords ?? []).length) return;
     const doc = new jsPDF();
     const colab = (allUsers ?? []).find((u) => u.id === selectedUser);
@@ -1060,7 +1321,7 @@ export default function Ponto() {
     const colabSchedule = (schedules ?? []).find((s) => s.role === userRole);
     const scheduleStr = colabSchedule
       ? `Entrada: ${colabSchedule.entry_time} | Almoço: ${colabSchedule.lunch_start} às ${colabSchedule.lunch_end} | Saída: ${colabSchedule.exit_time}`
-      : 'Horário esperado: Não configurado';
+      : 'Não configurado';
 
     doc.setFillColor(245, 247, 250);
     doc.rect(14, 35, 182, 7.5, 'F');
@@ -1152,15 +1413,16 @@ export default function Ponto() {
       const dayOfWeekName = daysOfWeek[dateObj.getDay()];
       const dateStr = `${dateParts[2]}/${dateParts[1]}`;
 
+      const isento = !controlaPonto;
       const hbEntry = hbByDate[day];
       let tipoDia = '-';
-      if (hbEntry) {
+      if (!isento && hbEntry) {
         if (hbEntry.type === 'falta' && (recs ?? []).length > 0) {
           tipoDia = 'Jornada Incompleta';
         } else {
           tipoDia = HB_TYPE_LABEL[hbEntry.type] ?? hbEntry.type;
         }
-      } else if (hours > 0) {
+      } else if (!isento && hours > 0) {
         tipoDia = 'Normal';
       }
 
@@ -1225,9 +1487,30 @@ export default function Ponto() {
     y += 5.5;
 
     // Resumo do banco de horas (TAREFA B - Compactado de 44mm para 27mm)
-    if (hourBankSummary) {
+    if (hourBankSummary && !controlaPonto) {
       const boxStartY = y - 2;
-      const boxHeight = 27;
+      const boxHeight = 15;
+
+      doc.setFillColor(245, 248, 252);
+      doc.rect(14, boxStartY, 182, boxHeight, 'F');
+      doc.setDrawColor(200, 215, 235);
+      doc.setLineWidth(0.3);
+      doc.rect(14, boxStartY, 182, boxHeight, 'S');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(30, 70, 140);
+      doc.text('RESUMO DO BANCO DE HORAS', 105, y + 2, { align: 'center' });
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(80, 80, 80);
+      doc.text('Colaborador isento de controle de jornada – sem banco de horas', 105, y + 8, { align: 'center' });
+
+      y += boxHeight + 3;
+    } else if (hourBankSummary) {
+      const boxStartY = y - 2;
+      const boxHeight = bankAccumulated ? 36 : 27;
 
       doc.setFillColor(245, 248, 252);
       doc.rect(14, boxStartY, 182, boxHeight, 'F');
@@ -1282,15 +1565,40 @@ export default function Ponto() {
       doc.setTextColor(50, 130, 200);
       doc.text(`${hourBankSummary.abonados} dia(s)`, valueX, y, { align: 'right' });
 
-      // 5. Saldo do Banco de Horas
+      // 5. Saldo do Período (renomeado)
       y += 4.4;
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(30, 30, 30);
-      doc.text('• Saldo Total do Banco de Horas:', labelX, y);
+      doc.text('• Saldo do Período:', labelX, y);
       const balanceColor = hourBankSummary.balance >= 0 ? [30, 140, 80] : [200, 50, 50];
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(balanceColor[0], balanceColor[1], balanceColor[2]);
       doc.text(`${hourBankSummary.balance >= 0 ? '+' : ''}${hourBankSummary.balance.toFixed(2)}h`, valueX, y, { align: 'right' });
+
+      // 6. Saldo anterior (somente se bankAccumulated disponível)
+      if (bankAccumulated) {
+        const prevUntilFmt = bankAccumulated.previousUntil
+          ? (() => { const p = bankAccumulated.previousUntil.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; })()
+          : '—';
+        y += 3.8;
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(50, 50, 50);
+        doc.text(`• Saldo anterior (até ${prevUntilFmt}):`, labelX, y);
+        const prevColor = bankAccumulated.previousBalance >= 0 ? [30, 140, 80] as [number, number, number] : [200, 50, 50] as [number, number, number];
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(prevColor[0], prevColor[1], prevColor[2]);
+        doc.text(`${bankAccumulated.previousBalance >= 0 ? '+' : ''}${bankAccumulated.previousBalance.toFixed(2)}h`, valueX, y, { align: 'right' });
+
+        // 7. Saldo acumulado
+        y += 3.8;
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 30, 30);
+        doc.text('• Saldo acumulado:', labelX, y);
+        const accumColor = bankAccumulated.accumulatedBalance >= 0 ? [30, 140, 80] as [number, number, number] : [200, 50, 50] as [number, number, number];
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(accumColor[0], accumColor[1], accumColor[2]);
+        doc.text(`${bankAccumulated.accumulatedBalance >= 0 ? '+' : ''}${bankAccumulated.accumulatedBalance.toFixed(2)}h`, valueX, y, { align: 'right' });
+      }
 
       y += 6.5;
 
@@ -1321,6 +1629,42 @@ export default function Ponto() {
     doc.text('Assinatura do Responsável', 152.5, y + 4.5, { align: 'center' });
     doc.setFont('helvetica', 'bold');
     doc.text(companyName, 152.5, y + 8.5, { align: 'center' });
+
+    // Buscar ajustes do mês para o anexo (somente se mês definido)
+    const monthStr = startDate ? startDate.slice(0, 7) : '';
+    let adjustmentsForPdf: any[] = [];
+    if (monthStr && selectedUser) {
+      try {
+        const adjRes = await api.get(`/api/ponto/ajustes?user_id=${selectedUser}&month=${monthStr}`);
+        adjustmentsForPdf = adjRes.data ?? [];
+      } catch {
+        adjustmentsForPdf = [];
+      }
+    }
+
+    // Anexo de ajustes (cria página(s) adicionais se houver ajustes)
+    // Nota: roleTranslated já está declarado acima (linha do Cargo no cabeçalho do PDF)
+    appendAjustesAnexoToPdf(doc, {
+      companyName,
+      companyCnpj,
+      periodStr,
+      userName,
+      userCpf,
+      userCargo: roleTranslated,
+      adjustments: adjustmentsForPdf,
+    });
+
+    // Rodapé "Pág. x/y" em todas as páginas quando há mais de 1
+    const totalPages = (doc as any).internal.getNumberOfPages();
+    if (totalPages > 1) {
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(150, 150, 150);
+        doc.text(`Pág. ${p}/${totalPages}`, 196, 290, { align: 'right' });
+      }
+    }
 
     doc.save(`ponto-${userName.replace(/\s/g, '-')}-${startDate}-a-${endDate}.pdf`);
   }
@@ -1439,7 +1783,7 @@ export default function Ponto() {
                             {new Date(rec.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                           </span>
                           <button
-                            onClick={() => { setAdjustingRecord(rec); setActiveTab('historico'); }}
+                            onClick={() => { openAdjustModal({ mode: 'employee', record: rec }); setActiveTab('historico'); }}
                             className="text-xs text-orange-500 hover:underline"
                           >
                             Solicitar ajuste
@@ -1460,38 +1804,56 @@ export default function Ponto() {
       {/* TAB: MEU HISTÓRICO */}
       {activeTab === 'historico' && (
         <div className="space-y-4">
-          {adjustingRecord && (
-            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 space-y-3">
-              <p className="font-semibold text-orange-800">Solicitar ajuste: {TYPE_LABELS[adjustingRecord.type]}</p>
-              <p className="text-sm text-orange-600">Horário atual: {new Date(adjustingRecord.timestamp).toLocaleString('pt-BR')}</p>
-              <input
-                type="datetime-local"
-                value={adjustNewTime}
-                onChange={(e) => setAdjustNewTime(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-              />
-              <textarea
-                placeholder="Justificativa obrigatória..."
-                value={adjustJustification}
-                onChange={(e) => setAdjustJustification(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm min-h-[80px]"
-              />
-              <div className="flex gap-2">
-                <button onClick={handleRequestAdjust} className="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium">Enviar solicitação</button>
-                <button onClick={() => setAdjustingRecord(null)} className="text-gray-500 px-4 py-2 rounded-lg text-sm border">Cancelar</button>
-              </div>
+          {/* Ação rápida: Solicitar ajuste (inclusive de dia sem batidas) */}
+          <div className="bg-white rounded-xl shadow p-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold text-gray-800 text-sm">Histórico de Batidas</p>
+              <p className="text-xs text-gray-400">Dias com batidas incompletas aparecem destacados para solicitação de ajuste (prazo de 30 dias).</p>
             </div>
-          )}
+            <button
+              type="button"
+              onClick={() => openAdjustModal({ mode: 'employee' })}
+              className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              + Solicitar ajuste
+            </button>
+          </div>
 
           {Object.entries(groupByDay(records ?? [])).sort().reverse().map(([day, recs]) => {
             const hours = calcDayHours(recs ?? []);
+            const missingTypes = TYPE_ORDER.filter((t) => !(recs ?? []).some((r) => r.type === t));
+            const hasMissingPunch = missingTypes.length > 0;
+            const firstMissingType = (missingTypes[0] ?? 'entry') as 'entry' | 'lunch_start' | 'lunch_end' | 'exit';
             return (
-              <div key={day} className="bg-white rounded-xl shadow p-4">
-                <div className="flex justify-between items-center mb-3">
-                  <p className="font-semibold text-gray-700">
-                    {new Date(day + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
-                  </p>
-                  {hours > 0 && <span className="text-sm text-blue-600 font-medium">{hours.toFixed(1)}h</span>}
+              <div
+                key={day}
+                className={`bg-white rounded-xl shadow p-4 ${hasMissingPunch ? 'border-l-4 border-amber-400' : ''}`}
+              >
+                <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-gray-700">
+                      {new Date(day + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
+                    </p>
+                    {hasMissingPunch && (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                        Batida faltante
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {hours > 0 && <span className="text-sm text-blue-600 font-medium">{hours.toFixed(1)}h</span>}
+                    <button
+                      type="button"
+                      onClick={() => openAdjustModal({ mode: 'employee', date: day, punchType: firstMissingType })}
+                      className={`text-xs font-medium px-3 py-1 rounded-lg border transition-colors ${
+                        hasMissingPunch
+                          ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
+                          : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                      }`}
+                    >
+                      Solicitar ajuste
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-1">
                   {TYPE_ORDER.map((t) => {
@@ -1530,7 +1892,7 @@ export default function Ponto() {
                             </div>
                             {rec.status !== 'adjustment_requested' && (
                               <button
-                                onClick={() => setAdjustingRecord(rec)}
+                                onClick={() => openAdjustModal({ mode: 'employee', record: rec })}
                                 className="text-xs text-orange-400 hover:underline mt-0.5"
                               >
                                 Ajustar
@@ -1551,6 +1913,93 @@ export default function Ponto() {
           {(records ?? []).length === 0 && (
             <p className="text-center text-gray-400 py-8">Nenhum registro este mês.</p>
           )}
+
+          {/* Seção: Meus ajustes */}
+          <div className="bg-white rounded-xl shadow p-4 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-3">
+              <div>
+                <p className="font-semibold text-gray-800 text-base">Meus ajustes</p>
+                <p className="text-xs text-gray-400">Acompanhe suas solicitações do mês selecionado.</p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="month"
+                  value={myAdjustMonth}
+                  onChange={(e) => {
+                    const m = e.target.value;
+                    setMyAdjustMonth(m);
+                    fetchMyAdjustments(m);
+                    fetchMyMonthlyDoc(m);
+                  }}
+                  className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+                />
+                {myMonthlyDocUrl && (
+                  <a
+                    href={myMonthlyDocUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                  >
+                    <ExternalLink size={14} /> Ver espelho assinado
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {loadingMyAdjustments ? (
+              <p className="text-center text-gray-400 py-6 text-sm">Carregando ajustes...</p>
+            ) : myAdjustments.length === 0 ? (
+              <p className="text-center text-gray-400 py-6 text-sm">Nenhum ajuste solicitado neste mês.</p>
+            ) : (
+              <div className="space-y-2">
+                {myAdjustments.map((adj) => {
+                  const refDate = adj.reference_date || (adj.new_timestamp ? getRecifeDateStr(adj.new_timestamp) : '');
+                  const pType = adj.punch_type || adj.time_records?.type || '';
+                  const reqTs = adj.requested_timestamp || adj.new_timestamp;
+                  const statusBadge =
+                    adj.status === 'approved'
+                      ? { label: 'Aprovado', cls: 'bg-green-100 text-green-700' }
+                      : adj.status === 'rejected'
+                      ? { label: 'Rejeitado', cls: 'bg-red-100 text-red-700' }
+                      : { label: 'Pendente', cls: 'bg-amber-100 text-amber-800' };
+                  return (
+                    <div key={adj.id} className="border border-gray-200 rounded-xl p-3 text-sm space-y-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {adj.document_number && (
+                            <span className="font-mono text-xs font-semibold bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
+                              {adj.document_number}
+                            </span>
+                          )}
+                          <span className="font-semibold text-gray-800">{refDate ? formatDate(refDate) : '—'}</span>
+                          <span className="text-gray-600">
+                            {TYPE_LABELS[pType] || pType} — {getRecifeTimeHHMM(reqTs)}
+                          </span>
+                        </div>
+                        <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${statusBadge.cls}`}>
+                          {statusBadge.label}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Motivo: {ADJUSTMENT_REASON_LABELS[adj.reason_category || ''] || adj.reason_category || '—'}
+                        {(adj.reason_text || adj.justification) ? ` — ${adj.reason_text || adj.justification}` : ''}
+                      </p>
+                      {adj.requested_ack_at && (
+                        <p className="text-[11px] text-gray-400">
+                          Aceite registrado em: {formatRecifeDateTime(adj.requested_ack_at)}
+                        </p>
+                      )}
+                      {adj.status === 'rejected' && adj.review_note && (
+                        <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-2.5 py-1.5 mt-1">
+                          <strong>Observação do gestor:</strong> {adj.review_note}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1671,6 +2120,41 @@ export default function Ponto() {
                   <Trash2 size={16} /> Excluir todos os registros
                 </button>
               )}
+
+              {/* Espelho assinado do mês selecionado (CEO/ADMIN) */}
+              {selectedUser && startDate && (
+                <>
+                  <input
+                    ref={monthlyDocInputRef}
+                    type="file"
+                    accept="application/pdf,image/jpeg,image/png"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleUploadMonthlyDoc(f);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={uploadingMonthlyDoc}
+                    onClick={() => monthlyDocInputRef.current?.click()}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50 transition-colors"
+                    title={`Anexar espelho assinado do mês ${startDate.slice(0, 7)} (PDF/JPG/PNG, máx. 10 MB)`}
+                  >
+                    <Upload size={16} /> {uploadingMonthlyDoc ? 'Enviando...' : 'Anexar espelho assinado'}
+                  </button>
+                  {managerMonthlyDocUrl && (
+                    <a
+                      href={managerMonthlyDocUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+                    >
+                      <ExternalLink size={16} /> Ver espelho assinado
+                    </a>
+                  )}
+                </>
+              )}
             </div>
 
             {/* Modal de confirmação: recalcular TODOS os funcionários */}
@@ -1784,7 +2268,13 @@ export default function Ponto() {
           </div>
 
           {/* Cards de Resumo do Banco de Horas */}
-          {hourBankSummary && (
+          {!controlaPonto && selectedUser && !loading && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-600 text-center">
+              Colaborador isento de controle de jornada — sem cálculo de faltas ou banco de horas.
+            </div>
+          )}
+
+          {hourBankSummary && controlaPonto && (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               {/* Hora Extra Dia Útil 50% */}
               <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
@@ -1820,6 +2310,60 @@ export default function Ponto() {
                   {hourBankSummary.balance >= 0 ? 'Crédito' : 'Débito'}
                 </p>
               </div>
+            </div>
+          )}
+
+          {/* Card Saldo Acumulado e Histórico do Banco de Horas */}
+          {bankAccumulated && controlaPonto && (
+            <div className={`border rounded-xl p-3 text-center ${bankAccumulated.accumulatedBalance >= 0 ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'}`}>
+              <p className={`text-xs font-semibold mb-1 ${bankAccumulated.accumulatedBalance >= 0 ? 'text-green-700' : 'text-red-700'}`}>Saldo Acumulado</p>
+              <p className={`text-xl font-bold ${bankAccumulated.accumulatedBalance >= 0 ? 'text-green-800' : 'text-red-800'}`}>
+                {bankAccumulated.accumulatedBalance >= 0 ? '+' : ''}{bankAccumulated.accumulatedBalance.toFixed(2)}h
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Incluindo saldo anterior até {bankAccumulated.previousUntil
+                  ? (() => { const p = bankAccumulated.previousUntil.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; })()
+                  : '—'}
+              </p>
+            </div>
+          )}
+
+          {hourBankHistory.length > 0 && controlaPonto && (
+            <div className="bg-white rounded-xl shadow p-4 overflow-x-auto">
+              <p className="font-semibold text-gray-700 mb-3 text-sm">Histórico do Banco de Horas</p>
+              {loadingHourBankHistory ? (
+                <p className="text-center text-gray-400 py-6 text-sm">Carregando histórico...</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="text-left p-2 text-xs text-gray-500 font-semibold uppercase">Mês</th>
+                      <th className="text-right p-2 text-xs text-gray-500 font-semibold uppercase">Saldo Anterior</th>
+                      <th className="text-right p-2 text-xs text-gray-500 font-semibold uppercase">Movimento</th>
+                      <th className="text-right p-2 text-xs text-gray-500 font-semibold uppercase">Saldo Final</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {hourBankHistory.map((h) => {
+                      const monthLabel = new Date(`${h.month}-15`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                      return (
+                        <tr key={h.month} className="hover:bg-gray-50">
+                          <td className="p-2 text-gray-700 capitalize">{monthLabel}</td>
+                          <td className={`p-2 text-right font-medium ${h.previousBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {h.previousBalance >= 0 ? '+' : ''}{h.previousBalance.toFixed(2)}h
+                          </td>
+                          <td className={`p-2 text-right font-medium ${h.movement >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {h.movement >= 0 ? '+' : ''}{h.movement.toFixed(2)}h
+                          </td>
+                          <td className={`p-2 text-right font-bold ${h.closingBalance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                            {h.closingBalance >= 0 ? '+' : ''}{h.closingBalance.toFixed(2)}h
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
             </div>
           )}
 
@@ -1864,7 +2408,7 @@ export default function Ponto() {
                         <span className="text-gray-600">
                           {new Date(day + 'T12:00:00').toLocaleDateString('pt-BR')}
                         </span>
-                        {hbEntry && (recs ?? []).length === 0 && (
+                        {hbEntry && (recs ?? []).length === 0 && controlaPonto && (
                           <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
                             hbEntry.type === 'folga_abatida' ? 'bg-purple-100 text-purple-800' :
                             hbEntry.type === 'compensacao' ? 'bg-indigo-100 text-indigo-800' :
@@ -2010,6 +2554,46 @@ export default function Ponto() {
               </table>
             )}
           </div>
+
+          {/* Histórico mensal do banco de horas (funcionário) */}
+          {hourBankHistory.length > 0 && controlaPonto && (
+            <div className="bg-white rounded-xl shadow p-4 overflow-x-auto">
+              <p className="font-semibold text-gray-700 mb-3 text-sm">Histórico Mensal do Banco de Horas</p>
+              {loadingHourBankHistory ? (
+                <p className="text-center text-gray-400 py-6 text-sm">Carregando histórico...</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="text-left p-2 text-xs text-gray-500 font-semibold uppercase">Mês</th>
+                      <th className="text-right p-2 text-xs text-gray-500 font-semibold uppercase">Saldo Anterior</th>
+                      <th className="text-right p-2 text-xs text-gray-500 font-semibold uppercase">Movimento</th>
+                      <th className="text-right p-2 text-xs text-gray-500 font-semibold uppercase">Saldo Final</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {hourBankHistory.map((h) => {
+                      const monthLabel = new Date(`${h.month}-15`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                      return (
+                        <tr key={h.month} className="hover:bg-gray-50">
+                          <td className="p-2 text-gray-700 capitalize">{monthLabel}</td>
+                          <td className={`p-2 text-right font-medium ${h.previousBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {h.previousBalance >= 0 ? '+' : ''}{h.previousBalance.toFixed(2)}h
+                          </td>
+                          <td className={`p-2 text-right font-medium ${h.movement >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {h.movement >= 0 ? '+' : ''}{h.movement.toFixed(2)}h
+                          </td>
+                          <td className={`p-2 text-right font-bold ${h.closingBalance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                            {h.closingBalance >= 0 ? '+' : ''}{h.closingBalance.toFixed(2)}h
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -2269,40 +2853,113 @@ export default function Ponto() {
       {/* TAB: AJUSTES PENDENTES (GESTOR) */}
       {activeTab === 'ajustes' && isManager && (
         <div className="space-y-4">
+          <div className="bg-white rounded-xl shadow p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <p className="font-semibold text-gray-800">Ajustes de Ponto</p>
+              <input
+                type="month"
+                value={managerAdjustMonth}
+                onChange={(e) => {
+                  const m = e.target.value;
+                  setManagerAdjustMonth(m);
+                  fetchPendingAdjustments(m);
+                }}
+                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => openAdjustModal({ mode: 'manager' })}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              Registrar ajuste em nome do colaborador
+            </button>
+          </div>
+
           {(adjustments ?? []).length === 0 ? (
-            <p className="text-center text-gray-400 py-8">Nenhum ajuste pendente.</p>
+            <p className="text-center text-gray-400 py-8">Nenhum ajuste encontrado neste mês.</p>
           ) : (
-            (adjustments ?? []).map((adj) => (
-              <div key={adj.id} className="bg-white rounded-xl shadow p-4">
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <p className="font-semibold text-gray-800">{adj.users?.name}</p>
-                    <p className="text-sm text-gray-500">
-                      Batida: {TYPE_LABELS[adj.time_records?.type ?? '']} em{' '}
-                      {new Date(adj.time_records?.timestamp).toLocaleString('pt-BR')}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      Novo horário: {new Date(adj.new_timestamp).toLocaleString('pt-BR')}
-                    </p>
-                    <p className="text-sm text-gray-700 mt-1">Justificativa: {adj.justification}</p>
+            (adjustments ?? []).map((adj) => {
+              const refDate = adj.reference_date || (adj.new_timestamp ? getRecifeDateStr(adj.new_timestamp) : '');
+              const pType = adj.punch_type || adj.time_records?.type || '';
+              const reqTs = adj.requested_timestamp || adj.new_timestamp;
+              const colabName = adj.user_name || adj.users?.name || 'Colaborador';
+              const statusBadge =
+                adj.status === 'approved'
+                  ? { label: 'Aprovado', cls: 'bg-green-100 text-green-700' }
+                  : adj.status === 'rejected'
+                  ? { label: 'Rejeitado', cls: 'bg-red-100 text-red-700' }
+                  : { label: 'Pendente', cls: 'bg-amber-100 text-amber-800' };
+              return (
+                <div key={adj.id} className="bg-white rounded-xl shadow p-4 space-y-2">
+                  <div className="flex justify-between items-start flex-wrap gap-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {adj.document_number && (
+                          <span className="font-mono text-xs font-semibold bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
+                            {adj.document_number}
+                          </span>
+                        )}
+                        <p className="font-semibold text-gray-800">{colabName}</p>
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        Data: <strong>{refDate ? formatDate(refDate) : '—'}</strong> | Tipo:{' '}
+                        <strong>{TYPE_LABELS[pType] || pType}</strong> | Horário solicitado:{' '}
+                        <strong>{getRecifeTimeHHMM(reqTs)}</strong>
+                        {adj.adjustment_type && (
+                          <span className="text-xs text-gray-400 ml-2">({adj.adjustment_type})</span>
+                        )}
+                      </p>
+                      <p className="text-sm text-gray-700">
+                        Motivo:{' '}
+                        <span className="font-medium">
+                          {ADJUSTMENT_REASON_LABELS[adj.reason_category || ''] || adj.reason_category || '—'}
+                        </span>
+                        {(adj.reason_text || adj.justification) && ` — ${adj.reason_text || adj.justification}`}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Aceite eletrônico:{' '}
+                        {adj.requested_ack_at
+                          ? formatRecifeDateTime(adj.requested_ack_at)
+                          : 'Aberto pelo gestor — aguardando assinatura mensal'}
+                      </p>
+                      {adj.review_note && (
+                        <p className="text-xs text-gray-600 bg-gray-50 rounded-lg px-2.5 py-1.5">
+                          <strong>Observação da decisão:</strong> {adj.review_note}
+                        </p>
+                      )}
+                    </div>
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusBadge.cls}`}>
+                      {statusBadge.label}
+                    </span>
                   </div>
+
+                  {adj.status === 'pending' && (
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        type="button"
+                        disabled={submittingReview}
+                        onClick={() => handleReviewAdjust(adj.id, 'approved')}
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                      >
+                        Aprovar
+                      </button>
+                      <button
+                        type="button"
+                        disabled={submittingReview}
+                        onClick={() => {
+                          setRejectModalAdj(adj);
+                          setRejectNote('');
+                        }}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                      >
+                        Rejeitar
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <div className="flex gap-2 mt-3">
-                  <button
-                    onClick={() => handleReviewAdjust(adj.id, 'approved')}
-                    className="bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium"
-                  >
-                    Aprovar
-                  </button>
-                  <button
-                    onClick={() => handleReviewAdjust(adj.id, 'rejected')}
-                    className="bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium"
-                  >
-                    Rejeitar
-                  </button>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       )}
@@ -2968,6 +3625,260 @@ export default function Ponto() {
                 className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-xs font-semibold"
               >
                 Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Solicitar / Registrar Ajuste de Ponto */}
+      {adjustModalOpen && (
+        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg border border-gray-100 overflow-hidden flex flex-col max-h-[92vh]">
+            <div className="flex justify-between items-center px-6 py-4 bg-gray-50 border-b border-gray-150">
+              <div>
+                <h2 className="text-lg font-bold text-gray-800">
+                  {adjustModalMode === 'manager'
+                    ? 'Registrar Ajuste em Nome do Colaborador'
+                    : 'Solicitar Ajuste de Ponto'}
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {adjustRecordId
+                    ? 'Correção de batida já registrada'
+                    : 'Inclusão de batida esquecida ou com falha no aplicativo'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAdjustModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-4">
+              {lastCreatedAdjustment ? (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center gap-2 text-green-800 font-bold text-sm">
+                    <CheckCircle2 size={18} /> Pedido registrado com sucesso!
+                  </div>
+                  <p className="text-sm text-green-900">
+                    Número do ajuste:{' '}
+                    <span className="font-mono font-bold">
+                      {lastCreatedAdjustment.document_number || '—'}
+                    </span>
+                  </p>
+                  {lastCreatedAdjustment.requested_ack_at && (
+                    <p className="text-xs text-green-700">
+                      Data e hora do aceite: {formatRecifeDateTime(lastCreatedAdjustment.requested_ack_at)}
+                    </p>
+                  )}
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setAdjustModalOpen(false)}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800 flex items-start gap-2">
+                    <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                    <span>Aviso: ajustes só podem ser solicitados para datas dentro do prazo de 30 dias.</span>
+                  </div>
+
+                  {adjustModalMode === 'manager' && (
+                    <>
+                      {adjustTargetUserId && Number(adjustTargetUserId) !== user?.id && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-800 font-medium">
+                          O colaborador confirmará assinando o espelho mensal
+                        </div>
+                      )}
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Colaborador *</label>
+                        <select
+                          value={adjustTargetUserId}
+                          onChange={(e) => setAdjustTargetUserId(e.target.value)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                        >
+                          <option value="">Selecione o colaborador</option>
+                          {(allUsers ?? []).map((u: any) => (
+                            <option key={u.id} value={u.id}>
+                              {u.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Data *</label>
+                      <input
+                        type="date"
+                        max={getRecifeDateStr()}
+                        value={adjustDate}
+                        disabled={Boolean(adjustRecordId)}
+                        onChange={(e) => setAdjustDate(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white disabled:bg-gray-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Tipo de Batida *</label>
+                      <select
+                        value={adjustPunchType}
+                        disabled={Boolean(adjustRecordId)}
+                        onChange={(e) => setAdjustPunchType(e.target.value as any)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white disabled:bg-gray-100"
+                      >
+                        <option value="entry">Entrada</option>
+                        <option value="lunch_start">Saída Almoço</option>
+                        <option value="lunch_end">Retorno Almoço</option>
+                        <option value="exit">Saída</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Horário *</label>
+                      <input
+                        type="time"
+                        value={adjustTime}
+                        onChange={(e) => setAdjustTime(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Categoria do Motivo *</label>
+                    <select
+                      value={adjustReasonCategory}
+                      onChange={(e) => setAdjustReasonCategory(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                    >
+                      <option value="esqueci_de_bater">Esqueci de bater</option>
+                      <option value="falha_aplicativo">Falha do aplicativo</option>
+                      <option value="sem_sinal">Sem sinal</option>
+                      <option value="gps_ou_camera_falhou">GPS ou câmera falhou</option>
+                      <option value="outro">Outro</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="block text-xs font-semibold text-gray-500 uppercase">Descrição Obrigatória *</label>
+                      <span
+                        className={`text-xs font-medium ${
+                          adjustReasonText.trim().length >= 15 ? 'text-green-600' : 'text-amber-600'
+                        }`}
+                      >
+                        {adjustReasonText.trim().length}/15 caracteres mínimos
+                      </span>
+                    </div>
+                    <textarea
+                      placeholder="Descreva detalhadamente o ocorrido (mínimo 15 caracteres)..."
+                      value={adjustReasonText}
+                      onChange={(e) => setAdjustReasonText(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-h-[85px]"
+                    />
+                  </div>
+
+                  {(adjustModalMode === 'employee' || (adjustModalMode === 'manager' && (!adjustTargetUserId || Number(adjustTargetUserId) === user?.id))) && (
+                    <label className="flex items-start gap-2.5 bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={adjustAccept}
+                        onChange={(e) => setAdjustAccept(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-orange-600"
+                      />
+                      <span>
+                        Declaro que as informações prestadas são verdadeiras e solicito o ajuste do registro de ponto acima. Estou ciente de que este pedido, com data e hora do aceite, constará no meu espelho de ponto mensal.
+                      </span>
+                    </label>
+                  )}
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setAdjustModalOpen(false)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      disabled={
+                        submittingAdjust ||
+                        !adjustDate ||
+                        !adjustPunchType ||
+                        !adjustTime ||
+                        adjustReasonText.trim().length < 15 ||
+                        (adjustModalMode === 'employee' && !adjustAccept) ||
+                        (adjustModalMode === 'manager' && !adjustTargetUserId) ||
+                        (adjustModalMode === 'manager' && Number(adjustTargetUserId) === user?.id && !adjustAccept)
+                      }
+                      onClick={handleRequestAdjust}
+                      className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-lg text-sm font-semibold disabled:opacity-40 transition-colors"
+                    >
+                      {submittingAdjust ? 'Enviando...' : 'Enviar'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Rejeitar Ajuste (Observação obrigatória) */}
+      {rejectModalAdj && (
+        <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md border border-gray-100 p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-base font-bold text-gray-800">
+                Rejeitar Ajuste {rejectModalAdj.document_number || `#${rejectModalAdj.id}`}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setRejectModalAdj(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500">
+              Colaborador: <strong>{rejectModalAdj.user_name || rejectModalAdj.users?.name || '—'}</strong>
+            </p>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">
+                Observação / Motivo da Rejeição *
+              </label>
+              <textarea
+                placeholder="Informe o motivo da rejeição..."
+                value={rejectNote}
+                onChange={(e) => setRejectNote(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-h-[85px]"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRejectModalAdj(null)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={submittingReview || !rejectNote.trim()}
+                onClick={() => handleReviewAdjust(rejectModalAdj.id, 'rejected', rejectNote)}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-40"
+              >
+                {submittingReview ? 'Rejeitando...' : 'Confirmar Rejeição'}
               </button>
             </div>
           </div>
